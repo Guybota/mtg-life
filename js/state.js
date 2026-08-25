@@ -41,9 +41,11 @@
         id: uid(),
         name: `Jogador ${i + 1}`,
         commander: null,
+        partnerCommander: null, // commander parceiro opcional (regra Partner)
         life: startLife,
-        cmdDamage: {}, // { [opponentPlayerId]: number }
+        cmdDamage: {}, // { [opponentPlayerId]: number, [opponentPlayerId + "::partner"]: number }
         eliminated: false,
+        protected: false, // mantido em jogo apesar de "eliminado" por uma carta (Platinum Angel, etc.)
         poison: 0,
         profileId: null,
         turnTimeMs: 0,
@@ -77,22 +79,32 @@
     const p = state.standard.players.find((x) => x.id === playerId);
     if (!p) return state;
     p.life += delta;
-    if (p.life <= 0) p.eliminated = true;
-    else if (p.eliminated && p.life > 0) p.eliminated = false;
+    // enquanto "protegido" (carta tipo Platinum Angel/Worship em jogo), a
+    // eliminação automática fica suspensa — só muda por ação explícita.
+    if (!p.protected) {
+      if (p.life <= 0) p.eliminated = true;
+      else if (p.eliminated && p.life > 0) p.eliminated = false;
+    }
     save(state);
     return state;
   }
 
-  function stdAdjustCmdDamage(state, playerId, fromId, delta) {
+  /** source: "main" (default) ou "partner" — para trackear o dano de cada
+   *  commander de um par de Partners separadamente (cada um mata aos 21). */
+  function stdAdjustCmdDamage(state, playerId, fromId, delta, source) {
     const p = state.standard.players.find((x) => x.id === playerId);
     if (!p) return state;
-    const cur = p.cmdDamage[fromId] || 0;
+    const key = source === "partner" ? fromId + "::partner" : fromId;
+    const cur = p.cmdDamage[key] || 0;
     const next = Math.max(0, cur + delta);
-    p.cmdDamage[fromId] = next;
+    p.cmdDamage[key] = next;
     // dano de commander também reduz a vida normal, como nas regras oficiais
     p.life -= delta;
-    if (next >= 21 || p.life <= 0) p.eliminated = true;
-    else if (p.life > 0 && next < 21) p.eliminated = false;
+    if (!p.protected) {
+      const anyLethal = Object.values(p.cmdDamage).some((v) => v >= 21);
+      if (anyLethal || p.life <= 0) p.eliminated = true;
+      else if (p.life > 0 && !anyLethal) p.eliminated = false;
+    }
     save(state);
     return state;
   }
@@ -101,6 +113,20 @@
     const p = state.standard.players.find((x) => x.id === playerId);
     if (!p) return state;
     p.eliminated = !p.eliminated;
+    p.protected = false; // um toggle manual substitui qualquer estado de proteção pendente
+    save(state);
+    return state;
+  }
+
+  /** Guarda de eliminação: para cartas como Platinum Angel / Worship que
+   *  evitam a eliminação mesmo a 0 (ou menos) vidas / 21+ commander damage.
+   *  protectedVal=true → mantém o jogador em jogo (eliminated=false).
+   *  protectedVal=false → a carta saiu do campo, volta a eliminá-lo agora. */
+  function stdSetProtected(state, playerId, protectedVal) {
+    const p = state.standard.players.find((x) => x.id === playerId);
+    if (!p) return state;
+    p.protected = !!protectedVal;
+    p.eliminated = !protectedVal;
     save(state);
     return state;
   }
@@ -109,6 +135,20 @@
     const p = state.standard.players.find((x) => x.id === playerId);
     if (!p) return state;
     p.commander = commander;
+    save(state);
+    return state;
+  }
+
+  /** Nota: o dano de commander do parceiro de "playerId" fica registado no
+   *  cmdDamage de CADA OPONENTE, na chave `${playerId}::partner`. Se o
+   *  parceiro for removido, essas entradas ficam simplesmente sem badge
+   *  visível (deixam de ser mostradas), mas não são apagadas — a vida já
+   *  perdida por causa desse dano mantém-se, como nas regras reais.
+   */
+  function stdSetPartnerCommander(state, playerId, commander) {
+    const p = state.standard.players.find((x) => x.id === playerId);
+    if (!p) return state;
+    p.partnerCommander = commander;
     save(state);
     return state;
   }
@@ -203,6 +243,7 @@
             gameTimeMs: stats.gameTimeMs,
             turnTimeMs: p.turnTimeMs,
             turnsTaken: p.turnsTaken,
+            mode: state.presetName || "standard",
           });
         }
       });
@@ -220,9 +261,11 @@
           id: uid(),
           name: `Jogador ${i + 1}`,
           commander: null,
+          partnerCommander: null,
           life: state.standard.startLife,
           cmdDamage: {},
           eliminated: false,
+          protected: false,
           poison: 0,
           profileId: null,
           turnTimeMs: 0,
@@ -245,6 +288,7 @@
       p.life = life;
       p.cmdDamage = {};
       p.eliminated = false;
+      p.protected = false;
       p.turnTimeMs = 0;
       p.turnsTaken = 0;
     });
@@ -421,6 +465,7 @@
           gameTimeMs,
           turnTimeMs: p.turnTimeMs,
           turnsTaken: p.turnsTaken,
+          mode: "br",
         });
       }
     });
@@ -578,6 +623,8 @@
     stdAdjustCmdDamage,
     stdToggleEliminated,
     stdSetCommander,
+    stdSetPartnerCommander,
+    stdSetProtected,
     stdSetName,
     stdSetPlayerCount,
     stdSetStartLife,

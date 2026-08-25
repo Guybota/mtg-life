@@ -41,6 +41,7 @@
       name: name && name.trim() ? name.trim() : commander ? commander.name : "Novo perfil",
       commander: commander || null,
       stats: { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 },
+      history: [],
       createdAt: Date.now(),
     };
     list.push(profile);
@@ -61,16 +62,53 @@
     persist(load().filter((p) => p.id !== id));
   }
 
-  /** Regista o resultado de um jogo terminado nas stats agregadas do perfil. */
-  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken }) {
+  /** Regista o resultado de um jogo terminado nas stats agregadas do perfil
+   *  e acrescenta uma entrada ao histórico de jogos desse perfil. */
+  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode }) {
     const list = load();
     const p = list.find((x) => x.id === id);
     if (!p) return null;
+    if (!p.history) p.history = [];
     p.stats.games += 1;
     if (won) p.stats.wins += 1;
     p.stats.totalGameTimeMs += gameTimeMs || 0;
     p.stats.totalTurnTimeMs += turnTimeMs || 0;
     p.stats.turnsTaken += turnsTaken || 0;
+    p.history.unshift({
+      id: uid(),
+      date: Date.now(),
+      won: !!won,
+      mode: mode || "standard",
+      gameTimeMs: gameTimeMs || 0,
+      turnTimeMs: turnTimeMs || 0,
+      turnsTaken: turnsTaken || 0,
+    });
+    persist(list);
+    return p;
+  }
+
+  /** Devolve o histórico de jogos de um perfil (mais recente primeiro). */
+  function historyOf(id) {
+    const p = get(id);
+    if (!p || !p.history) return [];
+    return p.history.slice().sort((a, b) => b.date - a.date);
+  }
+
+  /** Remove um jogo específico do histórico e desconta o seu contributo
+   *  das stats agregadas do perfil. */
+  function removeGame(id, gameId) {
+    const list = load();
+    const p = list.find((x) => x.id === id);
+    if (!p || !p.history) return null;
+    const idx = p.history.findIndex((g) => g.id === gameId);
+    if (idx === -1) return null;
+    const g = p.history[idx];
+    p.history.splice(idx, 1);
+    p.stats.games = Math.max(0, p.stats.games - 1);
+    if (g.won) p.stats.wins = Math.max(0, p.stats.wins - 1);
+    p.stats.totalGameTimeMs = Math.max(0, p.stats.totalGameTimeMs - (g.gameTimeMs || 0));
+    p.stats.totalTurnTimeMs = Math.max(0, p.stats.totalTurnTimeMs - (g.turnTimeMs || 0));
+    p.stats.turnsTaken = Math.max(0, p.stats.turnsTaken - (g.turnsTaken || 0));
     persist(list);
     return p;
   }
@@ -92,5 +130,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, recordGameResult, derived };
+  global.MTG.Profiles = { all, get, create, update, remove, recordGameResult, derived, historyOf, removeGame };
 })(window);

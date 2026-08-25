@@ -32,6 +32,16 @@
     return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   }
 
+  function formatDateTime(ts) {
+    if (!ts) return "-";
+    const d = new Date(ts);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  const MODE_LABELS = { commander: "Commander", duel: "Duelo 1v1", free: "Livre", standard: "Padrão", br: "Battle Royale" };
+  function modeLabel(mode) { return MODE_LABELS[mode] || mode || "Jogo"; }
+
   const PRESETS = {
     commander: {
       key: "commander",
@@ -225,7 +235,7 @@
             playerCount: preset.defaultPlayers,
             startLife: preset.defaultLife,
             cmdDmgEnabled: preset.cmdDmgDefault,
-            players: Array.from({ length: preset.defaultPlayers }, (_, i) => ({ name: "", commander: null, profileId: null })),
+            players: Array.from({ length: preset.defaultPlayers }, (_, i) => ({ name: "", commander: null, partnerCommander: null, profileId: null })),
           };
           nav("setup-standard");
         }
@@ -236,13 +246,13 @@
   // ===========================================================
   // COMMANDER PICKER (modal reutilizável)
   // ===========================================================
-  function openCommanderPicker(onSelect) {
+  function openCommanderPicker(onSelect, title) {
     // (sem closeAnyModal aqui de propósito: este picker pode abrir por cima
     // de outro modal já aberto, ex. dentro do ecrã de editar jogador)
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet">
-          <h2>🔍 Escolher Commander</h2>
+          <h2>${esc(title || "🔍 Escolher Commander")}</h2>
           <input type="text" id="cp-input" placeholder="Nome do commander (ex: Atraxa, Krenko...)" autocomplete="off" autocorrect="off" spellcheck="false">
           <div class="search-status hidden" id="cp-status"></div>
           <div class="search-results" id="cp-results"></div>
@@ -421,18 +431,26 @@
         const profile = p.profileId ? Profiles.get(p.profileId) : null;
         const card = el(`
           <div class="player-setup-card">
-            <div class="commander-thumb" data-i="${i}" style="${commanderThumbStyle(p.commander)}">
-              ${p.commander ? "" : "🃏"}
+            <div class="commander-thumbs">
+              <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">
+                ${p.commander ? "" : "🃏"}
+              </div>
+              <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">
+                ${p.partnerCommander ? "" : "+"}
+              </div>
             </div>
             <div class="player-setup-fields">
               <input type="text" data-i="${i}" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
-              <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}</div>
+              <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
               <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profile ? "👤 " + esc(profile.name) : "👤 Sem perfil"}</button>
             </div>
           </div>
         `);
-        card.querySelector(".commander-thumb").addEventListener("click", () => {
+        card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
           openCommanderPicker((card2) => { draft.players[i].commander = card2; renderPlayersList(); });
+        });
+        card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
+          openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, "🔍 Escolher Commander Parceiro");
         });
         card.querySelector(".name-input").addEventListener("input", (e) => {
           draft.players[i].name = e.target.value;
@@ -455,7 +473,7 @@
         n = Math.max(preset.minPlayers, Math.min(preset.maxPlayers, n));
         e.target.value = n;
         const cur = draft.players.length;
-        if (n > cur) for (let i = cur; i < n; i++) draft.players.push({ name: "", commander: null, profileId: null });
+        if (n > cur) for (let i = cur; i < n; i++) draft.players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
         else draft.players.length = n;
         draft.playerCount = n;
         renderPlayersList();
@@ -478,6 +496,7 @@
       st.standard.players.forEach((p, i) => {
         if (draft.players[i].name.trim()) p.name = draft.players[i].name.trim();
         p.commander = draft.players[i].commander;
+        p.partnerCommander = draft.players[i].partnerCommander || null;
         p.profileId = draft.players[i].profileId || null;
       });
       State.save(st);
@@ -549,7 +568,7 @@
     });
     s.querySelector("#reset-btn").addEventListener("click", () => {
       if (!confirm("Reiniciar vidas e commander damage de todos os jogadores?")) return;
-      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; });
+      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; });
       State.save(game);
       render();
     });
@@ -618,16 +637,11 @@
             <div class="life-tap plus"></div>
             <div class="life-total">${p.life}</div>
           </div>
-          ${cmdEnabled ? `<div class="commander-badges">${opponents.map((o) => {
-            const dmg = p.cmdDamage[o.id] || 0;
-            return `<div class="cmd-badge ${dmg >= 21 ? "lethal" : ""}" data-opp-id="${o.id}" style="${o.commander && o.commander.art ? `background-image:url('${esc(o.commander.art)}')` : ""}">
-              ${o.commander ? "" : "🃏"}<div class="dmg">${dmg}</div>
-            </div>`;
-          }).join("")}</div>` : ""}
-          ${p.eliminated ? `<div class="eliminated-badge">ELIMINADO</div>` : ""}
+          ${cmdEnabled ? `<div class="commander-badges">${opponents.map((o) => cmdBadgeHtml(p, o, "main") + (o.partnerCommander ? cmdBadgeHtml(p, o, "partner") : "")).join("")}</div>` : ""}
         </div>
       </div>
     `);
+    syncEliminationBadges(panel, p);
 
     const lifeZone = panel.querySelector(".life-zone");
     const minus = panel.querySelector(".life-tap.minus");
@@ -657,6 +671,39 @@
     return panel;
   }
 
+  /** HTML de um único badge de commander damage (main ou partner) de um oponente. */
+  function cmdBadgeHtml(p, o, source) {
+    const key = source === "partner" ? o.id + "::partner" : o.id;
+    const dmg = p.cmdDamage[key] || 0;
+    const cmd = source === "partner" ? o.partnerCommander : o.commander;
+    return `<div class="cmd-badge ${source === "partner" ? "partner" : ""} ${dmg >= 21 ? "lethal" : ""}" data-opp-id="${o.id}" data-source="${source}" style="${cmd && cmd.art ? `background-image:url('${esc(cmd.art)}')` : ""}">
+      ${cmd ? "" : "🃏"}<div class="dmg">${dmg}</div>
+    </div>`;
+  }
+
+  /** Mostra/esconde e liga os cliques dos badges "ELIMINADO" / "🛡️ PROTEGIDO"
+   *  no painel de um jogador (mesma lógica usada na criação e na atualização
+   *  parcial do painel). */
+  function syncEliminationBadges(panel, p) {
+    const content = panel.querySelector(".content");
+    let elimBadge = panel.querySelector(".eliminated-badge");
+    if (p.eliminated && !elimBadge) {
+      elimBadge = el(`<div class="eliminated-badge" title="Toca se uma carta evita a eliminação">ELIMINADO</div>`);
+      elimBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openEliminationGuardModal(p.id, true); });
+      content.appendChild(elimBadge);
+    } else if (!p.eliminated && elimBadge) {
+      elimBadge.remove();
+    }
+    let protBadge = panel.querySelector(".protected-badge");
+    if (p.protected && !p.eliminated && !protBadge) {
+      protBadge = el(`<div class="protected-badge" title="Toca se a carta de proteção saiu do campo">🛡️ PROTEGIDO</div>`);
+      protBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openEliminationGuardModal(p.id, false); });
+      content.appendChild(protBadge);
+    } else if ((!p.protected || p.eliminated) && protBadge) {
+      protBadge.remove();
+    }
+  }
+
   function updateStandardPanel(pid) {
     const p = game.standard.players.find((x) => x.id === pid);
     const panel = appEl.querySelector(`.player-panel[data-player-id="${pid}"]`);
@@ -664,19 +711,54 @@
     panel.classList.toggle("eliminated", p.eliminated);
     const lifeEl = panel.querySelector(".life-total");
     if (lifeEl) lifeEl.textContent = p.life;
-    let badge = panel.querySelector(".eliminated-badge");
-    if (p.eliminated && !badge) {
-      badge = el(`<div class="eliminated-badge">ELIMINADO</div>`);
-      panel.querySelector(".content").appendChild(badge);
-    } else if (!p.eliminated && badge) {
-      badge.remove();
-    }
+    syncEliminationBadges(panel, p);
     panel.querySelectorAll(".cmd-badge").forEach((b) => {
       const oppId = b.dataset.oppId;
-      const dmg = p.cmdDamage[oppId] || 0;
+      const source = b.dataset.source || "main";
+      const key = source === "partner" ? oppId + "::partner" : oppId;
+      const dmg = p.cmdDamage[key] || 0;
       b.querySelector(".dmg").textContent = dmg;
       b.classList.toggle("lethal", dmg >= 21);
     });
+  }
+
+  function openEliminationGuardModal(playerId, isEliminated) {
+    const p = game.standard.players.find((x) => x.id === playerId);
+    if (!p) return;
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet">
+          <h2>${isEliminated ? "☠️ Jogador eliminado" : "🛡️ Jogador protegido"}</h2>
+          <div class="footer-note" style="margin-bottom:14px">
+            ${isEliminated
+              ? `${esc(p.name)} está eliminado (0 ou menos vidas, ou 21+ de commander damage). Se tens em jogo uma carta que evita a eliminação (ex: Platinum Angel, Worship...), podes mantê-lo no jogo.`
+              : `${esc(p.name)} está a ser mantido no jogo apesar de já ter sofrido a eliminação, graças a uma carta de proteção. Assim que essa carta sair do campo, volta a eliminá-lo aqui.`}
+          </div>
+          <div class="col">
+            ${isEliminated
+              ? `<button class="btn btn-gold btn-block" id="eg-keep">🛡️ Manter no jogo</button>`
+              : `<button class="btn btn-primary btn-block" id="eg-reeliminate">☠️ A carta saiu — eliminar agora</button>`}
+            <button class="btn btn-ghost btn-block" id="eg-cancel">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    const keepBtn = backdrop.querySelector("#eg-keep");
+    if (keepBtn) keepBtn.addEventListener("click", () => {
+      State.stdSetProtected(game, playerId, true);
+      backdrop.remove();
+      render();
+    });
+    const reBtn = backdrop.querySelector("#eg-reeliminate");
+    if (reBtn) reBtn.addEventListener("click", () => {
+      State.stdSetProtected(game, playerId, false);
+      backdrop.remove();
+      render();
+    });
+    backdrop.querySelector("#eg-cancel").addEventListener("click", () => backdrop.remove());
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
   function openCmdDamageModal(playerId) {
@@ -694,27 +776,36 @@
     `);
     document.body.appendChild(backdrop);
     const list = backdrop.querySelector("#cd-list");
+    function buildRow(o, source, label, art) {
+      const key = source === "partner" ? o.id + "::partner" : o.id;
+      const dmg = p.cmdDamage[key] || 0;
+      const row = el(`
+        <div class="cd-list-item">
+          ${art ? `<img src="${esc(art)}">` : `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">🃏</div>`}
+          <div class="nm">${esc(label)}${source === "partner" ? ` <span class="turn-badge-sm partner-tag">PARCEIRO</span>` : ""}</div>
+          <button class="btn btn-icon" data-d="-1">−</button>
+          <div class="val">${dmg}</div>
+          <button class="btn btn-icon" data-d="1">+</button>
+        </div>
+      `);
+      row.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          State.stdAdjustCmdDamage(game, playerId, o.id, parseInt(btn.dataset.d, 10), source);
+          updateStandardPanel(playerId);
+          paint();
+        });
+      });
+      return row;
+    }
     function paint() {
       list.innerHTML = "";
       opponents.forEach((o) => {
-        const dmg = p.cmdDamage[o.id] || 0;
-        const row = el(`
-          <div class="cd-list-item">
-            ${o.commander && o.commander.art ? `<img src="${esc(o.commander.art)}">` : `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">🃏</div>`}
-            <div class="nm">${esc(o.name)}${o.commander ? " · " + esc(o.commander.name) : ""}</div>
-            <button class="btn btn-icon" data-d="-1">−</button>
-            <div class="val">${dmg}</div>
-            <button class="btn btn-icon" data-d="1">+</button>
-          </div>
-        `);
-        row.querySelectorAll("button").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            State.stdAdjustCmdDamage(game, playerId, o.id, parseInt(btn.dataset.d, 10));
-            updateStandardPanel(playerId);
-            paint();
-          });
-        });
-        list.appendChild(row);
+        const group = el(`<div class="cd-group"><div class="cd-group-title">${esc(o.name)}</div></div>`);
+        group.appendChild(buildRow(o, "main", o.commander ? o.commander.name : "Sem commander", o.commander && o.commander.art));
+        if (o.partnerCommander) {
+          group.appendChild(buildRow(o, "partner", o.partnerCommander.name, o.partnerCommander.art));
+        }
+        list.appendChild(group);
       });
     }
     paint();
@@ -725,6 +816,7 @@
   function openEditPlayerModal({ mode, playerId }) {
     const p = mode === "standard" ? game.standard.players.find((x) => x.id === playerId) : game.br.players.find((x) => x.id === playerId);
     let pendingCommander = p.commander;
+    let pendingPartnerCommander = p.partnerCommander || null;
     let pendingProfileId = p.profileId || null;
     closeAnyModal();
     const backdrop = el(`
@@ -738,6 +830,11 @@
               <div class="commander-thumb" id="ep-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
               <button class="btn btn-ghost grow" id="ep-commander">Alterar Commander</button>
             </div>
+            ${mode === "standard" ? `
+            <div class="row" style="align-items:center;margin-top:6px">
+              <div class="commander-thumb" id="ep-thumb-partner" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "🃏"}</div>
+              <button class="btn btn-ghost grow" id="ep-partner">${p.partnerCommander ? "Alterar Parceiro" : "➕ Adicionar Commander Parceiro"}</button>
+            </div>` : ""}
             <button class="btn btn-ghost btn-sm" id="ep-profile" style="margin-top:6px">${pendingProfileId ? "👤 " + esc((Profiles.get(pendingProfileId) || {}).name || "Perfil") : "👤 Sem perfil"}</button>
             ${mode === "standard" ? `<button class="btn ${p.eliminated ? "btn-primary" : "btn-ghost"}" id="ep-elim" style="margin-top:6px">${p.eliminated ? "Reviver jogador" : "Marcar como eliminado"}</button>` : ""}
           </div>
@@ -757,6 +854,18 @@
         thumb.textContent = c ? "" : "🃏";
       });
     });
+    const partnerBtn = backdrop.querySelector("#ep-partner");
+    if (partnerBtn) {
+      partnerBtn.addEventListener("click", () => {
+        openCommanderPicker((c) => {
+          pendingPartnerCommander = c;
+          const thumb = backdrop.querySelector("#ep-thumb-partner");
+          thumb.style.cssText = commanderThumbStyle(c);
+          thumb.textContent = c ? "" : "🃏";
+          partnerBtn.textContent = c ? "Alterar Parceiro" : "➕ Adicionar Commander Parceiro";
+        }, "🔍 Escolher Commander Parceiro");
+      });
+    }
     backdrop.querySelector("#ep-profile").addEventListener("click", () => {
       openProfilePicker({
         commander: pendingCommander,
@@ -783,6 +892,7 @@
       if (mode === "standard") {
         State.stdSetName(game, playerId, name);
         State.stdSetCommander(game, playerId, pendingCommander);
+        State.stdSetPartnerCommander(game, playerId, pendingPartnerCommander);
         State.stdSetProfile(game, playerId, pendingProfileId);
         if (toggledElim !== p.eliminated) State.stdToggleEliminated(game, playerId);
       } else {
@@ -1253,18 +1363,71 @@
               <div>🔁 Turnos totais: ${d.turnsTaken}</div>
             </div>
           </div>
-          <button class="btn btn-icon" data-id="${p.id}">🗑️</button>
+          <div class="col gap-sm">
+            <button class="btn btn-icon" data-act="history" data-id="${p.id}" title="Ver histórico">📜</button>
+            <button class="btn btn-icon" data-act="delete" data-id="${p.id}" title="Apagar perfil">🗑️</button>
+          </div>
         </div>
       `);
-      card.querySelector("button[data-id]").addEventListener("click", () => {
+      card.querySelector('button[data-act="delete"]').addEventListener("click", () => {
         if (confirm(`Apagar o perfil "${p.name}"? Esta ação não pode ser desfeita.`)) {
           Profiles.remove(p.id);
           render();
         }
       });
+      card.querySelector('button[data-act="history"]').addEventListener("click", () => {
+        openProfileHistoryModal(p.id);
+      });
       list.appendChild(card);
     });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
+  }
+
+  function openProfileHistoryModal(profileId) {
+    closeAnyModal();
+    const backdrop = el(`<div class="modal-backdrop center"><div class="modal-sheet"></div></div>`);
+    const sheet = backdrop.querySelector(".modal-sheet");
+    appEl.appendChild(backdrop);
+
+    function paint() {
+      const profile = Profiles.get(profileId);
+      if (!profile) { backdrop.remove(); return; }
+      const history = Profiles.historyOf(profileId);
+      sheet.innerHTML = `
+        <h2>📜 Histórico — ${esc(profile.name)}</h2>
+        <div class="scroll" style="padding:0; flex:1; min-height:0;">
+          ${history.length ? `<div class="col" id="history-list"></div>` : `<div class="footer-note">Ainda não há jogos registados para este perfil.</div>`}
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn btn-ghost grow" id="close-history-btn">Fechar</button>
+        </div>
+      `;
+      const list = sheet.querySelector("#history-list");
+      if (list) {
+        history.forEach((g) => {
+          const row = el(`
+            <div class="cd-list-item" style="align-items:flex-start;">
+              <div style="flex:1; min-width:0;">
+                <div class="nm">${g.won ? "🏆 Vitória" : "❌ Derrota"} — ${esc(modeLabel(g.mode))}</div>
+                <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
+                <div class="history-meta">⏳ Jogo: ${formatDuration(g.gameTimeMs)} · ⏱️ Nos teus turnos: ${formatDuration(g.turnTimeMs)} (${g.turnsTaken} turno${g.turnsTaken === 1 ? "" : "s"})</div>
+              </div>
+              <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="Apagar este jogo">🗑️</button>
+            </div>
+          `);
+          row.querySelector("button[data-gid]").addEventListener("click", () => {
+            if (confirm("Apagar este jogo do histórico? As stats do perfil serão atualizadas.")) {
+              Profiles.removeGame(profileId, g.id);
+              paint();
+            }
+          });
+          list.appendChild(row);
+        });
+      }
+      sheet.querySelector("#close-history-btn").addEventListener("click", () => render());
+    }
+    paint();
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) render(); });
   }
 
   // ---------------------------------------------------------

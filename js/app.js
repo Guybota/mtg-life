@@ -527,8 +527,12 @@
 
     const rowTop = s.querySelector("#row-top");
     const rowBottom = s.querySelector("#row-bottom");
+    // Disposição em "serpentina": a fila de baixo é colocada por ordem INVERSA
+    // para que a ordem dos turnos ande sempre em sentido horário à volta da
+    // mesa (top esquerda→direita, depois desce e volta direita→esquerda),
+    // em vez de saltar na diagonal de um canto para o outro.
     topPlayers.forEach((p) => rowTop.appendChild(buildStandardPanel(p, true, currentPlayer)));
-    bottomPlayers.forEach((p) => rowBottom.appendChild(buildStandardPanel(p, false, currentPlayer)));
+    bottomPlayers.slice().reverse().forEach((p) => rowBottom.appendChild(buildStandardPanel(p, false, currentPlayer)));
 
     function tickClock() {
       const chipTurn = s.querySelector("#chip-turn-time");
@@ -605,8 +609,9 @@
         <div class="bg" style="${p.commander && p.commander.art ? `background-image:url('${esc(p.commander.art)}')` : "background:linear-gradient(160deg,#2a2f38,#12141a)"}"></div>
         <div class="mini-actions"><button class="mini-btn" data-action="edit">✏️</button></div>
         <div class="content">
-          <div class="player-header">
-            <div class="player-name">${isActive ? "🔸 " : ""}${esc(p.name)}</div>
+          ${isActive ? `<div class="turn-badge">▶ VEZ</div>` : ""}
+        <div class="player-header">
+            <div class="player-name">${esc(p.name)}</div>
           </div>
           <div class="life-zone">
             <div class="life-tap minus"></div>
@@ -964,7 +969,7 @@
         <div class="br-row-top">
           <div class="br-avatar" style="${p.commander && p.commander.art ? `background-image:url('${esc(p.commander.art)}')` : "background:#2a2f38"}"></div>
           <div class="br-info">
-            <div class="nm">${esc(p.name)} ${isActive ? "🔸" : ""}</div>
+            <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">▶ VEZ</span>` : ""}</div>
             <div class="meta">
               <span>Zona <strong>${p.zone}</strong></span>
               ${p.eliminated ? `<span>💀 Eliminado</span>` : `<span>🎁 ${p.lootUsed.length}/6</span>`}

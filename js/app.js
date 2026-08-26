@@ -1095,31 +1095,24 @@
     const isActive = current && current.id === p.id;
     const row = el(`
       <div class="br-player-row ${isActive ? "active" : ""} ${p.eliminated ? "eliminated" : ""}">
-        <div class="br-row-top">
-          <div class="br-avatar" style="${playerBgStyle(p)}"></div>
-          <div class="br-info">
-            <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">▶ VEZ</span>` : ""}</div>
-            <div class="meta">
-              <span>Zona <strong>${p.zone}</strong></span>
-              ${p.eliminated ? `<span>💀 Eliminado</span>` : `<span>🎁 ${p.lootUsed.length}/6</span>`}
-            </div>
-          </div>
+        <div class="br-avatar" style="${playerBgStyle(p)}"></div>
+        <div class="br-info">
+          <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">▶ VEZ</span>` : ""}</div>
+          <div class="meta">${p.eliminated ? `💀 Eliminado` : `🎁 ${p.lootUsed.length}/6`}</div>
         </div>
-        <div class="br-row-bottom">
-          ${!p.eliminated ? `
-          <select class="br-zone-select" data-act="zone" title="Zona atual">
-            ${State.ZONES.map((z) => `<option value="${z}" ${z === p.zone ? "selected" : ""}>Zona ${z}</option>`).join("")}
-          </select>
-          <div class="br-life-stepper">
-            <button class="btn btn-icon" data-act="minus">−</button>
-            <div class="br-life">${p.life}</div>
-            <button class="btn btn-icon" data-act="plus">+</button>
-          </div>
-          ` : `<div class="grow"></div>`}
-          <div class="br-actions-mini">
-            <button class="btn btn-icon" data-act="edit">✏️</button>
-            ${!p.eliminated ? `<button class="btn btn-icon" data-act="kill">💀</button>` : ""}
-          </div>
+        ${!p.eliminated ? `
+        <select class="br-zone-select" data-act="zone" title="Zona atual">
+          ${State.ZONES.map((z) => `<option value="${z}" ${z === p.zone ? "selected" : ""}>${z}</option>`).join("")}
+        </select>
+        <div class="br-life-stepper">
+          <button class="btn btn-icon" data-act="minus">−</button>
+          <div class="br-life">${p.life}</div>
+          <button class="btn btn-icon" data-act="plus">+</button>
+        </div>
+        ` : ""}
+        <div class="br-actions-mini">
+          <button class="btn btn-icon" data-act="edit">✏️</button>
+          ${!p.eliminated ? `<button class="btn btn-icon" data-act="kill">💀</button>` : ""}
         </div>
       </div>
     `);

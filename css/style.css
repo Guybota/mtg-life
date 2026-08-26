@@ -341,9 +341,17 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
   transition: filter .2s ease;
 }
 .player-panel.eliminated .bg{ filter: grayscale(1) brightness(.25); }
-.player-panel.active-turn{
+/* A borda de "é a tua vez" tem de ficar num pseudo-elemento à parte, por
+   cima de tudo (.bg, .content, badges...): um box-shadow inset colocado
+   diretamente no .player-panel fica por BAIXO dos seus filhos posicionados
+   (a imagem de fundo .bg cobre-o por completo) e nunca se vê. */
+.player-panel.active-turn{ z-index: 1; }
+.player-panel.active-turn::after{
+  content:"";
+  position:absolute; inset:0;
+  z-index:7;
+  pointer-events:none;
   box-shadow: inset 0 0 0 3px var(--gold), inset 0 0 26px rgba(212,175,55,.55);
-  z-index: 1;
   animation: activeGlow 2.2s ease-in-out infinite;
 }
 @keyframes activeGlow{

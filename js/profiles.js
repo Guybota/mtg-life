@@ -34,11 +34,12 @@
     return load().find((p) => p.id === id) || null;
   }
 
-  function create({ name, commander }) {
+  function create({ name, commander, playerName }) {
     const list = load();
     const profile = {
       id: uid(),
       name: name && name.trim() ? name.trim() : commander ? commander.name : "Novo perfil",
+      playerName: playerName && playerName.trim() ? playerName.trim() : "",
       commander: commander || null,
       stats: { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 },
       history: [],

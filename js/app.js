@@ -426,7 +426,7 @@
   // ===========================================================
   // PROFILE PICKER (modal reutilizável) — ligar/criar perfil de commander
   // ===========================================================
-  function openProfilePicker({ commander, currentProfileId, onSelect }) {
+  function openProfilePicker({ commander, currentProfileId, playerName, onSelect }) {
     // (sem closeAnyModal aqui de propósito: pode abrir por cima do modal de editar jogador)
     const profiles = Profiles.all();
     const backdrop = el(`
@@ -475,7 +475,7 @@
     });
     backdrop.querySelector("#pp-new-confirm").addEventListener("click", () => {
       const name = backdrop.querySelector("#pp-new-name").value.trim();
-      const profile = Profiles.create({ name, commander });
+      const profile = Profiles.create({ name, commander, playerName });
       onSelect(profile.id);
       backdrop.remove();
     });
@@ -499,7 +499,11 @@
             ${preset.minPlayers !== preset.maxPlayers ? `
             <div class="field">
               <label>Jogadores</label>
-              <input type="number" id="cfg-players" min="${preset.minPlayers}" max="${preset.maxPlayers}" value="${draft.playerCount}">
+              <div class="stepper-field">
+                <button class="btn btn-icon" type="button" id="players-minus">−</button>
+                <input type="number" id="cfg-players" min="${preset.minPlayers}" max="${preset.maxPlayers}" value="${draft.playerCount}">
+                <button class="btn btn-icon" type="button" id="players-plus">+</button>
+              </div>
             </div>` : ""}
             <div class="field">
               <label>Vida inicial</label>
@@ -522,65 +526,96 @@
     `);
     appEl.appendChild(s);
 
-    function renderPlayersList() {
-      const list = s.querySelector("#players-list");
-      list.innerHTML = "";
-      draft.players.forEach((p, i) => {
-        const profile = p.profileId ? Profiles.get(p.profileId) : null;
-        const card = el(`
-          <div class="player-setup-card">
-            <div class="commander-thumbs">
-              <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">
-                ${p.commander ? "" : "🃏"}
-              </div>
-              <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">
-                ${p.partnerCommander ? "" : "+"}
-              </div>
+    // Reconciliação por índice: reaproveita os cards já existentes em vez de
+    // destruir e recriar tudo a cada alteração (nº de jogadores, escolher
+    // commander/perfil de OUTRO jogador, etc.) — isto evita perder o foco
+    // (e o que já se tinha escrito) no campo de nome de um jogador quando
+    // outra parte do ecrã dispara um re-render ao mesmo tempo.
+    function buildPlayerCard(i) {
+      const p = draft.players[i];
+      const profile = p.profileId ? Profiles.get(p.profileId) : null;
+      const card = el(`
+        <div class="player-setup-card">
+          <div class="commander-thumbs">
+            <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">
+              ${p.commander ? "" : "🃏"}
             </div>
-            <div class="player-setup-fields">
-              <input type="text" data-i="${i}" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
-              <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
-              <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profile ? "👤 " + esc(profile.name) : "👤 Sem perfil"}</button>
+            <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">
+              ${p.partnerCommander ? "" : "+"}
             </div>
           </div>
-        `);
-        card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
-          openCommanderPicker((card2) => { draft.players[i].commander = card2; renderPlayersList(); });
-        });
-        card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
-          openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, "🔍 Escolher Commander Parceiro");
-        });
-        card.querySelector(".name-input").addEventListener("input", (e) => {
-          draft.players[i].name = e.target.value;
-        });
-        card.querySelector(".profile-btn").addEventListener("click", () => {
-          openProfilePicker({
-            commander: draft.players[i].commander,
-            currentProfileId: draft.players[i].profileId,
-            onSelect: (id) => {
-              draft.players[i].profileId = id;
-              const prof = id ? Profiles.get(id) : null;
-              if (prof && prof.commander) draft.players[i].commander = prof.commander;
-              renderPlayersList();
-            },
-          });
-        });
-        list.appendChild(card);
+          <div class="player-setup-fields">
+            <input type="text" data-i="${i}" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
+            <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
+            <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profile ? "👤 " + esc(profile.name) : "👤 Sem perfil"}</button>
+          </div>
+        </div>
+      `);
+      card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
+        openCommanderPicker((card2) => { draft.players[i].commander = card2; renderPlayersList(); });
       });
+      card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
+        openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, "🔍 Escolher Commander Parceiro");
+      });
+      card.querySelector(".name-input").addEventListener("input", (e) => {
+        draft.players[i].name = e.target.value;
+      });
+      card.querySelector(".profile-btn").addEventListener("click", () => {
+        openProfilePicker({
+          commander: draft.players[i].commander,
+          currentProfileId: draft.players[i].profileId,
+          playerName: draft.players[i].name,
+          onSelect: (id) => {
+            draft.players[i].profileId = id;
+            const prof = id ? Profiles.get(id) : null;
+            if (prof && prof.commander) draft.players[i].commander = prof.commander;
+            if (prof && prof.playerName) draft.players[i].name = prof.playerName;
+            renderPlayersList();
+          },
+        });
+      });
+      return card;
+    }
+    function updatePlayerCard(card, i) {
+      const p = draft.players[i];
+      const profile = p.profileId ? Profiles.get(p.profileId) : null;
+      const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
+      mainThumb.style.cssText = commanderThumbStyle(p.commander);
+      mainThumb.textContent = p.commander ? "" : "🃏";
+      const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
+      partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
+      partnerThumb.textContent = p.partnerCommander ? "" : "+";
+      card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : "Sem commander escolhido") + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
+      card.querySelector(".profile-btn").textContent = profile ? "👤 " + profile.name : "👤 Sem perfil";
+      const nameInput = card.querySelector(".name-input");
+      if (document.activeElement !== nameInput) nameInput.value = p.name;
+    }
+    function renderPlayersList() {
+      const list = s.querySelector("#players-list");
+      const existing = Array.from(list.children);
+      draft.players.forEach((p, i) => {
+        if (existing[i]) updatePlayerCard(existing[i], i);
+        else list.appendChild(buildPlayerCard(i));
+      });
+      while (list.children.length > draft.players.length) list.removeChild(list.lastChild);
     }
     renderPlayersList();
 
     if (preset.minPlayers !== preset.maxPlayers) {
-      s.querySelector("#cfg-players").addEventListener("change", (e) => {
-        let n = parseInt(e.target.value, 10) || preset.defaultPlayers;
-        n = Math.max(preset.minPlayers, Math.min(preset.maxPlayers, n));
-        e.target.value = n;
+      function setPlayerCount(n) {
+        n = Math.max(preset.minPlayers, Math.min(preset.maxPlayers, n || preset.defaultPlayers));
+        s.querySelector("#cfg-players").value = n;
         const cur = draft.players.length;
         if (n > cur) for (let i = cur; i < n; i++) draft.players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
         else draft.players.length = n;
         draft.playerCount = n;
         renderPlayersList();
+      }
+      s.querySelector("#cfg-players").addEventListener("change", (e) => {
+        setPlayerCount(parseInt(e.target.value, 10));
       });
+      s.querySelector("#players-minus").addEventListener("click", () => setPlayerCount(draft.playerCount - 1));
+      s.querySelector("#players-plus").addEventListener("click", () => setPlayerCount(draft.playerCount + 1));
     }
     s.querySelector("#cfg-life").addEventListener("change", (e) => {
       draft.startLife = Math.max(1, parseInt(e.target.value, 10) || preset.defaultLife);
@@ -1146,6 +1181,7 @@
       openProfilePicker({
         commander: pendingCommander,
         currentProfileId: pendingProfileId,
+        playerName: backdrop.querySelector("#ep-name").value,
         onSelect: (id) => {
           pendingProfileId = id;
           const prof = id ? Profiles.get(id) : null;
@@ -1155,6 +1191,9 @@
             const thumb = backdrop.querySelector("#ep-thumb");
             thumb.style.cssText = commanderThumbStyle(prof.commander);
             thumb.textContent = "";
+          }
+          if (prof && prof.playerName) {
+            backdrop.querySelector("#ep-name").value = prof.playerName;
           }
         },
       });
@@ -1236,6 +1275,7 @@
         openProfilePicker({
           commander: draft.commanders[i],
           currentProfileId: draft.profileIds[i],
+          playerName: draft.names[i],
           onSelect: (id) => {
             draft.profileIds[i] = id;
             const p = id ? Profiles.get(id) : null;
@@ -1245,6 +1285,10 @@
               card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(p.commander);
               card.querySelector(".commander-thumb").textContent = "";
               card.querySelector(".commander-name").textContent = p.commander.name;
+            }
+            if (p && p.playerName) {
+              draft.names[i] = p.playerName;
+              card.querySelector(".name-input").value = p.playerName;
             }
           },
         });

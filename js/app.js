@@ -12,6 +12,34 @@
   let game = null; // estado do jogo atual (espelha o State guardado)
   let draft = null; // rascunho usado nos ecrãs de setup
   let liveTimer = null; // interval do relógio ao vivo (turno/total) no tabuleiro
+  let wakeLock = null; // Screen Wake Lock ativo enquanto se está no contador de vida
+
+  // Impede o ecrã de bloquear enquanto se está a jogar (Commander/Duelo/Livre/BR).
+  // A Wake Lock API só funciona em contexto seguro (https ou localhost) e nem
+  // todos os browsers a suportam — falha em silêncio nesses casos.
+  async function requestWakeLock() {
+    if (!("wakeLock" in navigator)) return;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch (e) {
+      wakeLock = null;
+    }
+  }
+  function releaseWakeLock() {
+    if (wakeLock) {
+      try { wakeLock.release(); } catch (e) {}
+      wakeLock = null;
+    }
+  }
+  // Em muitos browsers a wake lock é libertada automaticamente quando a página
+  // fica em background (ex: trocar de app) — volta a pedir quando se regressa,
+  // mas só se ainda estivermos num ecrã de jogo.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && (screen === "game-standard" || screen === "game-br") && !wakeLock) {
+      requestWakeLock();
+    }
+  });
 
   function playTurnSound() {
     if (!turnAudioEl) return;
@@ -142,17 +170,6 @@
     elm.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
-  function floatDelta(panelEl, text, x, y, positive) {
-    const f = document.createElement("div");
-    f.className = "life-delta-float";
-    f.textContent = text;
-    f.style.left = x + "px";
-    f.style.top = y + "px";
-    f.style.color = positive ? "#7CE38B" : "#FF8F80";
-    panelEl.appendChild(f);
-    setTimeout(() => f.remove(), 750);
-  }
-
   function commanderThumbStyle(commander) {
     if (commander && commander.art) return `background-image:url('${commander.art}')`;
     return "";
@@ -185,6 +202,9 @@
     else if (screen === "game-br") renderGameBR();
     else if (screen === "stats-standard") renderStatsStandard();
     else if (screen === "profiles") renderProfilesScreen();
+
+    if (screen === "game-standard" || screen === "game-br") requestWakeLock();
+    else releaseWakeLock();
   }
 
   // ===========================================================
@@ -585,7 +605,13 @@
       State.ensureFallbackColors(st.standard.players);
       State.save(st);
       game = st;
-      nav("game-standard");
+      openWhoStartsModal(
+        st.standard.players.map((p) => ({ id: p.id, name: p.name })),
+        (winnerId) => {
+          State.stdSetStartingPlayer(game, winnerId);
+          nav("game-standard");
+        }
+      );
     });
   }
 
@@ -613,6 +639,7 @@
         </div>
         <div class="br-status-row">
           <div class="br-chip turn">👤 Vez: ${currentPlayer ? esc(currentPlayer.name) : "-"}</div>
+          <div class="br-chip">🔢 Turno: ${game.standard.turnNumber || 1}</div>
           <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
           <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
         </div>
@@ -652,7 +679,8 @@
     });
     s.querySelector("#reset-btn").addEventListener("click", () => {
       if (!confirm("Reiniciar vidas e commander damage de todos os jogadores?")) return;
-      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; });
+      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
+      game.standard.turnNumber = 1;
       State.save(game);
       render();
     });
@@ -715,10 +743,12 @@
           ${isActive ? `<div class="turn-badge">▶ VEZ</div>` : ""}
         <div class="player-header">
             <div class="player-name">${esc(p.name)}</div>
+            <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
           </div>
           <div class="life-zone">
             <div class="life-tap minus"></div>
             <div class="life-tap plus"></div>
+            <div class="life-delta-fixed"></div>
             <div class="life-total">${p.life}</div>
           </div>
           ${cmdEnabled ? `<div class="commander-badges">${opponents.map((o) => cmdBadgeHtml(p, o, "main") + (o.partnerCommander ? cmdBadgeHtml(p, o, "partner") : "")).join("")}</div>` : ""}
@@ -727,25 +757,44 @@
     `);
     syncEliminationBadges(panel, p);
 
-    const lifeZone = panel.querySelector(".life-zone");
     const minus = panel.querySelector(".life-tap.minus");
     const plus = panel.querySelector(".life-tap.plus");
+    const deltaEl = panel.querySelector(".life-delta-fixed");
 
-    bindPressRepeat(minus, (e) => {
+    // Acumula os toques consecutivos num só número (em vez de mostrar
+    // "+1"/"-1" a cada toque) e só reinicia 2s depois do último toque.
+    let deltaAcc = 0;
+    let deltaTimer = null;
+    function bumpDelta(amount) {
+      deltaAcc += amount;
+      clearTimeout(deltaTimer);
+      deltaEl.textContent = (deltaAcc > 0 ? "+" : "") + deltaAcc;
+      deltaEl.classList.toggle("plus", deltaAcc >= 0);
+      deltaEl.classList.toggle("minus", deltaAcc < 0);
+      deltaEl.classList.add("show");
+      deltaTimer = setTimeout(() => {
+        deltaEl.classList.remove("show");
+        deltaAcc = 0;
+      }, 2000);
+    }
+
+    bindPressRepeat(minus, () => {
       State.stdAdjustLife(game, p.id, -1);
       updateStandardPanel(p.id);
-      const rect = lifeZone.getBoundingClientRect();
-      floatDelta(panel.querySelector(".content"), "-1", (e.clientX || rect.left + rect.width * 0.25) - rect.left, (e.clientY || rect.top + rect.height / 2) - rect.top, false);
+      bumpDelta(-1);
     });
-    bindPressRepeat(plus, (e) => {
+    bindPressRepeat(plus, () => {
       State.stdAdjustLife(game, p.id, 1);
       updateStandardPanel(p.id);
-      const rect = lifeZone.getBoundingClientRect();
-      floatDelta(panel.querySelector(".content"), "+1", (e.clientX || rect.left + rect.width * 0.75) - rect.left, (e.clientY || rect.top + rect.height / 2) - rect.top, true);
+      bumpDelta(1);
     });
     panel.querySelector('[data-action="edit"]').addEventListener("click", (ev) => {
       ev.stopPropagation();
       openEditPlayerModal({ mode: "standard", playerId: p.id });
+    });
+    panel.querySelector('[data-action="tax"]').addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      openCommanderTaxModal(p.id);
     });
     if (cmdEnabled) {
       panel.querySelectorAll(".cmd-badge").forEach((b) => {
@@ -753,6 +802,146 @@
       });
     }
     return panel;
+  }
+
+  /** Texto compacto do badge de commander tax: "+{main*2}" ou, com
+   *  parceiro, "+{main*2}/+{partner*2}". */
+  function taxBadgeText(p) {
+    const main = "+" + (p.cmdTax || 0) * 2;
+    if (!p.partnerCommander) return main;
+    return main + "/+" + (p.partnerCmdTax || 0) * 2;
+  }
+
+  function openCommanderTaxModal(playerId) {
+    const p = game.standard.players.find((x) => x.id === playerId);
+    if (!p) return;
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet">
+          <h2>💠 Commander Tax — ${esc(p.name)}</h2>
+          <div class="footer-note" style="margin-bottom:10px">Cada vez que conjuras o commander da zona de comando, o custo sobe {2}. Toca em "+" de cada vez que o conjurares.</div>
+          <div class="cd-list" id="tax-list"></div>
+          <button class="btn btn-ghost btn-block" id="tax-close" style="margin-top:14px">Fechar</button>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    const list = backdrop.querySelector("#tax-list");
+    function buildRow(label, field, source) {
+      const n = p[field] || 0;
+      const row = el(`
+        <div class="cd-list-item">
+          <div class="nm">${esc(label)}</div>
+          <button class="btn btn-icon" data-d="-1">−</button>
+          <div class="val">+${n * 2}</div>
+          <button class="btn btn-icon" data-d="1">+</button>
+        </div>
+      `);
+      row.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          State.stdAdjustCmdTax(game, playerId, parseInt(btn.dataset.d, 10), source);
+          paint();
+        });
+      });
+      return row;
+    }
+    function paint() {
+      list.innerHTML = "";
+      list.appendChild(buildRow(p.commander ? p.commander.name : "Commander", "cmdTax", "main"));
+      if (p.partnerCommander) {
+        list.appendChild(buildRow(p.partnerCommander.name, "partnerCmdTax", "partner"));
+      }
+      const badge = appEl.querySelector(`.player-panel[data-player-id="${playerId}"] .tax-badge`);
+      if (badge) badge.textContent = taxBadgeText(p);
+    }
+    paint();
+    backdrop.querySelector("#tax-close").addEventListener("click", () => backdrop.remove());
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
+  }
+
+  /** Modal reutilizável (setup standard e BR) para escolher quem começa o jogo:
+   *  manualmente (toca no nome) ou por dados (1d6 cada, empates voltam a rolar
+   *  só entre os empatados até haver um vencedor único). Chama onConfirm(playerId)
+   *  assim que há uma escolha/vencedor confirmado. `players` é [{id, name}]. */
+  function openWhoStartsModal(players, onConfirm) {
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet">
+          <h2>🎲 Quem começa?</h2>
+          <div class="footer-note" style="margin-bottom:10px">Escolhe manualmente ou roda os dados — ganha quem tirar o valor mais alto (empates voltam a rolar).</div>
+          <div class="cd-list" id="who-manual-list"></div>
+          <button class="btn btn-accent btn-block" id="who-roll-btn" style="margin-top:14px">🎲 Rolar dados por todos</button>
+          <div id="who-roll-results" style="margin-top:12px"></div>
+          <button class="btn btn-ghost btn-block" id="who-cancel" style="margin-top:14px">Cancelar</button>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+
+    const manualList = backdrop.querySelector("#who-manual-list");
+    players.forEach((p) => {
+      const row = el(`
+        <div class="cd-list-item" style="cursor:pointer" data-pid="${p.id}">
+          <div class="nm">${esc(p.name)}</div>
+          <div class="val">▶</div>
+        </div>
+      `);
+      row.addEventListener("click", () => {
+        backdrop.remove();
+        onConfirm(p.id);
+      });
+      manualList.appendChild(row);
+    });
+
+    const resultsEl = backdrop.querySelector("#who-roll-results");
+    backdrop.querySelector("#who-roll-btn").addEventListener("click", () => {
+      let pool = players.slice();
+      let rollsByPlayer = {};
+      players.forEach((p) => { rollsByPlayer[p.id] = null; });
+
+      function rollRound() {
+        pool.forEach((p) => { rollsByPlayer[p.id] = 1 + Math.floor(Math.random() * 6); });
+        const maxRoll = Math.max(...pool.map((p) => rollsByPlayer[p.id]));
+        const winners = pool.filter((p) => rollsByPlayer[p.id] === maxRoll);
+        paintResults(winners.length > 1);
+        if (winners.length > 1) {
+          pool = winners;
+          setTimeout(rollRound, 1200);
+        } else {
+          const winnerId = winners[0].id;
+          setTimeout(() => {
+            backdrop.remove();
+            onConfirm(winnerId);
+          }, 1400);
+        }
+      }
+      function paintResults(tied) {
+        resultsEl.innerHTML = "";
+        const list = el(`<div class="cd-list"></div>`);
+        players.forEach((p) => {
+          const r = rollsByPlayer[p.id];
+          const inPool = pool.includes(p);
+          const row = el(`
+            <div class="cd-list-item" style="${inPool ? "" : "opacity:.4"}">
+              <div class="nm">${esc(p.name)}</div>
+              <div class="val">${r === null ? "…" : "🎲 " + r}</div>
+            </div>
+          `);
+          list.appendChild(row);
+        });
+        resultsEl.appendChild(list);
+        if (tied) {
+          resultsEl.appendChild(el(`<div class="footer-note" style="margin-top:6px">Empate — a rodar de novo só entre quem empatou...</div>`));
+        }
+      }
+      backdrop.querySelector("#who-roll-btn").disabled = true;
+      manualList.style.display = "none";
+      rollRound();
+    });
+
+    backdrop.querySelector("#who-cancel").addEventListener("click", () => backdrop.remove());
   }
 
   /** HTML de um único badge de commander damage (main ou partner) de um oponente. */
@@ -1072,7 +1261,13 @@
       State.ensureFallbackColors(st.br.players);
       State.save(st);
       game = st;
-      nav("game-br");
+      openWhoStartsModal(
+        st.br.players.map((p) => ({ id: p.id, name: p.name })),
+        (winnerId) => {
+          State.brSetStartingPlayer(game, winnerId);
+          nav("game-br");
+        }
+      );
     });
   }
 
@@ -1096,6 +1291,7 @@
         <div class="br-status-row">
           <div class="br-chip turn">🔁 Ronda ${br.roundNumber}</div>
           <div class="br-chip">👤 Vez de: ${current ? esc(current.name) : "-"}</div>
+          <div class="br-chip">🔢 Turno: ${(br.globalTurnCount || 0) + 1}</div>
           <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
           <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
           <div class="br-chip ${br.phase !== "normal" ? "phase-final" : ""}">${phaseLabel(br.phase)}</div>

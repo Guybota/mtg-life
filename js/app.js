@@ -306,16 +306,24 @@
           const item = el(`
             <div class="search-result-item">
               <img src="${card.art ? esc(card.art) : ""}" onerror="this.style.visibility='hidden'">
-              <div>
+              <div class="info">
                 <div class="name">${esc(card.name)}</div>
                 <div class="type">${esc(card.typeLine)}</div>
               </div>
+              ${card.printsUri ? `<button class="btn btn-icon versions-btn" title="Escolher arte/versão alternativa">🎨</button>` : ""}
             </div>
           `);
           item.addEventListener("click", () => {
             onSelect(card);
             backdrop.remove();
           });
+          const versionsBtn = item.querySelector(".versions-btn");
+          if (versionsBtn) {
+            versionsBtn.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              openVersionPicker(card, (chosen) => onSelect(chosen), backdrop);
+            });
+          }
           results.appendChild(item);
         });
       } catch (err) {
@@ -336,6 +344,62 @@
       onSelect({ id: "manual_" + Date.now(), name, art: url, artNormal: url });
       backdrop.remove();
     });
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
+  }
+
+  // ===========================================================
+  // VERSION PICKER (modal reutilizável) — escolher arte/edição alternativa
+  // de uma carta já encontrada na pesquisa (abre por cima do commander picker)
+  // ===========================================================
+  function openVersionPicker(baseCard, onSelect, parentBackdrop) {
+    // (sem closeAnyModal aqui de propósito: abre por cima do commander picker)
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet">
+          <h2>🎨 Escolher arte — ${esc(baseCard.name)}</h2>
+          <div class="search-status" id="vp-status">A carregar edições…</div>
+          <div class="search-results" id="vp-results"></div>
+          <button class="btn btn-ghost" id="vp-cancel" style="margin-top:10px">Cancelar</button>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    const results = backdrop.querySelector("#vp-results");
+    const status = backdrop.querySelector("#vp-status");
+
+    function selectVersion(card) {
+      onSelect(card);
+      backdrop.remove();
+      if (parentBackdrop) parentBackdrop.remove();
+    }
+
+    (async () => {
+      try {
+        const prints = await Scryfall.getPrints(baseCard.printsUri);
+        if (!prints.length) {
+          status.textContent = "Não há outras edições/artes disponíveis para esta carta.";
+          return;
+        }
+        status.classList.add("hidden");
+        prints.forEach((card) => {
+          const item = el(`
+            <div class="search-result-item">
+              <img src="${card.art ? esc(card.art) : ""}" onerror="this.style.visibility='hidden'">
+              <div class="info">
+                <div class="name">${esc(card.setName || card.set)}</div>
+                <div class="type">${esc(card.artist ? "Arte de " + card.artist : "")}${card.collectorNumber ? " · #" + esc(card.collectorNumber) : ""}</div>
+              </div>
+            </div>
+          `);
+          item.addEventListener("click", () => selectVersion(card));
+          results.appendChild(item);
+        });
+      } catch (err) {
+        status.textContent = "⚠️ Não foi possível carregar as edições/artes. Tenta novamente.";
+      }
+    })();
+
+    backdrop.querySelector("#vp-cancel").addEventListener("click", () => backdrop.remove());
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
@@ -473,7 +537,12 @@
           openProfilePicker({
             commander: draft.players[i].commander,
             currentProfileId: draft.players[i].profileId,
-            onSelect: (id) => { draft.players[i].profileId = id; renderPlayersList(); },
+            onSelect: (id) => {
+              draft.players[i].profileId = id;
+              const prof = id ? Profiles.get(id) : null;
+              if (prof && prof.commander) draft.players[i].commander = prof.commander;
+              renderPlayersList();
+            },
           });
         });
         list.appendChild(card);
@@ -892,6 +961,12 @@
           pendingProfileId = id;
           const prof = id ? Profiles.get(id) : null;
           backdrop.querySelector("#ep-profile").textContent = prof ? "👤 " + prof.name : "👤 Sem perfil";
+          if (prof && prof.commander) {
+            pendingCommander = prof.commander;
+            const thumb = backdrop.querySelector("#ep-thumb");
+            thumb.style.cssText = commanderThumbStyle(prof.commander);
+            thumb.textContent = "";
+          }
         },
       });
     });
@@ -976,6 +1051,12 @@
             draft.profileIds[i] = id;
             const p = id ? Profiles.get(id) : null;
             card.querySelector(".profile-btn").textContent = p ? "👤 " + p.name : "👤 Sem perfil";
+            if (p && p.commander) {
+              draft.commanders[i] = p.commander;
+              card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(p.commander);
+              card.querySelector(".commander-thumb").textContent = "";
+              card.querySelector(".commander-name").textContent = p.commander.name;
+            }
           },
         });
       });

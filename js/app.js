@@ -158,6 +158,20 @@
     return "";
   }
 
+  /** Fundo do "cartão" de um jogador durante o jogo: a arte do commander,
+   *  ou — se ainda não escolheu nenhum — uma cor sorteada só para ele (sem
+   *  repetir entre os jogadores que também não têm imagem). */
+  function playerBgStyle(p) {
+    if (p && p.commander && p.commander.art) return `background-image:url('${esc(p.commander.art)}')`;
+    const idx = p && p.fallbackColorIdx;
+    const palette = State.FALLBACK_PALETTE;
+    if (typeof idx === "number" && palette && palette[idx]) {
+      const [c1, c2] = palette[idx];
+      return `background:linear-gradient(160deg, ${c1}, ${c2})`;
+    }
+    return "background:linear-gradient(160deg,#2a2f38,#12141a)";
+  }
+
   // ---------------------------------------------------------
   // ROUTER
   // ---------------------------------------------------------
@@ -180,7 +194,7 @@
     const saved = State.load();
     const s = el(`
       <div class="screen menu-screen">
-        <div class="logo">🔥 MTG <span>LIFE</span> COUNTER
+        <div class="logo">MTG <span>LIFE</span> COUNTER
           <small>Commander • Battle Royale • Livre</small>
         </div>
         ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">▶️ Continuar jogo em curso</button>` : ""}
@@ -499,6 +513,7 @@
         p.partnerCommander = draft.players[i].partnerCommander || null;
         p.profileId = draft.players[i].profileId || null;
       });
+      State.ensureFallbackColors(st.standard.players);
       State.save(st);
       game = st;
       nav("game-standard");
@@ -625,7 +640,7 @@
     const isActive = currentPlayer && currentPlayer.id === p.id;
     const panel = el(`
       <div class="player-panel ${rotated ? "rot180" : ""} ${p.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-player-id="${p.id}">
-        <div class="bg" style="${p.commander && p.commander.art ? `background-image:url('${esc(p.commander.art)}')` : "background:linear-gradient(160deg,#2a2f38,#12141a)"}"></div>
+        <div class="bg" style="${playerBgStyle(p)}"></div>
         <div class="mini-actions"><button class="mini-btn" data-action="edit">✏️</button></div>
         <div class="content">
           ${isActive ? `<div class="turn-badge">▶ VEZ</div>` : ""}
@@ -676,7 +691,10 @@
     const key = source === "partner" ? o.id + "::partner" : o.id;
     const dmg = p.cmdDamage[key] || 0;
     const cmd = source === "partner" ? o.partnerCommander : o.commander;
-    return `<div class="cmd-badge ${source === "partner" ? "partner" : ""} ${dmg >= 21 ? "lethal" : ""}" data-opp-id="${o.id}" data-source="${source}" style="${cmd && cmd.art ? `background-image:url('${esc(cmd.art)}')` : ""}">
+    // no badge "main" (identidade do oponente), sem arte usa a mesma cor
+    // sorteada do painel dele; o badge "partner" fica neutro sem arte.
+    const bgStyle = source === "partner" ? (cmd && cmd.art ? `background-image:url('${esc(cmd.art)}')` : "") : playerBgStyle(o);
+    return `<div class="cmd-badge ${source === "partner" ? "partner" : ""} ${dmg >= 21 ? "lethal" : ""}" data-opp-id="${o.id}" data-source="${source}" style="${bgStyle}">
       ${cmd ? "" : "🃏"}<div class="dmg">${dmg}</div>
     </div>`;
   }
@@ -970,6 +988,7 @@
         p.commander = draft.commanders[i];
         p.profileId = draft.profileIds[i] || null;
       });
+      State.ensureFallbackColors(st.br.players);
       State.save(st);
       game = st;
       nav("game-br");
@@ -1023,7 +1042,7 @@
       const cell = el(`
         <div class="zone-cell ${closed ? "closed" : ""}">
           <div class="zn">${z}</div>
-          <div class="zone-avatars">${occupants.map((o) => `<div class="zone-avatar" style="${o.commander && o.commander.art ? `background-image:url('${esc(o.commander.art)}')` : "background:#333"}" title="${esc(o.name)}"></div>`).join("")}</div>
+          <div class="zone-avatars">${occupants.map((o) => `<div class="zone-avatar" style="${playerBgStyle(o)}" title="${esc(o.name)}"></div>`).join("")}</div>
         </div>
       `);
       zoneMap.appendChild(cell);
@@ -1077,7 +1096,7 @@
     const row = el(`
       <div class="br-player-row ${isActive ? "active" : ""} ${p.eliminated ? "eliminated" : ""}">
         <div class="br-row-top">
-          <div class="br-avatar" style="${p.commander && p.commander.art ? `background-image:url('${esc(p.commander.art)}')` : "background:#2a2f38"}"></div>
+          <div class="br-avatar" style="${playerBgStyle(p)}"></div>
           <div class="br-info">
             <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">▶ VEZ</span>` : ""}</div>
             <div class="meta">
@@ -1256,7 +1275,7 @@
     const stats = State.brComputeStats(game);
     const s = el(`
       <div class="screen" style="align-items:center;text-align:center;">
-        ${champ && champ.commander && champ.commander.art ? `<div class="bg" style="position:absolute;inset:0;background-image:url('${esc(champ.commander.art)}');background-size:cover;filter:brightness(.3)"></div>` : ""}
+        ${champ ? `<div class="bg" style="position:absolute;inset:0;${playerBgStyle(champ)};background-size:cover;filter:brightness(.3)"></div>` : ""}
         <div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 20px 6px;flex-shrink:0">
           <div class="trophy">👑</div>
           <div class="cname">${champ ? esc(champ.name) : "?"}</div>
@@ -1265,7 +1284,7 @@
         <div class="scroll" style="position:relative;z-index:2;width:100%">${buildStatsBlock(stats)}</div>
         <div class="board-toolbar" style="position:relative;z-index:2;width:100%">
           <button class="btn btn-accent grow" id="new-br-btn">🩸 Novo Battle Royale</button>
-          <button class="btn btn-ghost" id="menu-btn2">🏠 Menu</button>
+          <button class="btn btn-ghost" id="menu-btn2">Menu</button>
         </div>
       </div>
     `);
@@ -1318,7 +1337,7 @@
         </div>
         <div class="scroll">${buildStatsBlock(stats)}</div>
         <div class="board-toolbar">
-          <button class="btn btn-primary btn-block" id="stats-menu-btn">🏠 Menu</button>
+          <button class="btn btn-primary btn-block" id="stats-menu-btn">Menu</button>
         </div>
       </div>
     `);

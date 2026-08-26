@@ -8,6 +8,48 @@
     return "p_" + Math.random().toString(36).slice(2, 10);
   }
 
+  // Cores de fundo sorteadas para jogadores sem commander escolhido (sem
+  // arte de fundo). Cada entrada é [corClara, corEscura] para um gradiente.
+  const FALLBACK_PALETTE = [
+    ["#c0392b", "#6b1810"], // vermelho
+    ["#1f6fb2", "#0d2f4f"], // azul
+    ["#2e9e5b", "#123f24"], // verde
+    ["#8e2ee0", "#3a1263"], // roxo
+    ["#d4af37", "#5c4813"], // dourado
+    ["#e0632e", "#5c2510"], // laranja
+    ["#2ec4b6", "#0f4c47"], // turquesa
+    ["#e0389a", "#5c1743"], // rosa
+  ];
+
+  /** Garante que todos os jogadores sem arte de commander têm uma cor de
+   *  fundo sorteada e que não há duas repetidas entre eles. Mantém a cor já
+   *  atribuída a quem já tinha (só reatribui quando falta ou há colisão). */
+  function ensureFallbackColors(players) {
+    if (!players) return;
+    const needColor = players.filter((p) => !(p.commander && p.commander.art));
+    const used = new Set();
+    needColor.forEach((p) => {
+      if (typeof p.fallbackColorIdx === "number" && !used.has(p.fallbackColorIdx)) {
+        used.add(p.fallbackColorIdx);
+      } else {
+        p.fallbackColorIdx = undefined;
+      }
+    });
+    const pool = FALLBACK_PALETTE.map((_, i) => i).filter((i) => !used.has(i));
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    needColor.forEach((p) => {
+      if (typeof p.fallbackColorIdx !== "number") {
+        p.fallbackColorIdx = pool.length ? pool.shift() : Math.floor(Math.random() * FALLBACK_PALETTE.length);
+      }
+    });
+    players.forEach((p) => {
+      if (p.commander && p.commander.art) p.fallbackColorIdx = undefined;
+    });
+  }
+
   function save(state) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -135,6 +177,7 @@
     const p = state.standard.players.find((x) => x.id === playerId);
     if (!p) return state;
     p.commander = commander;
+    ensureFallbackColors(state.standard.players);
     save(state);
     return state;
   }
@@ -426,6 +469,7 @@
     const p = state.br.players.find((x) => x.id === playerId);
     if (!p) return state;
     p.commander = commander;
+    ensureFallbackColors(state.br.players);
     save(state);
     return state;
   }
@@ -653,5 +697,7 @@
     CLOSE_ORDER: BR_CLOSE_ORDER,
     EVENTS: BR_EVENTS,
     LOOT: BR_LOOT,
+    FALLBACK_PALETTE,
+    ensureFallbackColors,
   };
 })(window);

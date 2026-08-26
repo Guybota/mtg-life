@@ -107,7 +107,8 @@
         players,
         turnOrder: players.map((p) => p.id),
         currentTurnIndex: 0,
-        turnNumber: 1,
+        roundStartIndex: 0, // índice (em turnOrder) de quem começou a ronda/jogo atual
+        roundNumber: 1,
         gameStartedAt: now,
         turnStartedAt: now,
         ended: false,
@@ -243,7 +244,9 @@
     return fromIndex;
   }
 
-  /** Passa o turno: acumula o tempo do jogador atual e toca a vez ao próximo vivo. */
+  /** Passa o turno: acumula o tempo do jogador atual e toca a vez ao próximo vivo.
+   *  A ronda só sobe quando a vez volta a dar a quem começou a ronda/jogo
+   *  (roundStartIndex) — não a cada turno individual. */
   function stdPassTurn(state) {
     const std = state.standard;
     if (!std || std.ended) return state;
@@ -255,7 +258,9 @@
     }
     std.currentTurnIndex = stdNextAliveIndex(state, std.currentTurnIndex);
     std.turnStartedAt = now;
-    std.turnNumber = (std.turnNumber || 1) + 1;
+    if (std.currentTurnIndex === (std.roundStartIndex || 0)) {
+      std.roundNumber = (std.roundNumber || 1) + 1;
+    }
     save(state);
     return state;
   }
@@ -268,7 +273,8 @@
     if (idx === -1) return state;
     const now = Date.now();
     std.currentTurnIndex = idx;
-    std.turnNumber = 1;
+    std.roundStartIndex = idx;
+    std.roundNumber = 1;
     std.turnStartedAt = now;
     std.gameStartedAt = now;
     save(state);
@@ -352,6 +358,7 @@
     }
     state.standard.turnOrder = players.map((p) => p.id);
     state.standard.currentTurnIndex = 0;
+    state.standard.roundStartIndex = 0;
     save(state);
     return state;
   }
@@ -370,7 +377,8 @@
       p.turnsTaken = 0;
     });
     state.standard.currentTurnIndex = 0;
-    state.standard.turnNumber = 1;
+    state.standard.roundStartIndex = 0;
+    state.standard.roundNumber = 1;
     state.standard.gameStartedAt = now;
     state.standard.turnStartedAt = now;
     state.standard.ended = false;

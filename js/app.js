@@ -674,7 +674,7 @@
         </div>
         <div class="br-status-row">
           <div class="br-chip turn">👤 Vez: ${currentPlayer ? esc(currentPlayer.name) : "-"}</div>
-          <div class="br-chip">🔢 Turno: ${game.standard.turnNumber || 1}</div>
+          <div class="br-chip">🔁 Ronda: ${game.standard.roundNumber || 1}</div>
           <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
           <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
         </div>
@@ -715,7 +715,8 @@
     s.querySelector("#reset-btn").addEventListener("click", () => {
       if (!confirm("Reiniciar vidas e commander damage de todos os jogadores?")) return;
       game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
-      game.standard.turnNumber = 1;
+      game.standard.roundNumber = 1;
+      game.standard.roundStartIndex = game.standard.currentTurnIndex;
       State.save(game);
       render();
     });
@@ -1335,7 +1336,6 @@
         <div class="br-status-row">
           <div class="br-chip turn">🔁 Ronda ${br.roundNumber}</div>
           <div class="br-chip">👤 Vez de: ${current ? esc(current.name) : "-"}</div>
-          <div class="br-chip">🔢 Turno: ${(br.globalTurnCount || 0) + 1}</div>
           <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
           <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
           <div class="br-chip ${br.phase !== "normal" ? "phase-final" : ""}">${phaseLabel(br.phase)}</div>

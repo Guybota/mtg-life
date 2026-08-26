@@ -86,6 +86,8 @@
         partnerCommander: null, // commander parceiro opcional (regra Partner)
         life: startLife,
         cmdDamage: {}, // { [opponentPlayerId]: number, [opponentPlayerId + "::partner"]: number }
+        cmdTax: 0, // nº de vezes que o commander principal já foi conjurado da zona de comando
+        partnerCmdTax: 0, // idem, para o commander parceiro
         eliminated: false,
         protected: false, // mantido em jogo apesar de "eliminado" por uma carta (Platinum Angel, etc.)
         poison: 0,
@@ -105,6 +107,7 @@
         players,
         turnOrder: players.map((p) => p.id),
         currentTurnIndex: 0,
+        turnNumber: 1,
         gameStartedAt: now,
         turnStartedAt: now,
         ended: false,
@@ -147,6 +150,17 @@
       if (anyLethal || p.life <= 0) p.eliminated = true;
       else if (p.life > 0 && !anyLethal) p.eliminated = false;
     }
+    save(state);
+    return state;
+  }
+
+  /** Commander tax: cada vez que o jogador conjura o commander (principal ou
+   *  parceiro) da zona de comando, o custo sobe {2}. source: "main"|"partner". */
+  function stdAdjustCmdTax(state, playerId, delta, source) {
+    const p = state.standard.players.find((x) => x.id === playerId);
+    if (!p) return state;
+    const field = source === "partner" ? "partnerCmdTax" : "cmdTax";
+    p[field] = Math.max(0, (p[field] || 0) + delta);
     save(state);
     return state;
   }
@@ -241,6 +255,22 @@
     }
     std.currentTurnIndex = stdNextAliveIndex(state, std.currentTurnIndex);
     std.turnStartedAt = now;
+    std.turnNumber = (std.turnNumber || 1) + 1;
+    save(state);
+    return state;
+  }
+
+  /** Define quem começa o jogo (escolha manual ou resultado do dado),
+   *  reiniciando o relógio do jogo/turno a partir de agora. */
+  function stdSetStartingPlayer(state, playerId) {
+    const std = state.standard;
+    const idx = std.turnOrder.indexOf(playerId);
+    if (idx === -1) return state;
+    const now = Date.now();
+    std.currentTurnIndex = idx;
+    std.turnNumber = 1;
+    std.turnStartedAt = now;
+    std.gameStartedAt = now;
     save(state);
     return state;
   }
@@ -307,6 +337,8 @@
           partnerCommander: null,
           life: state.standard.startLife,
           cmdDamage: {},
+          cmdTax: 0,
+          partnerCmdTax: 0,
           eliminated: false,
           protected: false,
           poison: 0,
@@ -330,12 +362,15 @@
     state.standard.players.forEach((p) => {
       p.life = life;
       p.cmdDamage = {};
+      p.cmdTax = 0;
+      p.partnerCmdTax = 0;
       p.eliminated = false;
       p.protected = false;
       p.turnTimeMs = 0;
       p.turnsTaken = 0;
     });
     state.standard.currentTurnIndex = 0;
+    state.standard.turnNumber = 1;
     state.standard.gameStartedAt = now;
     state.standard.turnStartedAt = now;
     state.standard.ended = false;
@@ -470,6 +505,21 @@
     if (!p) return state;
     p.commander = commander;
     ensureFallbackColors(state.br.players);
+    save(state);
+    return state;
+  }
+
+  /** Define quem começa o Battle Royale (escolha manual ou resultado do
+   *  dado), reiniciando o relógio do jogo/turno a partir de agora. */
+  function brSetStartingPlayer(state, playerId) {
+    const br = state.br;
+    const idx = br.turnOrder.indexOf(playerId);
+    if (idx === -1) return state;
+    const now = Date.now();
+    br.currentTurnIndex = idx;
+    br.globalTurnCount = 0;
+    br.turnStartedAt = now;
+    br.gameStartedAt = now;
     save(state);
     return state;
   }
@@ -665,6 +715,7 @@
     createStandardGame,
     stdAdjustLife,
     stdAdjustCmdDamage,
+    stdAdjustCmdTax,
     stdToggleEliminated,
     stdSetCommander,
     stdSetPartnerCommander,
@@ -673,6 +724,7 @@
     stdSetPlayerCount,
     stdSetStartLife,
     stdSetProfile,
+    stdSetStartingPlayer,
     stdCurrentPlayer,
     stdPassTurn,
     stdEndGame,
@@ -683,6 +735,7 @@
     brSetName,
     brSetCommander,
     brSetProfile,
+    brSetStartingPlayer,
     brZoneAdjacent,
     brEliminate,
     brApplyLoot,

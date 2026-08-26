@@ -368,7 +368,7 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 }
 .player-header{
   display:flex; align-items:center; justify-content:space-between;
-  padding: 6px 10px;
+  padding: 6px 40px 6px 10px;
   gap:6px;
 }
 .player-name{
@@ -380,6 +380,11 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 .player-header .zone-tag{
   font-size:.65rem; background:rgba(0,0,0,.5); padding:2px 6px; border-radius:6px; font-weight:700;
 }
+.tax-badge{
+  font-size:.65rem; background:rgba(0,0,0,.5); padding:2px 7px; border-radius:6px; font-weight:700;
+  color: var(--gold, #d4af37); white-space:nowrap; cursor:pointer; border:1px solid rgba(212,175,55,.4);
+}
+.tax-badge:active{ background:rgba(0,0,0,.7); }
 .life-zone{
   flex:1;
   display:flex;
@@ -402,18 +407,30 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
   z-index:3;
   line-height:1;
 }
-.life-delta-float{
+.life-delta-fixed{
   position:absolute;
-  font-size:1.4rem;
+  top:8%;
+  left:50%;
+  transform: translateX(-50%) translateY(-6px);
+  font-size:1.3rem;
   font-weight:800;
   pointer-events:none;
-  animation: floatup .7s ease-out forwards;
   z-index:4;
   text-shadow: 0 2px 6px rgba(0,0,0,.9);
+  opacity:0;
+  transition: opacity .15s ease, transform .15s ease;
+  background: rgba(0,0,0,.45);
+  padding: 2px 10px;
+  border-radius: 10px;
 }
-@keyframes floatup{
-  0%{ opacity:1; transform: translateY(0); }
-  100%{ opacity:0; transform: translateY(-40px); }
+.life-delta-fixed.show{
+  opacity:1;
+  transform: translateX(-50%) translateY(0);
+}
+.life-delta-fixed.plus{ color:#7be08a; }
+.life-delta-fixed.minus{ color:#ff8a8a; }
+.player-panel.rot180 .life-delta-fixed{
+  top:auto; bottom:8%;
 }
 .commander-badges{
   display:flex;

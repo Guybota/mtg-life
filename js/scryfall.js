@@ -62,7 +62,12 @@
       art: getArt(card, "art_crop"),
       artNormal: getArt(card, "normal"),
       set: card.set,
+      setName: card.set_name || "",
+      artist: card.artist || (Array.isArray(card.card_faces) && card.card_faces[0] && card.card_faces[0].artist) || "",
+      collectorNumber: card.collector_number || "",
       colorIdentity: card.color_identity || [],
+      // link para ir buscar todas as edições/artes desta carta (ver getPrints)
+      printsUri: card.prints_search_uri || null,
     };
   }
 
@@ -140,6 +145,37 @@
     }
   }
 
+  /**
+   * Vai buscar todas as edições/impressões (e portanto artes alternativas)
+   * de uma carta, a partir do seu `printsUri` (devolvido em cada resultado
+   * de pesquisa). Ordenadas pelo próprio Scryfall (mais recente primeiro).
+   */
+  async function getPrints(printsUri) {
+    if (!printsUri) return [];
+    const c = loadCache();
+    const cacheKey = "prints:" + printsUri;
+    if (c[cacheKey] && Date.now() - c[cacheKey].t < 1000 * 60 * 60 * 24) {
+      return c[cacheKey].data;
+    }
+    try {
+      const res = await throttledFetch(printsUri);
+      if (res.status === 404) {
+        c[cacheKey] = { t: Date.now(), data: [] };
+        saveCache();
+        return [];
+      }
+      if (!res.ok) throw new Error("Scryfall respondeu " + res.status);
+      const json = await res.json();
+      const data = (json.data || []).map(normalizeCard).filter((card) => card.art);
+      c[cacheKey] = { t: Date.now(), data };
+      saveCache();
+      return data;
+    } catch (err) {
+      console.warn("[Scryfall] falha ao carregar versões/artes:", err);
+      throw err;
+    }
+  }
+
   global.MTG = global.MTG || {};
-  global.MTG.Scryfall = { searchCommanders, searchAnyCard, getArt, normalizeCard };
+  global.MTG.Scryfall = { searchCommanders, searchAnyCard, getArt, normalizeCard, getPrints };
 })(window);

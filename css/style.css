@@ -202,6 +202,8 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 .mode-card.free:active{ box-shadow: 0 0 0 2px rgba(46,158,91,.5), 0 4px 14px rgba(0,0,0,.3); }
 .mode-card.br{ border-color: rgba(142,46,224,.55); background: linear-gradient(160deg, rgba(142,46,224,.18), var(--bg-elev)); }
 .mode-card.br:active{ box-shadow: 0 0 0 2px rgba(142,46,224,.55), 0 4px 14px rgba(0,0,0,.3); }
+.mode-card.teams{ border-color: rgba(31,111,178,.5); }
+.mode-card.teams:active{ box-shadow: 0 0 0 2px rgba(31,111,178,.55), 0 4px 14px rgba(0,0,0,.3); }
 
 .footer-note{ font-size:.7rem; color:var(--text-dim); max-width:480px; }
 
@@ -234,6 +236,19 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 }
 
 .player-setup-list{ display:flex; flex-direction:column; gap:12px; }
+.team-setup-card{
+  background: var(--bg-elev);
+  border:1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+.team-setup-card .team-name-input{
+  font-family: var(--font-display);
+  font-weight:700;
+  margin-bottom:10px;
+}
+.team-setup-card .player-setup-list{ gap:10px; }
 .player-setup-card{
   background: linear-gradient(160deg, var(--bg-elev-2), var(--bg-elev));
   border:1px solid var(--line);
@@ -341,6 +356,17 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
   transition: filter .2s ease;
 }
 .player-panel.eliminated .bg{ filter: grayscale(1) brightness(.25); }
+/* Commander Parceiro (ou, numa equipa, cada jogador da equipa): o fundo
+   fica dividido em fatias iguais, uma por commander, em vez de mostrar só
+   uma arte única. Generalizado para N fatias (não só 2). */
+.player-panel .bg.bg-split{ display:flex; }
+.player-panel .bg.bg-split .bg-half{
+  flex:1;
+  height:100%;
+  background-size:cover;
+  background-position:center 30%;
+}
+.player-panel .bg.bg-split .bg-half:not(:last-child){ border-right:2px solid rgba(255,255,255,.3); }
 /* A borda de "é a tua vez" tem de ficar num pseudo-elemento à parte, por
    cima de tudo (.bg, .content, badges...): um box-shadow inset colocado
    diretamente no .player-panel fica por BAIXO dos seus filhos posicionados
@@ -402,8 +428,9 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
   font-size:.65rem; background:rgba(0,0,0,.5); padding:2px 6px; border-radius:6px; font-weight:700;
 }
 .tax-badge{
-  font-size:.65rem; background:rgba(0,0,0,.5); padding:2px 7px; border-radius:6px; font-weight:700;
+  font-size:.85rem; background:rgba(0,0,0,.5); padding:7px 14px; border-radius:10px; font-weight:700;
   color: var(--gold, #d4af37); white-space:nowrap; cursor:pointer; border:1px solid rgba(212,175,55,.4);
+  min-height:30px; display:flex; align-items:center;
 }
 .tax-badge:active{ background:rgba(0,0,0,.7); }
 .life-zone{
@@ -413,13 +440,20 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
   justify-content:center;
   position:relative;
 }
+/* Zonas de toque para +/- vida: mostram apenas o símbolo, sem fundo
+   nem fade, para se perceber qual é o lado de cada um sem distrair. */
 .life-tap{
   position:absolute; top:0; bottom:0; width:50%;
-  display:flex; align-items:center; justify-content:center;
-  font-size:1.6rem; opacity:0; font-weight:800;
+  display:flex; align-items:center;
+  font-size:1.7rem; font-weight:800;
+  color: rgba(255,255,255,.6);
+  text-shadow: 0 1px 4px rgba(0,0,0,.7);
 }
-.life-tap.minus{ left:0; }
-.life-tap.plus{ right:0; }
+.life-tap.minus{ left:0; justify-content:flex-start; padding-left:5%; }
+.life-tap.plus{ right:0; justify-content:flex-end; padding-right:5%; }
+.tap-circle{
+  display:flex; align-items:center; justify-content:center;
+}
 .life-total{
   font-size: clamp(2.2rem, 9vw, 4rem);
   font-weight:800;
@@ -453,13 +487,11 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 .player-panel.rot180 .life-delta-fixed{
   top:auto; bottom:8%;
 }
+/* Badges de commander damage: faixa centrada por baixo do contador de vida. */
 .commander-badges{
-  display:flex;
-  gap:5px;
-  padding: 4px 8px 8px;
-  flex-wrap:wrap;
-  z-index:3;
-  position:relative;
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:center;
+  gap:7px;
+  padding: 2px 8px 6px;
 }
 .cmd-badge{
   width:30px; height:30px;
@@ -485,6 +517,42 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 .cmd-badge.lethal{ border-color: var(--gold); }
 .cmd-badge.partner{ border-color: rgba(142,46,224,.7); }
 .cmd-badge.partner.lethal{ border-color: var(--gold); }
+
+/* Modo Equipas: roster de jogadores dentro do painel (vida) da equipa. */
+.team-roster{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding: 4px 8px 8px;
+  z-index:3;
+  position:relative;
+}
+.team-roster-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  background: rgba(0,0,0,.35);
+  border-radius:8px;
+  padding: 4px 6px;
+}
+.team-roster-row.up{ background: rgba(212,175,55,.25); box-shadow: inset 0 0 0 1px rgba(212,175,55,.5); }
+.team-roster-thumb{
+  width:22px; height:22px; border-radius:50%; flex-shrink:0;
+  background-size:cover; background-position:center;
+  background-color: rgba(255,255,255,.08);
+  display:flex; align-items:center; justify-content:center; font-size:.6rem;
+}
+.team-roster-name{
+  flex:1; font-size:.72rem; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+}
+.tax-badge-sm{
+  font-size:.68rem; background:rgba(0,0,0,.5); padding:6px 10px; border-radius:8px; font-weight:700;
+  color: var(--gold, #d4af37); white-space:nowrap; cursor:pointer; border:1px solid rgba(212,175,55,.4);
+  min-height:26px; display:flex; align-items:center;
+}
+.team-roster-row .mini-btn{ width:20px; height:20px; font-size:.6rem; position:static; }
 
 .player-panel .mini-actions{
   position:absolute; top:6px; right:6px; z-index:5;
@@ -527,6 +595,45 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 }
 .board-toolbar .btn{ flex:1; }
 
+/* Botão de "passar turno" dentro do próprio painel do jogador/equipa da
+   vez, logo por baixo do contador de vida (em vez de ficar sempre fixo
+   numa barra global no fundo do ecrã). */
+.panel-pass-turn-btn{
+  margin: 2px 8px 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--gold), #a8791f);
+  color:#1a1206;
+  font-weight:800;
+  font-size:.74rem;
+  border:none;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:5px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  position:relative; z-index:3;
+  flex-shrink:0;
+}
+.panel-pass-turn-btn:active{ filter:brightness(.9); }
+.panel-pass-turn-btn:disabled{ opacity:.4; pointer-events:none; }
+
+/* Modo fullscreen do tabuleiro: esconde a barra de topo, a barra de
+   estado e a barra de baixo, ficando só os contadores de vida visíveis.
+   Como a barra de topo (onde vive o botão normal de fullscreen) fica
+   escondida, mostra-se este botão flutuante só para poder sair. */
+.screen.board-fullscreen .topbar,
+.screen.board-fullscreen .br-status-row,
+.screen.board-fullscreen .board-toolbar{ display:none; }
+.fullscreen-toggle-btn{
+  position:fixed; top: calc(8px + var(--safe-top)); right: calc(8px + var(--safe-right));
+  z-index:80;
+  width:34px; height:34px; border-radius:50%;
+  background: rgba(0,0,0,.55); color:#fff;
+  border:1px solid rgba(255,255,255,.3);
+  display:flex; align-items:center; justify-content:center;
+  font-size:1rem;
+}
+.fullscreen-toggle-btn:active{ background: rgba(0,0,0,.75); }
+
 /* ===========================================================
    COMMANDER DAMAGE MODAL
    =========================================================== */
@@ -549,9 +656,62 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 .cd-list-item .nm{ flex:1; font-size:.85rem; font-weight:600; }
 .cd-list-item .val{ font-weight:800; min-width:26px; text-align:center; }
 .history-meta{ font-size:.72rem; color:var(--text-dim); margin-top:3px; line-height:1.35; }
+.cd-list-item .val.plus{ color:#7be08a; }
+.cd-list-item .val.minus{ color:#ff8a8a; }
 .cd-group{ margin-bottom:14px; }
 .cd-group:last-child{ margin-bottom:0; }
 .cd-group-title{ font-size:.72rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; }
+
+/* Histórico de vida em formato de "timeline" vertical: uma linha contínua
+   à esquerda, com um marcador maior (dourado) para cada turno e um ponto
+   mais pequeno (verde/vermelho) para cada alteração de vida desse turno. */
+.lh-timeline{
+  position:relative;
+  padding: 2px 4px 2px 6px;
+}
+.lh-timeline::before{
+  content:"";
+  position:absolute; left:15px; top:8px; bottom:8px; width:2px;
+  background: rgba(255,255,255,.14);
+}
+.lh-turn{
+  position:relative;
+  padding: 14px 0 8px 34px;
+  font-weight:800; font-size:.72rem;
+  text-transform:uppercase; letter-spacing:.4px;
+  color: var(--text-dim);
+}
+.lh-turn:first-child{ padding-top:2px; }
+.lh-turn .lh-turn-round{ color: var(--gold); }
+.lh-turn::before{
+  content:"";
+  position:absolute; left:9px; top:19px;
+  width:13px; height:13px; border-radius:50%;
+  background: var(--gold);
+  box-shadow: 0 0 0 4px var(--bg-elev-2);
+}
+.lh-turn:first-child::before{ top:5px; }
+.lh-event{
+  position:relative;
+  display:flex; align-items:center; gap:10px;
+  padding: 7px 4px 7px 34px;
+  border-radius: 8px;
+}
+.lh-event::before{
+  content:"";
+  position:absolute; left:11px; top:50%; transform:translateY(-50%);
+  width:9px; height:9px; border-radius:50%;
+  background: rgba(255,255,255,.4);
+  box-shadow: 0 0 0 4px var(--bg-elev-2);
+}
+.lh-event.plus::before{ background:#7be08a; }
+.lh-event.minus::before{ background:#ff8a8a; }
+.lh-event-body{ flex:1; min-width:0; }
+.lh-event-name{ font-size:.82rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lh-event-time{ font-size:.68rem; color:var(--text-dim); margin-top:1px; }
+.lh-event-delta{ font-weight:800; font-size:.95rem; flex-shrink:0; min-width:30px; text-align:right; }
+.lh-event-delta.plus{ color:#7be08a; }
+.lh-event-delta.minus{ color:#ff8a8a; }
 .cd-group .cd-list-item{ margin-bottom:8px; }
 .cd-group .cd-list-item:last-child{ margin-bottom:0; }
 .turn-badge-sm.partner-tag{ background: linear-gradient(135deg, #b98af0, var(--accent-2) 60%, #5c1a94); color:#fff; }
@@ -582,6 +742,8 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 }
 .br-chip.phase-final{ border-color: var(--accent); color:#ff9b8f; }
 .br-chip.turn{ border-color: var(--gold); background: linear-gradient(135deg, rgba(212,175,55,.22), var(--bg-elev-2)); color:#f3d873; }
+.br-chip.paused{ border-color:#7ec8ff; background: linear-gradient(135deg, rgba(126,200,255,.22), var(--bg-elev-2)); color:#a9dcff; animation: pausedPulse 1.6s ease-in-out infinite; }
+@keyframes pausedPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
 
 .zone-map{
   display:grid;

@@ -13,6 +13,7 @@
   let draft = null; // rascunho usado nos ecrãs de setup
   let liveTimer = null; // interval do relógio ao vivo (turno/total) no tabuleiro
   let wakeLock = null; // Screen Wake Lock ativo enquanto se está no contador de vida
+  let boardFullscreen = false; // esconde as barras de cima/baixo no contador de vida (persiste entre re-renders do mesmo jogo)
 
   // Impede o ecrã de bloquear enquanto se está a jogar (Commander/Duelo/Livre/BR).
   // A Wake Lock API só funciona em contexto seguro (https ou localhost) e nem
@@ -65,6 +66,13 @@
     const d = new Date(ts);
     const pad = (n) => String(n).padStart(2, "0");
     return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function formatTimeOnly(ts) {
+    if (!ts) return "-";
+    const d = new Date(ts);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   }
 
   const MODE_LABELS = { commander: "Commander", duel: "Duelo 1v1", free: "Livre", standard: "Padrão", br: "Battle Royale" };
@@ -189,6 +197,33 @@
     return "background:linear-gradient(160deg,#2a2f38,#12141a)";
   }
 
+  /** HTML do fundo do painel de um jogador: uma imagem única, ou — quando
+   *  tem um commander parceiro — dividido ao meio, uma metade para cada
+   *  commander (o principal usa a mesma lógica de fallback que já existia;
+   *  o parceiro usa a arte dele, ou repete a mesma cor de fundo se não
+   *  tiver nenhuma escolhida). */
+  function panelBgHtml(p) {
+    if (p && p.partnerCommander) {
+      const mainStyle = playerBgStyle(p);
+      const partnerStyle = commanderThumbStyle(p.partnerCommander) || mainStyle;
+      return `<div class="bg bg-split"><div class="bg-half" style="${mainStyle}"></div><div class="bg-half" style="${partnerStyle}"></div></div>`;
+    }
+    return `<div class="bg" style="${playerBgStyle(p)}"></div>`;
+  }
+
+  /** HTML do fundo do painel de uma EQUIPA: dividido em fatias iguais, uma
+   *  por jogador da equipa (cada uma com a arte do commander desse jogador,
+   *  ou a cor sorteada só dele se ainda não tiver escolhido nenhum) — em vez
+   *  de mostrar só a arte de um único jogador da equipa. */
+  function teamBgHtml(team) {
+    const players = team.players || [];
+    if (players.length <= 1) {
+      return `<div class="bg" style="${playerBgStyle(players[0])}"></div>`;
+    }
+    const halves = players.map((p) => `<div class="bg-half" style="${playerBgStyle(p)}"></div>`).join("");
+    return `<div class="bg bg-split">${halves}</div>`;
+  }
+
   // ---------------------------------------------------------
   // ROUTER
   // ---------------------------------------------------------
@@ -200,10 +235,12 @@
     else if (screen === "game-standard") renderGameStandard();
     else if (screen === "setup-br") renderSetupBR();
     else if (screen === "game-br") renderGameBR();
+    else if (screen === "setup-teams") renderSetupTeams();
+    else if (screen === "game-teams") renderGameTeams();
     else if (screen === "stats-standard") renderStatsStandard();
     else if (screen === "profiles") renderProfilesScreen();
 
-    if (screen === "game-standard" || screen === "game-br") requestWakeLock();
+    if (screen === "game-standard" || screen === "game-br" || screen === "game-teams") requestWakeLock();
     else releaseWakeLock();
   }
 
@@ -239,6 +276,11 @@
             <div class="title">Battle Royale</div>
             <div class="desc">6 jogadores · zonas · loot · último vivo</div>
           </div>
+          <div class="mode-card teams" data-mode="teams">
+            <div class="icon">🛡️</div>
+            <div class="title">Equipas</div>
+            <div class="desc">Escolhe nº de equipas e jogadores por equipa · vida partilhada</div>
+          </div>
         </div>
         <div class="footer-note">As imagens dos commanders são obtidas automaticamente da Scryfall API (é necessária ligação à internet só para a pesquisa).</div>
         <button class="btn btn-ghost" id="profiles-btn">👤 Perfis guardados</button>
@@ -250,6 +292,8 @@
       s.querySelector("#resume-btn").addEventListener("click", () => {
         game = saved;
         if (saved.mode === "br") nav("game-br");
+        else if (saved.mode === "teams" && saved.teams.ended) nav("stats-standard", { stats: State.teamsComputeStats(saved) });
+        else if (saved.mode === "teams") nav("game-teams");
         else if (saved.mode === "standard" && saved.standard.ended) nav("stats-standard", { stats: State.stdComputeStats(saved) });
         else nav("game-standard");
       });
@@ -262,6 +306,9 @@
         if (mode === "br") {
           draft = { names: ["", "", "", "", "", ""], commanders: [null, null, null, null, null, null], profileIds: [null, null, null, null, null, null] };
           nav("setup-br");
+        } else if (mode === "teams") {
+          draft = makeTeamsDraft(2, 2, 40);
+          nav("setup-teams");
         } else {
           const preset = PRESETS[mode];
           draft = {
@@ -664,27 +711,35 @@
     const topPlayers = players.slice(0, top);
     const bottomPlayers = players.slice(top);
     const currentPlayer = State.stdCurrentPlayer(game);
+    const paused = !!game.standard.paused;
 
     const s = el(`
-      <div class="screen">
+      <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
+        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">🗗</button>` : ""}
         <div class="topbar">
           <button class="btn btn-icon" id="menu-btn">☰</button>
           <h1>${esc(PRESETS[game.presetName] ? PRESETS[game.presetName].label : "Jogo")}</h1>
-          <button class="btn btn-icon" id="reset-btn">↺</button>
+          <div class="row" style="gap:6px; flex-shrink:0;">
+            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">↺</button>
+            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${boardFullscreen ? "🗗" : "⛶"}</button>
+          </div>
         </div>
         <div class="br-status-row">
           <div class="br-chip turn">👤 Vez: ${currentPlayer ? esc(currentPlayer.name) : "-"}</div>
           <div class="br-chip">🔁 Ronda: ${game.standard.roundNumber || 1}</div>
           <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
           <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
+          ${paused ? `<div class="br-chip paused">⏸️ PAUSADO</div>` : ""}
         </div>
         <div class="board">
           <div class="board-row" id="row-top"></div>
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-primary grow" id="pass-turn-btn">⏭️ Passar turno</button>
-          <button class="btn btn-ghost" id="end-game-btn">🏁 Terminar</button>
+          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${paused ? "▶️" : "⏸️"}</button>
+          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">📜</button>
+          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">🔀</button>
+          <button class="btn btn-ghost grow" id="end-game-btn">🏁 Terminar</button>
         </div>
       </div>
     `);
@@ -703,8 +758,9 @@
       const chipTurn = s.querySelector("#chip-turn-time");
       const chipTotal = s.querySelector("#chip-total-time");
       if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
-      chipTurn.textContent = "⏱ Turno: " + formatDuration(Date.now() - game.standard.turnStartedAt);
-      chipTotal.textContent = "⏳ Total: " + formatDuration(Date.now() - game.standard.gameStartedAt);
+      const now = game.standard.paused ? game.standard.pausedAt : Date.now();
+      chipTurn.textContent = "⏱ Turno: " + formatDuration(now - game.standard.turnStartedAt);
+      chipTotal.textContent = "⏳ Total: " + formatDuration(now - game.standard.gameStartedAt);
     }
     tickClock();
     liveTimer = setInterval(tickClock, 1000);
@@ -713,18 +769,32 @@
       if (confirm("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde.")) nav("menu");
     });
     s.querySelector("#reset-btn").addEventListener("click", () => {
-      if (!confirm("Reiniciar vidas e commander damage de todos os jogadores?")) return;
+      if (!confirm("Reiniciar vidas, commander damage e os relógios de turno/jogo de todos os jogadores?")) return;
+      const now = Date.now();
       game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
       game.standard.roundNumber = 1;
       game.standard.roundStartIndex = game.standard.currentTurnIndex;
+      game.standard.turnSeq = 1;
+      game.standard.lifeLog = [];
+      game.standard.gameStartedAt = now;
+      game.standard.turnStartedAt = now;
+      game.standard.paused = false;
+      game.standard.pausedAt = null;
       State.save(game);
       render();
     });
-    s.querySelector("#pass-turn-btn").addEventListener("click", () => {
-      State.stdPassTurn(game);
-      playTurnSound();
+    s.querySelector("#pause-btn").addEventListener("click", () => {
+      State.stdTogglePause(game);
       render();
     });
+    s.querySelector("#history-btn").addEventListener("click", () => openLifeHistoryModal());
+    s.querySelector("#reorder-btn").addEventListener("click", () => openReorderPositionsModal("standard"));
+    s.querySelector("#fullscreen-btn").addEventListener("click", () => {
+      boardFullscreen = !boardFullscreen;
+      render();
+    });
+    const fsExitBtn = s.querySelector("#fullscreen-exit-btn");
+    if (fsExitBtn) fsExitBtn.addEventListener("click", () => { boardFullscreen = !boardFullscreen; render(); });
     s.querySelector("#end-game-btn").addEventListener("click", () => openEndGameModal());
   }
 
@@ -771,9 +841,17 @@
     const cmdEnabled = game.standard.commanderDamageEnabled;
     const opponents = game.standard.players.filter((x) => x.id !== p.id);
     const isActive = currentPlayer && currentPlayer.id === p.id;
+    // Badges de commander damage: faixa centrada por baixo do contador de vida.
+    const cmdBadgeList = [];
+    if (cmdEnabled) {
+      opponents.forEach((o) => {
+        cmdBadgeList.push(cmdBadgeHtml(p, o, "main"));
+        if (o.partnerCommander) cmdBadgeList.push(cmdBadgeHtml(p, o, "partner"));
+      });
+    }
     const panel = el(`
       <div class="player-panel ${rotated ? "rot180" : ""} ${p.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-player-id="${p.id}">
-        <div class="bg" style="${playerBgStyle(p)}"></div>
+        ${panelBgHtml(p)}
         <div class="mini-actions"><button class="mini-btn" data-action="edit">✏️</button></div>
         <div class="content">
           ${isActive ? `<div class="turn-badge">▶ VEZ</div>` : ""}
@@ -782,12 +860,13 @@
             <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
           </div>
           <div class="life-zone">
-            <div class="life-tap minus"></div>
-            <div class="life-tap plus"></div>
+            <div class="life-tap minus"><span class="tap-circle">−</span></div>
+            <div class="life-tap plus"><span class="tap-circle">+</span></div>
             <div class="life-delta-fixed"></div>
             <div class="life-total">${p.life}</div>
           </div>
-          ${cmdEnabled ? `<div class="commander-badges">${opponents.map((o) => cmdBadgeHtml(p, o, "main") + (o.partnerCommander ? cmdBadgeHtml(p, o, "partner") : "")).join("")}</div>` : ""}
+          ${cmdEnabled ? `<div class="commander-badges">${cmdBadgeList.join("")}</div>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>⏭️ Passar turno</button>` : ""}
         </div>
       </div>
     `);
@@ -830,7 +909,14 @@
     });
     panel.querySelector('[data-action="tax"]').addEventListener("click", (ev) => {
       ev.stopPropagation();
-      openCommanderTaxModal(p.id);
+      openCommanderTaxModal("standard", p.id);
+    });
+    const passBtn = panel.querySelector('[data-action="pass-turn"]');
+    if (passBtn) passBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      State.stdPassTurn(game);
+      playTurnSound();
+      render();
     });
     if (cmdEnabled) {
       panel.querySelectorAll(".cmd-badge").forEach((b) => {
@@ -848,8 +934,8 @@
     return main + "/+" + (p.partnerCmdTax || 0) * 2;
   }
 
-  function openCommanderTaxModal(playerId) {
-    const p = game.standard.players.find((x) => x.id === playerId);
+  function openCommanderTaxModal(mode, playerId) {
+    const p = mode === "teams" ? State.teamsFindPlayer(game, playerId).player : game.standard.players.find((x) => x.id === playerId);
     if (!p) return;
     closeAnyModal();
     const backdrop = el(`
@@ -876,7 +962,9 @@
       `);
       row.querySelectorAll("button").forEach((btn) => {
         btn.addEventListener("click", () => {
-          State.stdAdjustCmdTax(game, playerId, parseInt(btn.dataset.d, 10), source);
+          const delta = parseInt(btn.dataset.d, 10);
+          if (mode === "teams") State.teamsAdjustCmdTax(game, playerId, delta, source);
+          else State.stdAdjustCmdTax(game, playerId, delta, source);
           paint();
         });
       });
@@ -888,7 +976,7 @@
       if (p.partnerCommander) {
         list.appendChild(buildRow(p.partnerCommander.name, "partnerCmdTax", "partner"));
       }
-      const badge = appEl.querySelector(`.player-panel[data-player-id="${playerId}"] .tax-badge`);
+      const badge = appEl.querySelector(`[data-player-id="${playerId}"] .tax-badge, [data-player-id="${playerId}"] .tax-badge-sm`);
       if (badge) badge.textContent = taxBadgeText(p);
     }
     paint();
@@ -1126,7 +1214,9 @@
   }
 
   function openEditPlayerModal({ mode, playerId }) {
-    const p = mode === "standard" ? game.standard.players.find((x) => x.id === playerId) : game.br.players.find((x) => x.id === playerId);
+    const p = mode === "standard" ? game.standard.players.find((x) => x.id === playerId)
+      : mode === "teams" ? State.teamsFindPlayer(game, playerId).player
+      : game.br.players.find((x) => x.id === playerId);
     let pendingCommander = p.commander;
     let pendingPartnerCommander = p.partnerCommander || null;
     let pendingProfileId = p.profileId || null;
@@ -1142,7 +1232,7 @@
               <div class="commander-thumb" id="ep-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
               <button class="btn btn-ghost grow" id="ep-commander">Alterar Commander</button>
             </div>
-            ${mode === "standard" ? `
+            ${(mode === "standard" || mode === "teams") ? `
             <div class="row" style="align-items:center;margin-top:6px">
               <div class="commander-thumb" id="ep-thumb-partner" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "🃏"}</div>
               <button class="btn btn-ghost grow" id="ep-partner">${p.partnerCommander ? "Alterar Parceiro" : "➕ Adicionar Commander Parceiro"}</button>
@@ -1217,6 +1307,11 @@
         State.stdSetPartnerCommander(game, playerId, pendingPartnerCommander);
         State.stdSetProfile(game, playerId, pendingProfileId);
         if (toggledElim !== p.eliminated) State.stdToggleEliminated(game, playerId);
+      } else if (mode === "teams") {
+        State.teamsSetName(game, playerId, name);
+        State.teamsSetCommander(game, playerId, pendingCommander);
+        State.teamsSetPartnerCommander(game, playerId, pendingPartnerCommander);
+        State.teamsSetProfile(game, playerId, pendingProfileId);
       } else {
         State.brSetName(game, playerId, name);
         State.brSetCommander(game, playerId, pendingCommander);
@@ -1326,12 +1421,17 @@
     if (br.phase === "ended") { renderChampionScreen(); return; }
 
     const current = State.brCurrentPlayer(game);
+    const paused = !!br.paused;
     const s = el(`
       <div class="screen">
         <div class="topbar br-topbar">
           <button class="btn btn-icon" id="menu-btn">☰</button>
           <h1>🩸 Battle Royale</h1>
-          <button class="btn btn-icon" id="info-btn">ℹ️</button>
+          <div class="row" style="gap:6px; flex-shrink:0;">
+            <button class="btn btn-icon" id="history-btn" title="Histórico de vida">📜</button>
+            <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">🔀</button>
+            <button class="btn btn-icon" id="info-btn">ℹ️</button>
+          </div>
         </div>
         <div class="br-status-row">
           <div class="br-chip turn">🔁 Ronda ${br.roundNumber}</div>
@@ -1340,6 +1440,7 @@
           <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
           <div class="br-chip ${br.phase !== "normal" ? "phase-final" : ""}">${phaseLabel(br.phase)}</div>
           <div class="br-chip">☢️ Zonas fechadas: ${br.closedZones.length}/5</div>
+          ${paused ? `<div class="br-chip paused">⏸️ PAUSADO</div>` : ""}
         </div>
         <div class="zone-map" id="zone-map"></div>
         ${br.phase === "final_circle" ? `<div class="banner">☠️ FINAL CIRCLE — não podes ganhar vidas · todos atacam todos · criaturas com haste · +2 Treasure no início de cada turno</div>` : ""}
@@ -1347,7 +1448,8 @@
         ${br.phase === "final_duel" ? `<div class="banner gold">⚔️ FINAL DUEL em curso — até à morte!</div>` : ""}
         <div class="row" style="padding:0 12px 8px;gap:8px;flex-shrink:0">
           <button class="btn btn-accent grow" id="roll-event-btn" ${br.roundEventRolled ? "disabled" : ""}>🎲 Rolar evento da ronda</button>
-          <button class="btn btn-primary grow" id="next-turn-btn">➡️ Próximo turno</button>
+          <button class="btn btn-primary grow" id="next-turn-btn" ${paused ? "disabled" : ""}>➡️ Próximo turno</button>
+          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${paused ? "▶️" : "⏸️"}</button>
         </div>
         <div class="event-log" id="event-log"></div>
         <div class="br-players" id="br-players"></div>
@@ -1383,8 +1485,9 @@
       const chipTurn = s.querySelector("#chip-turn-time");
       const chipTotal = s.querySelector("#chip-total-time");
       if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
-      chipTurn.textContent = "⏱ Turno: " + formatDuration(Date.now() - game.br.turnStartedAt);
-      chipTotal.textContent = "⏳ Total: " + formatDuration(Date.now() - game.br.gameStartedAt);
+      const now = game.br.paused ? game.br.pausedAt : Date.now();
+      chipTurn.textContent = "⏱ Turno: " + formatDuration(now - game.br.turnStartedAt);
+      chipTotal.textContent = "⏳ Total: " + formatDuration(now - game.br.gameStartedAt);
     }
     tickClock();
     liveTimer = setInterval(tickClock, 1000);
@@ -1393,6 +1496,8 @@
       if (confirm("Voltar ao menu? O jogo fica guardado.")) nav("menu");
     });
     s.querySelector("#info-btn").addEventListener("click", showBRRules);
+    s.querySelector("#history-btn").addEventListener("click", () => openLifeHistoryModal());
+    s.querySelector("#reorder-btn").addEventListener("click", () => openReorderPositionsModal("br"));
     s.querySelector("#roll-event-btn").addEventListener("click", () => {
       const { event, roll } = State.brRollEvent(game);
       State.save(game);
@@ -1402,6 +1507,10 @@
     s.querySelector("#next-turn-btn").addEventListener("click", () => {
       State.brNextTurn(game);
       playTurnSound();
+      render();
+    });
+    s.querySelector("#pause-btn").addEventListener("click", () => {
+      State.brTogglePause(game);
       render();
     });
     const duelBtn = s.querySelector("#start-duel-btn");
@@ -1612,6 +1721,455 @@
   }
 
   // ===========================================================
+  // SETUP — Equipas (Teams)
+  // ===========================================================
+  function makeTeamsDraft(numTeams, playersPerTeam, startLife) {
+    const teams = [];
+    for (let t = 0; t < numTeams; t++) {
+      const players = [];
+      for (let i = 0; i < playersPerTeam; i++) players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
+      teams.push({ name: `Equipa ${t + 1}`, players });
+    }
+    return { numTeams, playersPerTeam, startLife, teams };
+  }
+
+  function renderSetupTeams() {
+    const s = el(`
+      <div class="screen">
+        <div class="topbar">
+          <button class="btn btn-icon" id="back-btn">←</button>
+          <h1>🛡️ Equipas — Setup</h1>
+          <div style="width:40px"></div>
+        </div>
+        <div class="scroll">
+          <div class="setup-controls">
+            <div class="field">
+              <label>Equipas</label>
+              <div class="stepper-field">
+                <button class="btn btn-icon" type="button" id="teams-minus">−</button>
+                <input type="number" id="cfg-teams" min="2" max="4" value="${draft.numTeams}">
+                <button class="btn btn-icon" type="button" id="teams-plus">+</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Jogadores/equipa</label>
+              <div class="stepper-field">
+                <button class="btn btn-icon" type="button" id="ppt-minus">−</button>
+                <input type="number" id="cfg-ppt" min="1" max="4" value="${draft.playersPerTeam}">
+                <button class="btn btn-icon" type="button" id="ppt-plus">+</button>
+              </div>
+            </div>
+            <div class="field">
+              <label>Vida inicial (por equipa)</label>
+              <input type="number" id="cfg-life" min="1" value="${draft.startLife}">
+            </div>
+          </div>
+          <div class="footer-note" style="margin-bottom:12px">Vida partilhada por equipa (estilo Two-Headed Giant): a equipa toda soma/perde vida em conjunto. Os turnos alternam entre equipas.</div>
+          <div id="teams-list"></div>
+        </div>
+        <div class="board-toolbar">
+          <button class="btn btn-primary btn-block" id="start-btn">🚀 Começar Jogo</button>
+        </div>
+      </div>
+    `);
+    appEl.appendChild(s);
+
+    // Mesma lógica de reconciliação por índice do setup Standard (ver ali
+    // o porquê): evita destruir/recriar cards (e perder o foco de quem
+    // estava a escrever um nome) sempre que outra parte do ecrã re-renderiza.
+    function buildTeamPlayerCard(t, i) {
+      const p = draft.teams[t].players[i];
+      const profile = p.profileId ? Profiles.get(p.profileId) : null;
+      const card = el(`
+        <div class="player-setup-card">
+          <div class="commander-thumbs">
+            <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
+            <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "+"}</div>
+          </div>
+          <div class="player-setup-fields">
+            <input type="text" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
+            <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
+            <button class="btn btn-ghost btn-sm profile-btn">${profile ? "👤 " + esc(profile.name) : "👤 Sem perfil"}</button>
+          </div>
+        </div>
+      `);
+      card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
+        openCommanderPicker((c) => { draft.teams[t].players[i].commander = c; renderTeamsList(); });
+      });
+      card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
+        openCommanderPicker((c) => { draft.teams[t].players[i].partnerCommander = c; renderTeamsList(); }, "🔍 Escolher Commander Parceiro");
+      });
+      card.querySelector(".name-input").addEventListener("input", (e) => { draft.teams[t].players[i].name = e.target.value; });
+      card.querySelector(".profile-btn").addEventListener("click", () => {
+        openProfilePicker({
+          commander: draft.teams[t].players[i].commander,
+          currentProfileId: draft.teams[t].players[i].profileId,
+          playerName: draft.teams[t].players[i].name,
+          onSelect: (id) => {
+            draft.teams[t].players[i].profileId = id;
+            const prof = id ? Profiles.get(id) : null;
+            if (prof && prof.commander) draft.teams[t].players[i].commander = prof.commander;
+            if (prof && prof.playerName) draft.teams[t].players[i].name = prof.playerName;
+            renderTeamsList();
+          },
+        });
+      });
+      return card;
+    }
+    function updateTeamPlayerCard(card, t, i) {
+      const p = draft.teams[t].players[i];
+      const profile = p.profileId ? Profiles.get(p.profileId) : null;
+      const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
+      mainThumb.style.cssText = commanderThumbStyle(p.commander);
+      mainThumb.textContent = p.commander ? "" : "🃏";
+      const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
+      partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
+      partnerThumb.textContent = p.partnerCommander ? "" : "+";
+      card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : "Sem commander escolhido") + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
+      card.querySelector(".profile-btn").textContent = profile ? "👤 " + profile.name : "👤 Sem perfil";
+      const nameInput = card.querySelector(".name-input");
+      if (document.activeElement !== nameInput) nameInput.value = p.name;
+    }
+    function buildTeamCard(t) {
+      const team = draft.teams[t];
+      const card = el(`
+        <div class="team-setup-card" data-team="${t}">
+          <input type="text" class="team-name-input" value="${esc(team.name)}">
+          <div class="player-setup-list team-players"></div>
+        </div>
+      `);
+      card.querySelector(".team-name-input").addEventListener("input", (e) => { draft.teams[t].name = e.target.value; });
+      return card;
+    }
+    function renderTeamsList() {
+      const list = s.querySelector("#teams-list");
+      const existingTeamCards = Array.from(list.children);
+      draft.teams.forEach((team, t) => {
+        let teamCard = existingTeamCards[t];
+        if (!teamCard) {
+          teamCard = buildTeamCard(t);
+          list.appendChild(teamCard);
+        } else {
+          const nameInput = teamCard.querySelector(".team-name-input");
+          if (document.activeElement !== nameInput) nameInput.value = team.name;
+        }
+        const playersContainer = teamCard.querySelector(".team-players");
+        const existingPlayerCards = Array.from(playersContainer.children);
+        team.players.forEach((p, i) => {
+          if (existingPlayerCards[i]) updateTeamPlayerCard(existingPlayerCards[i], t, i);
+          else playersContainer.appendChild(buildTeamPlayerCard(t, i));
+        });
+        while (playersContainer.children.length > team.players.length) playersContainer.removeChild(playersContainer.lastChild);
+      });
+      while (list.children.length > draft.teams.length) list.removeChild(list.lastChild);
+    }
+    renderTeamsList();
+
+    function setNumTeams(n) {
+      n = Math.max(2, Math.min(4, n || 2));
+      s.querySelector("#cfg-teams").value = n;
+      const cur = draft.teams.length;
+      if (n > cur) {
+        for (let t = cur; t < n; t++) {
+          const players = [];
+          for (let i = 0; i < draft.playersPerTeam; i++) players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
+          draft.teams.push({ name: `Equipa ${t + 1}`, players });
+        }
+      } else {
+        draft.teams.length = n;
+      }
+      draft.numTeams = n;
+      renderTeamsList();
+    }
+    function setPlayersPerTeam(n) {
+      n = Math.max(1, Math.min(4, n || 1));
+      s.querySelector("#cfg-ppt").value = n;
+      draft.teams.forEach((team) => {
+        const cur = team.players.length;
+        if (n > cur) for (let i = cur; i < n; i++) team.players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
+        else team.players.length = n;
+      });
+      draft.playersPerTeam = n;
+      renderTeamsList();
+    }
+    s.querySelector("#cfg-teams").addEventListener("change", (e) => setNumTeams(parseInt(e.target.value, 10)));
+    s.querySelector("#teams-minus").addEventListener("click", () => setNumTeams(draft.numTeams - 1));
+    s.querySelector("#teams-plus").addEventListener("click", () => setNumTeams(draft.numTeams + 1));
+    s.querySelector("#cfg-ppt").addEventListener("change", (e) => setPlayersPerTeam(parseInt(e.target.value, 10)));
+    s.querySelector("#ppt-minus").addEventListener("click", () => setPlayersPerTeam(draft.playersPerTeam - 1));
+    s.querySelector("#ppt-plus").addEventListener("click", () => setPlayersPerTeam(draft.playersPerTeam + 1));
+    s.querySelector("#cfg-life").addEventListener("change", (e) => {
+      draft.startLife = Math.max(1, parseInt(e.target.value, 10) || 40);
+    });
+    s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
+    s.querySelector("#start-btn").addEventListener("click", () => {
+      const st = State.createTeamsGame({ numTeams: draft.numTeams, playersPerTeam: draft.playersPerTeam, startLife: draft.startLife });
+      st.teams.teams.forEach((team, t) => {
+        if (draft.teams[t].name.trim()) team.name = draft.teams[t].name.trim();
+        team.players.forEach((p, i) => {
+          const dp = draft.teams[t].players[i];
+          if (dp.name.trim()) p.name = dp.name.trim();
+          p.commander = dp.commander;
+          p.partnerCommander = dp.partnerCommander || null;
+          p.profileId = dp.profileId || null;
+        });
+      });
+      State.ensureFallbackColors(st.teams.teams.reduce((acc, t) => acc.concat(t.players), []));
+      State.save(st);
+      game = st;
+      const teamChoices = st.teams.teams.map((team) => ({ id: team.id, name: team.name }));
+      openWhoStartsModal(teamChoices, (winnerTeamId) => {
+        State.teamsSetStartingTeam(game, winnerTeamId);
+        nav("game-teams");
+      });
+    });
+  }
+
+  // ===========================================================
+  // JOGO — Equipas (Teams)
+  // ===========================================================
+  function teamRosterRowHtml(p, isActive) {
+    return `
+      <div class="team-roster-row ${isActive ? "up" : ""}" data-player-id="${p.id}">
+        <div class="team-roster-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
+        <div class="team-roster-name">${esc(p.name)}</div>
+        <div class="tax-badge-sm" data-action="tax" data-player-id="${p.id}" title="Commander tax">${taxBadgeText(p)}</div>
+        <button class="mini-btn" data-action="edit" data-player-id="${p.id}">✏️</button>
+      </div>
+    `;
+  }
+
+  function syncTeamEliminationBadge(panel, team) {
+    const content = panel.querySelector(".content");
+    let badge = panel.querySelector(".eliminated-badge");
+    if (team.eliminated && !badge) {
+      badge = el(`<div class="eliminated-badge" title="Toca para reverter">ELIMINADA</div>`);
+      badge.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        State.teamsToggleEliminated(game, team.id);
+        render();
+      });
+      content.appendChild(badge);
+    } else if (!team.eliminated && badge) {
+      badge.remove();
+    }
+  }
+
+  function buildTeamPanel(team, rotated, currentTeam) {
+    const isActive = currentTeam && currentTeam.id === team.id;
+    const panel = el(`
+      <div class="player-panel team-panel ${rotated ? "rot180" : ""} ${team.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-team-id="${team.id}">
+        ${teamBgHtml(team)}
+        <div class="content">
+          ${isActive ? `<div class="turn-badge">▶ VEZ</div>` : ""}
+          <div class="player-header">
+            <div class="player-name">${esc(team.name)}</div>
+          </div>
+          <div class="life-zone">
+            <div class="life-tap minus"><span class="tap-circle">−</span></div>
+            <div class="life-tap plus"><span class="tap-circle">+</span></div>
+            <div class="life-delta-fixed"></div>
+            <div class="life-total">${team.life}</div>
+          </div>
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>⏭️ Passar turno</button>` : ""}
+          <div class="team-roster">${team.players.map((p) => teamRosterRowHtml(p, isActive)).join("")}</div>
+        </div>
+      </div>
+    `);
+    syncTeamEliminationBadge(panel, team);
+
+    const minus = panel.querySelector(".life-tap.minus");
+    const plus = panel.querySelector(".life-tap.plus");
+    const deltaEl = panel.querySelector(".life-delta-fixed");
+    let deltaAcc = 0;
+    let deltaTimer = null;
+    function bumpDelta(amount) {
+      deltaAcc += amount;
+      clearTimeout(deltaTimer);
+      deltaEl.textContent = (deltaAcc > 0 ? "+" : "") + deltaAcc;
+      deltaEl.classList.toggle("plus", deltaAcc >= 0);
+      deltaEl.classList.toggle("minus", deltaAcc < 0);
+      deltaEl.classList.add("show");
+      deltaTimer = setTimeout(() => {
+        deltaEl.classList.remove("show");
+        deltaAcc = 0;
+      }, 2000);
+    }
+    bindPressRepeat(minus, () => {
+      State.teamsAdjustLife(game, team.id, -1);
+      updateTeamPanel(team.id);
+      bumpDelta(-1);
+    });
+    bindPressRepeat(plus, () => {
+      State.teamsAdjustLife(game, team.id, 1);
+      updateTeamPanel(team.id);
+      bumpDelta(1);
+    });
+    panel.querySelectorAll('[data-action="edit"]').forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        openEditPlayerModal({ mode: "teams", playerId: btn.dataset.playerId });
+      });
+    });
+    panel.querySelectorAll('[data-action="tax"]').forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        openCommanderTaxModal("teams", btn.dataset.playerId);
+      });
+    });
+    const passBtn = panel.querySelector('[data-action="pass-turn"]');
+    if (passBtn) passBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      State.teamsPassTurn(game);
+      playTurnSound();
+      render();
+    });
+    return panel;
+  }
+
+  function updateTeamPanel(teamId) {
+    const team = game.teams.teams.find((t) => t.id === teamId);
+    const panel = appEl.querySelector(`.team-panel[data-team-id="${teamId}"]`);
+    if (!team || !panel) return;
+    panel.classList.toggle("eliminated", team.eliminated);
+    const lifeEl = panel.querySelector(".life-total");
+    if (lifeEl) lifeEl.textContent = team.life;
+    syncTeamEliminationBadge(panel, team);
+  }
+
+  function openEndGameTeamsModal() {
+    closeAnyModal();
+    const teams = game.teams.teams;
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet">
+          <h2>🏁 Terminar jogo</h2>
+          <div class="footer-note" style="margin-bottom:10px">Que equipa venceu esta partida? (fica registado nos perfis ligados de todos os jogadores dessa equipa)</div>
+          <div class="col" id="winner-list">
+            ${teams.map((t) => `
+              <label class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:10px;">
+                <input type="radio" name="winner" value="${t.id}" style="width:auto">
+                <span class="grow">${esc(t.name)}${t.eliminated ? " (eliminada)" : ""}</span>
+              </label>
+            `).join("")}
+            <label class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:10px;">
+              <input type="radio" name="winner" value="" style="width:auto" checked>
+              <span class="grow">Sem vencedor / não contar</span>
+            </label>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn btn-ghost grow" id="eg-cancel">Cancelar</button>
+            <button class="btn btn-primary grow" id="eg-confirm">📊 Ver Estatísticas</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    backdrop.querySelector("#eg-cancel").addEventListener("click", () => backdrop.remove());
+    backdrop.querySelector("#eg-confirm").addEventListener("click", () => {
+      const sel = backdrop.querySelector('input[name="winner"]:checked');
+      const winnerTeamId = sel && sel.value ? sel.value : null;
+      const stats = State.teamsEndGame(game, winnerTeamId);
+      backdrop.remove();
+      nav("stats-standard", { stats });
+    });
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
+  }
+
+  function renderGameTeams() {
+    const teams = game.teams.teams;
+    const currentTeam = State.teamsCurrentTeam(game);
+    const paused = !!game.teams.paused;
+    const { top, bottom } = layoutRows(teams.length);
+    const topTeams = teams.slice(0, top);
+    const bottomTeams = teams.slice(top);
+
+    const s = el(`
+      <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
+        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">🗗</button>` : ""}
+        <div class="topbar">
+          <button class="btn btn-icon" id="menu-btn">☰</button>
+          <h1>🛡️ Equipas</h1>
+          <div class="row" style="gap:6px; flex-shrink:0;">
+            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">↺</button>
+            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${boardFullscreen ? "🗗" : "⛶"}</button>
+          </div>
+        </div>
+        <div class="br-status-row">
+          <div class="br-chip turn">👤 Vez: ${currentTeam ? esc(currentTeam.name) : "-"}</div>
+          <div class="br-chip">🔁 Ronda: ${game.teams.roundNumber || 1}</div>
+          <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
+          <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
+          ${paused ? `<div class="br-chip paused">⏸️ PAUSADO</div>` : ""}
+        </div>
+        <div class="board">
+          <div class="board-row" id="row-top"></div>
+          <div class="board-row" id="row-bottom"></div>
+        </div>
+        <div class="board-toolbar">
+          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${paused ? "▶️" : "⏸️"}</button>
+          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">📜</button>
+          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">🔀</button>
+          <button class="btn btn-ghost grow" id="end-game-btn">🏁 Terminar</button>
+        </div>
+      </div>
+    `);
+    appEl.appendChild(s);
+
+    const rowTop = s.querySelector("#row-top");
+    const rowBottom = s.querySelector("#row-bottom");
+    topTeams.forEach((t) => rowTop.appendChild(buildTeamPanel(t, true, currentTeam)));
+    bottomTeams.slice().reverse().forEach((t) => rowBottom.appendChild(buildTeamPanel(t, false, currentTeam)));
+
+    function tickClock() {
+      const chipTurn = s.querySelector("#chip-turn-time");
+      const chipTotal = s.querySelector("#chip-total-time");
+      if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
+      const now = game.teams.paused ? game.teams.pausedAt : Date.now();
+      chipTurn.textContent = "⏱ Turno: " + formatDuration(now - game.teams.turnStartedAt);
+      chipTotal.textContent = "⏳ Total: " + formatDuration(now - game.teams.gameStartedAt);
+    }
+    tickClock();
+    liveTimer = setInterval(tickClock, 1000);
+
+    s.querySelector("#menu-btn").addEventListener("click", () => {
+      if (confirm("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde.")) nav("menu");
+    });
+    s.querySelector("#reset-btn").addEventListener("click", () => {
+      if (!confirm("Reiniciar vidas de todas as equipas e os relógios de turno/jogo?")) return;
+      const now = Date.now();
+      game.teams.teams.forEach((team) => {
+        team.life = game.teams.startLife;
+        team.eliminated = false;
+        team.players.forEach((p) => { p.cmdTax = 0; p.partnerCmdTax = 0; });
+      });
+      game.teams.roundNumber = 1;
+      game.teams.roundStartIndex = game.teams.currentTurnIndex;
+      game.teams.turnSeq = 1;
+      game.teams.lifeLog = [];
+      game.teams.gameStartedAt = now;
+      game.teams.turnStartedAt = now;
+      game.teams.paused = false;
+      game.teams.pausedAt = null;
+      State.save(game);
+      render();
+    });
+    s.querySelector("#pause-btn").addEventListener("click", () => {
+      State.teamsTogglePause(game);
+      render();
+    });
+    s.querySelector("#history-btn").addEventListener("click", () => openLifeHistoryModal());
+    s.querySelector("#reorder-btn").addEventListener("click", () => openReorderPositionsModal("teams"));
+    s.querySelector("#fullscreen-btn").addEventListener("click", () => {
+      boardFullscreen = !boardFullscreen;
+      render();
+    });
+    const fsExitBtn = s.querySelector("#fullscreen-exit-btn");
+    if (fsExitBtn) fsExitBtn.addEventListener("click", () => { boardFullscreen = !boardFullscreen; render(); });
+    s.querySelector("#end-game-btn").addEventListener("click", () => openEndGameTeamsModal());
+  }
+
+  // ===========================================================
   // ESTATÍSTICAS DE FIM DE JOGO (partilhado por Standard e Battle Royale)
   // ===========================================================
   function buildStatsBlock(stats) {
@@ -1622,7 +2180,7 @@
       .map((p) => {
         const pct = stats.gameTimeMs ? Math.round((p.turnTimeMs / stats.gameTimeMs) * 100) : 0;
         const barPct = Math.round((p.turnTimeMs / maxTime) * 100);
-        const isWinner = stats.winnerId === p.id;
+        const isWinner = Array.isArray(stats.winnerId) ? stats.winnerId.includes(p.id) : stats.winnerId === p.id;
         return `
           <div class="stat-row ${isWinner ? "winner" : ""}">
             <div class="stat-avatar" style="${p.commander && p.commander.art ? `background-image:url('${esc(p.commander.art)}')` : ""}">${p.commander ? "" : "🃏"}</div>
@@ -1660,8 +2218,152 @@
   }
 
   // ===========================================================
-  // PERFIS GUARDADOS
+  // TROCAR POSIÇÕES / HISTÓRICO DE VIDA (jogo atual, qualquer modo)
   // ===========================================================
+  /** Deixa reordenar a posição dos jogadores/equipas no tabuleiro (só a
+   *  disposição visual — não mexe na ordem dos turnos). mode: "standard" |
+   *  "br" | "teams". */
+  function openReorderPositionsModal(mode) {
+    closeAnyModal();
+    let items;
+    if (mode === "standard") items = game.standard.players.map((p) => ({ id: p.id, name: p.name }));
+    else if (mode === "teams") items = game.teams.teams.map((t) => ({ id: t.id, name: t.name }));
+    else items = game.br.players.map((p) => ({ id: p.id, name: p.name }));
+    const noun = mode === "teams" ? "equipa" : "jogador";
+
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet">
+          <h2>🔀 Trocar posições</h2>
+          <div class="footer-note" style="margin-bottom:10px">Usa as setas para mudar a posição de cada ${noun} no tabuleiro — não afeta a ordem dos turnos.</div>
+          <div class="col" id="reorder-list"></div>
+          <div class="row" style="margin-top:14px">
+            <button class="btn btn-primary grow" id="reorder-done-btn">Concluído</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+
+    function applyOrder() {
+      const ids = items.map((it) => it.id);
+      if (mode === "standard") State.stdReorderPlayers(game, ids);
+      else if (mode === "teams") State.teamsReorderTeams(game, ids);
+      else State.brReorderPlayers(game, ids);
+    }
+
+    function paintList() {
+      const list = backdrop.querySelector("#reorder-list");
+      list.innerHTML = "";
+      items.forEach((it, idx) => {
+        const row = el(`
+          <div class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:8px 10px;margin-bottom:6px;gap:8px;">
+            <span class="grow" style="font-weight:600;font-size:.85rem;">${esc(it.name)}</span>
+            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>▲</button>
+            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="down" data-idx="${idx}" ${idx === items.length - 1 ? "disabled" : ""}>▼</button>
+          </div>
+        `);
+        list.appendChild(row);
+      });
+      list.querySelectorAll('[data-act="up"]').forEach((btn) => btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.idx, 10);
+        if (i <= 0) return;
+        [items[i - 1], items[i]] = [items[i], items[i - 1]];
+        applyOrder();
+        paintList();
+      }));
+      list.querySelectorAll('[data-act="down"]').forEach((btn) => btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.idx, 10);
+        if (i >= items.length - 1) return;
+        [items[i + 1], items[i]] = [items[i], items[i + 1]];
+        applyOrder();
+        paintList();
+      }));
+    }
+    paintList();
+    backdrop.querySelector("#reorder-done-btn").addEventListener("click", () => { backdrop.remove(); render(); });
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) { backdrop.remove(); render(); } });
+  }
+
+  /** Histórico ao vivo das alterações de vida do jogo atual (qualquer modo),
+   *  agrupado por turno — mostra CADA alteração individual (ex: -3, +5, -1),
+   *  não só a diferença total acumulada, e quem estava a jogar em cada turno. */
+  function openLifeHistoryModal() {
+    closeAnyModal();
+    const modeState = game.mode === "standard" ? game.standard : game.mode === "br" ? game.br : game.teams;
+    const log = (modeState && modeState.lifeLog) || [];
+    const groups = [];
+    const byTurn = new Map();
+    log.forEach((entry) => {
+      if (!byTurn.has(entry.turnSeq)) {
+        const g = { turnSeq: entry.turnSeq, roundNumber: entry.roundNumber, turnName: entry.turnName, entries: [] };
+        byTurn.set(entry.turnSeq, g);
+        groups.push(g);
+      }
+      byTurn.get(entry.turnSeq).entries.push(entry);
+    });
+    groups.sort((a, b) => b.turnSeq - a.turnSeq);
+
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet">
+          <h2>📜 Histórico de vida</h2>
+          <div class="scroll" style="padding:0; flex:1; min-height:0;">
+            ${groups.length ? `<div id="life-history-list"></div>` : `<div class="footer-note">Ainda não há alterações de vida registadas neste jogo.</div>`}
+          </div>
+          <div class="row" style="margin-top:12px;">
+            <button class="btn btn-ghost grow" id="close-lh-btn">Fechar</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    // Junta toques consecutivos do MESMO alvo feitos a menos de 2s uns dos
+    // outros numa só linha (o mesmo intervalo usado no indicador ao vivo do
+    // tabuleiro) — ex: -1,-1,-1 seguidos viram uma linha "-3" — mas mantém
+    // ações separadas no tempo como linhas distintas (-3; +5; -1), nunca
+    // reduzindo tudo à diferença total do turno.
+    function mergeBursts(entries) {
+      const merged = [];
+      entries.forEach((entry) => {
+        const last = merged[merged.length - 1];
+        if (last && last.targetId === entry.targetId && entry.ts - last.lastTs <= 2000) {
+          last.delta += entry.delta;
+          last.lastTs = entry.ts;
+        } else {
+          merged.push({ targetId: entry.targetId, targetName: entry.targetName, delta: entry.delta, ts: entry.ts, lastTs: entry.ts });
+        }
+      });
+      return merged;
+    }
+
+    const list = backdrop.querySelector("#life-history-list");
+    if (list) {
+      list.classList.add("lh-timeline");
+      groups.forEach((g) => {
+        const bursts = mergeBursts(g.entries.slice().sort((a, b) => a.ts - b.ts)).filter((b) => b.delta !== 0);
+        if (!bursts.length) return;
+        list.appendChild(el(`<div class="lh-turn"><span class="lh-turn-round">Ronda ${g.roundNumber}</span> · Turno de ${esc(g.turnName)}</div>`));
+        bursts.forEach((entry) => {
+          const sign = entry.delta > 0 ? "plus" : "minus";
+          const row = el(`
+            <div class="lh-event ${sign}">
+              <div class="lh-event-body">
+                <div class="lh-event-name">${esc(entry.targetName)}</div>
+                <div class="lh-event-time">${formatTimeOnly(entry.ts)}</div>
+              </div>
+              <div class="lh-event-delta ${sign}">${entry.delta > 0 ? "+" : ""}${entry.delta}</div>
+            </div>
+          `);
+          list.appendChild(row);
+        });
+      });
+      if (!list.children.length) list.appendChild(el(`<div class="footer-note">Ainda não há alterações de vida registadas neste jogo.</div>`));
+    }
+    backdrop.querySelector("#close-lh-btn").addEventListener("click", () => backdrop.remove());
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
+  }
+
   function renderProfilesScreen() {
     const profiles = Profiles.all();
     const s = el(`
@@ -1672,12 +2374,53 @@
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
+          <div class="row" style="gap:8px; margin-bottom:12px;">
+            <button class="btn btn-ghost grow" id="export-profiles-btn">⬇️ Exportar</button>
+            <button class="btn btn-ghost grow" id="import-profiles-btn">⬆️ Importar</button>
+            <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
+          </div>
           ${profiles.length ? "" : `<div class="footer-note">Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.</div>`}
           <div class="col" id="profiles-list"></div>
         </div>
       </div>
     `);
     appEl.appendChild(s);
+    s.querySelector("#export-profiles-btn").addEventListener("click", () => {
+      const json = Profiles.exportAll();
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `mtg-life-counter-perfis-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    });
+    const importInput = s.querySelector("#import-profiles-input");
+    s.querySelector("#import-profiles-btn").addEventListener("click", () => importInput.click());
+    importInput.addEventListener("change", () => {
+      const file = importInput.files && importInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        let count = 0;
+        try {
+          const parsed = JSON.parse(String(reader.result));
+          const list = Array.isArray(parsed) ? parsed : parsed.profiles;
+          count = Profiles.importList(list);
+        } catch (e) {
+          count = -1;
+        }
+        importInput.value = "";
+        if (count < 0) alert("Não foi possível ler este ficheiro. Confirma que é um ficheiro exportado por esta app.");
+        else if (count === 0) alert("Não foram encontrados perfis válidos neste ficheiro.");
+        else alert(`${count} perfil${count === 1 ? "" : "s"} importado${count === 1 ? "" : "s"} com sucesso.`);
+        render();
+      };
+      reader.readAsText(file);
+    });
     const list = s.querySelector("#profiles-list");
     profiles.forEach((p) => {
       const d = Profiles.derived(p);

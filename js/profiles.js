@@ -130,6 +130,39 @@
     };
   }
 
+  /** Devolve um JSON com TODOS os perfis (e o respetivo histórico/stats),
+   *  pronto a guardar num ficheiro local. */
+  function exportAll() {
+    return JSON.stringify({ app: "mtg-life-counter", type: "profiles-export", version: 1, exportedAt: Date.now(), profiles: load() }, null, 2);
+  }
+
+  /** Importa uma lista de perfis (tipicamente vinda de exportAll noutro
+   *  aparelho/browser). Cada perfil importado recebe sempre um id NOVO —
+   *  nunca substitui nem faz merge com um perfil já existente, para nunca
+   *  se perder dados por engano. Devolve quantos perfis foram importados. */
+  function importList(profiles) {
+    if (!Array.isArray(profiles)) return 0;
+    const list = load();
+    let count = 0;
+    profiles.forEach((p) => {
+      if (!p || typeof p !== "object") return;
+      let clone;
+      try {
+        clone = JSON.parse(JSON.stringify(p));
+      } catch (e) {
+        return;
+      }
+      clone.id = uid();
+      if (!clone.stats) clone.stats = { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 };
+      if (!Array.isArray(clone.history)) clone.history = [];
+      if (!clone.createdAt) clone.createdAt = Date.now();
+      list.push(clone);
+      count++;
+    });
+    if (count) persist(list);
+    return count;
+  }
+
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, recordGameResult, derived, historyOf, removeGame };
+  global.MTG.Profiles = { all, get, create, update, remove, recordGameResult, derived, historyOf, removeGame, exportAll, importList };
 })(window);

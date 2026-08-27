@@ -50,6 +50,30 @@
     });
   }
 
+  /** Regista uma alteração de vida no histórico ao vivo do jogo (mostrado no
+   *  botão "📜 Histórico" do tabuleiro) — guarda CADA alteração individual
+   *  (não só a diferença total acumulada), já com o contexto de que
+   *  turno/ronda era e de quem era a vez nesse momento. turnEntity/
+   *  targetEntity podem ser um jogador OU uma equipa (só precisam de
+   *  id/name). */
+  function logLifeChange(modeState, turnEntity, targetEntity, delta) {
+    if (!delta) return;
+    if (!modeState.lifeLog) modeState.lifeLog = [];
+    modeState.lifeLog.push({
+      id: uid(),
+      ts: Date.now(),
+      turnSeq: modeState.turnSeq != null ? modeState.turnSeq : (modeState.globalTurnCount || 0),
+      roundNumber: modeState.roundNumber || 1,
+      turnName: turnEntity ? turnEntity.name : "-",
+      targetId: targetEntity.id,
+      targetName: targetEntity.name,
+      delta,
+    });
+    // limite generoso para não fazer crescer o localStorage indefinidamente
+    // em jogos muito longos — mantém sempre as 500 alterações mais recentes.
+    if (modeState.lifeLog.length > 500) modeState.lifeLog.splice(0, modeState.lifeLog.length - 500);
+  }
+
   function save(state) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -109,8 +133,12 @@
         currentTurnIndex: 0,
         roundStartIndex: 0, // índice (em turnOrder) de quem começou a ronda/jogo atual
         roundNumber: 1,
+        turnSeq: 1,
+        lifeLog: [],
         gameStartedAt: now,
         turnStartedAt: now,
+        paused: false,
+        pausedAt: null,
         ended: false,
         endedAt: null,
         winnerId: null,
@@ -131,6 +159,7 @@
       if (p.life <= 0) p.eliminated = true;
       else if (p.eliminated && p.life > 0) p.eliminated = false;
     }
+    logLifeChange(state.standard, stdCurrentPlayer(state), p, delta);
     save(state);
     return state;
   }
@@ -249,7 +278,7 @@
    *  (roundStartIndex) — não a cada turno individual. */
   function stdPassTurn(state) {
     const std = state.standard;
-    if (!std || std.ended) return state;
+    if (!std || std.ended || std.paused) return state;
     const now = Date.now();
     const cur = stdCurrentPlayer(state);
     if (cur) {
@@ -258,6 +287,7 @@
     }
     std.currentTurnIndex = stdNextAliveIndex(state, std.currentTurnIndex);
     std.turnStartedAt = now;
+    std.turnSeq = (std.turnSeq || 1) + 1;
     if (std.currentTurnIndex === (std.roundStartIndex || 0)) {
       std.roundNumber = (std.roundNumber || 1) + 1;
     }
@@ -275,8 +305,33 @@
     std.currentTurnIndex = idx;
     std.roundStartIndex = idx;
     std.roundNumber = 1;
+    std.turnSeq = 1;
+    std.lifeLog = [];
     std.turnStartedAt = now;
     std.gameStartedAt = now;
+    std.paused = false;
+    std.pausedAt = null;
+    save(state);
+    return state;
+  }
+
+  /** Pausa/retoma os relógios de turno e de jogo. Ao retomar, desloca as
+   *  referências de tempo pelo tempo em pausa, para o tempo pausado não
+   *  contar para a duração do turno/jogo. */
+  function stdTogglePause(state) {
+    const std = state.standard;
+    if (!std || std.ended) return state;
+    const now = Date.now();
+    if (std.paused) {
+      const pausedMs = now - (std.pausedAt || now);
+      std.turnStartedAt += pausedMs;
+      std.gameStartedAt += pausedMs;
+      std.paused = false;
+      std.pausedAt = null;
+    } else {
+      std.paused = true;
+      std.pausedAt = now;
+    }
     save(state);
     return state;
   }
@@ -305,7 +360,7 @@
     if (std.ended) return stdComputeStats(state);
     const now = Date.now();
     const cur = stdCurrentPlayer(state);
-    if (cur) {
+    if (cur && !std.paused) {
       cur.turnTimeMs += now - std.turnStartedAt;
       cur.turnsTaken += 1;
     }
@@ -363,6 +418,19 @@
     return state;
   }
 
+  /** Reordena a posição dos jogadores no tabuleiro (só a disposição visual —
+   *  `turnOrder` guarda ids, não índices, por isso a ordem dos turnos não é
+   *  afetada por isto). orderedIds deve conter todos os ids atuais. */
+  function stdReorderPlayers(state, orderedIds) {
+    const std = state.standard;
+    const byId = new Map(std.players.map((p) => [p.id, p]));
+    const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+    std.players.forEach((p) => { if (!orderedIds.includes(p.id)) reordered.push(p); });
+    std.players = reordered;
+    save(state);
+    return state;
+  }
+
   function stdSetStartLife(state, life) {
     const now = Date.now();
     state.standard.startLife = life;
@@ -379,8 +447,12 @@
     state.standard.currentTurnIndex = 0;
     state.standard.roundStartIndex = 0;
     state.standard.roundNumber = 1;
+    state.standard.turnSeq = 1;
+    state.standard.lifeLog = [];
     state.standard.gameStartedAt = now;
     state.standard.turnStartedAt = now;
+    state.standard.paused = false;
+    state.standard.pausedAt = null;
     state.standard.ended = false;
     state.standard.endedAt = null;
     state.standard.winnerId = null;
@@ -458,8 +530,11 @@
         lastRoll: null,
         gameStartedAt: now,
         turnStartedAt: now,
+        paused: false,
+        pausedAt: null,
         endedAt: null,
         profilesApplied: false,
+        lifeLog: [],
         log: [{ t: Date.now(), text: "🎮 Battle Royale iniciado. Boa sorte, tributos." }],
       },
     };
@@ -484,10 +559,24 @@
       return state;
     }
     p.life += delta;
+    logLifeChange(state.br, brCurrentPlayer(state), p, delta);
     if (p.life <= 0 && !p.eliminated) {
       brEliminate(state, playerId, []);
       return state;
     }
+    save(state);
+    return state;
+  }
+
+  /** Reordena a posição dos jogadores na lista (só a disposição visual —
+   *  `turnOrder` guarda ids, não índices, por isso a ordem dos turnos não é
+   *  afetada por isto). orderedIds deve conter todos os ids atuais. */
+  function brReorderPlayers(state, orderedIds) {
+    const br = state.br;
+    const byId = new Map(br.players.map((p) => [p.id, p]));
+    const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+    br.players.forEach((p) => { if (!orderedIds.includes(p.id)) reordered.push(p); });
+    br.players = reordered;
     save(state);
     return state;
   }
@@ -526,8 +615,32 @@
     const now = Date.now();
     br.currentTurnIndex = idx;
     br.globalTurnCount = 0;
+    br.lifeLog = [];
     br.turnStartedAt = now;
     br.gameStartedAt = now;
+    br.paused = false;
+    br.pausedAt = null;
+    save(state);
+    return state;
+  }
+
+  /** Pausa/retoma os relógios de turno e de jogo. Ao retomar, desloca as
+   *  referências de tempo pelo tempo em pausa, para o tempo pausado não
+   *  contar para a duração do turno/jogo. */
+  function brTogglePause(state) {
+    const br = state.br;
+    if (!br || br.phase === "ended") return state;
+    const now = Date.now();
+    if (br.paused) {
+      const pausedMs = now - (br.pausedAt || now);
+      br.turnStartedAt += pausedMs;
+      br.gameStartedAt += pausedMs;
+      br.paused = false;
+      br.pausedAt = null;
+    } else {
+      br.paused = true;
+      br.pausedAt = now;
+    }
     save(state);
     return state;
   }
@@ -647,7 +760,7 @@
   }
 
   function brNextTurn(state) {
-    if (state.br.phase === "ended") return state;
+    if (state.br.phase === "ended" || state.br.paused) return state;
     const now = Date.now();
     const prevIndex = state.br.currentTurnIndex;
     const currentBefore = brCurrentPlayer(state);
@@ -715,6 +828,302 @@
     return state;
   }
 
+  // ---------------------------------------------------------
+  // MODO EQUIPAS (Teams) — vida partilhada por equipa (estilo Two-Headed
+  // Giant), com N equipas de M jogadores cada. Cada jogador continua a ter
+  // o seu próprio commander (+ parceiro opcional) e commander tax, mas a
+  // vida é um total único por equipa. O TURNO é da EQUIPA, não de um
+  // jogador individual — todos os jogadores da mesma equipa jogam ao
+  // mesmo tempo no turno dela; "passar turno" avança para a equipa
+  // seguinte (T1 → T2 → T3 → T1 → ...).
+  // ---------------------------------------------------------
+
+  /** Junta os jogadores de todas as equipas numa única lista, para poderem
+   *  partilhar o sorteio de cores de fallback (cada jogador sem commander
+   *  tem a sua própria cor, nunca repetida entre os jogadores da equipa —
+   *  o fundo do painel da equipa fica dividido, uma fatia por jogador). */
+  function teamsAllPlayers(teams) {
+    return (teams || []).reduce((acc, t) => acc.concat(t.players), []);
+  }
+
+  function createTeamsGame({ numTeams, playersPerTeam, startLife }) {
+    const teams = [];
+    let seat = 0;
+    for (let t = 0; t < numTeams; t++) {
+      const teamPlayers = [];
+      for (let i = 0; i < playersPerTeam; i++) {
+        seat++;
+        teamPlayers.push({
+          id: uid(),
+          name: `Jogador ${seat}`,
+          commander: null,
+          partnerCommander: null,
+          cmdTax: 0,
+          partnerCmdTax: 0,
+          profileId: null,
+        });
+      }
+      teams.push({
+        id: uid(),
+        name: `Equipa ${t + 1}`,
+        life: startLife,
+        eliminated: false,
+        turnTimeMs: 0,
+        turnsTaken: 0,
+        players: teamPlayers,
+      });
+    }
+    ensureFallbackColors(teamsAllPlayers(teams));
+    // ordem de turnos: uma entrada por EQUIPA (não por jogador) — dentro do
+    // turno de uma equipa, todos os seus jogadores jogam ao mesmo tempo.
+    const turnOrder = teams.map((tm) => tm.id);
+    const now = Date.now();
+    const state = {
+      mode: "teams",
+      presetName: "teams",
+      createdAt: now,
+      teams: {
+        numTeams,
+        playersPerTeam,
+        startLife,
+        teams,
+        turnOrder,
+        currentTurnIndex: 0,
+        roundStartIndex: 0,
+        roundNumber: 1,
+        turnSeq: 1,
+        lifeLog: [],
+        gameStartedAt: now,
+        turnStartedAt: now,
+        paused: false,
+        pausedAt: null,
+        ended: false,
+        endedAt: null,
+        winnerTeamId: null,
+        profilesApplied: false,
+      },
+    };
+    save(state);
+    return state;
+  }
+
+  /** Localiza um jogador (e a sua equipa) em qualquer equipa pelo id. */
+  function teamsFindPlayer(state, playerId) {
+    const teams = state.teams.teams;
+    for (const team of teams) {
+      const player = team.players.find((p) => p.id === playerId);
+      if (player) return { team, player };
+    }
+    return { team: null, player: null };
+  }
+
+  function teamsAdjustLife(state, teamId, delta) {
+    const team = state.teams.teams.find((t) => t.id === teamId);
+    if (!team) return state;
+    team.life += delta;
+    if (team.life <= 0) team.eliminated = true;
+    else if (team.eliminated && team.life > 0) team.eliminated = false;
+    logLifeChange(state.teams, teamsCurrentTeam(state), team, delta);
+    save(state);
+    return state;
+  }
+
+  /** Commander tax de um jogador dentro de uma equipa (main/partner). */
+  function teamsAdjustCmdTax(state, playerId, delta, source) {
+    const { player } = teamsFindPlayer(state, playerId);
+    if (!player) return state;
+    const field = source === "partner" ? "partnerCmdTax" : "cmdTax";
+    player[field] = Math.max(0, (player[field] || 0) + delta);
+    save(state);
+    return state;
+  }
+
+  function teamsSetCommander(state, playerId, commander) {
+    const { player } = teamsFindPlayer(state, playerId);
+    if (!player) return state;
+    player.commander = commander;
+    ensureFallbackColors(teamsAllPlayers(state.teams.teams));
+    save(state);
+    return state;
+  }
+
+  function teamsSetPartnerCommander(state, playerId, commander) {
+    const { player } = teamsFindPlayer(state, playerId);
+    if (!player) return state;
+    player.partnerCommander = commander;
+    save(state);
+    return state;
+  }
+
+  function teamsSetName(state, playerId, name) {
+    const { player } = teamsFindPlayer(state, playerId);
+    if (!player) return state;
+    player.name = name;
+    save(state);
+    return state;
+  }
+
+  function teamsSetProfile(state, playerId, profileId) {
+    const { player } = teamsFindPlayer(state, playerId);
+    if (!player) return state;
+    player.profileId = profileId;
+    save(state);
+    return state;
+  }
+
+  /** Toggle manual de "equipa eliminada" (ex: concederem a partida sem
+   *  chegar a 0 de vida). */
+  function teamsToggleEliminated(state, teamId) {
+    const team = state.teams.teams.find((t) => t.id === teamId);
+    if (!team) return state;
+    team.eliminated = !team.eliminated;
+    save(state);
+    return state;
+  }
+
+  /** Reordena a posição das equipas no tabuleiro (só a disposição visual —
+   *  `turnOrder` guarda ids, não índices, por isso a ordem dos turnos não é
+   *  afetada por isto). orderedIds deve conter todos os ids atuais. */
+  function teamsReorderTeams(state, orderedIds) {
+    const t = state.teams;
+    const byId = new Map(t.teams.map((tm) => [tm.id, tm]));
+    const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+    t.teams.forEach((tm) => { if (!orderedIds.includes(tm.id)) reordered.push(tm); });
+    t.teams = reordered;
+    save(state);
+    return state;
+  }
+
+  /** A equipa da vez (o "turno" é da equipa toda, não de um jogador). */
+  function teamsCurrentTeam(state) {
+    const t = state.teams;
+    if (!t.turnOrder) return null;
+    const id = t.turnOrder[t.currentTurnIndex];
+    return t.teams.find((tm) => tm.id === id) || null;
+  }
+
+  function teamsNextAliveIndex(state, fromIndex) {
+    const order = state.teams.turnOrder;
+    for (let step = 1; step <= order.length; step++) {
+      const idx = (fromIndex + step) % order.length;
+      const team = state.teams.teams.find((tm) => tm.id === order[idx]);
+      if (team && !team.eliminated) return idx;
+    }
+    return fromIndex;
+  }
+
+  /** Passa o turno para a equipa seguinte ainda viva. A ronda só sobe
+   *  quando a vez volta a dar a quem começou a ronda/jogo. */
+  function teamsPassTurn(state) {
+    const t = state.teams;
+    if (!t || t.ended || t.paused) return state;
+    const now = Date.now();
+    const cur = teamsCurrentTeam(state);
+    if (cur) {
+      cur.turnTimeMs += now - t.turnStartedAt;
+      cur.turnsTaken += 1;
+    }
+    t.currentTurnIndex = teamsNextAliveIndex(state, t.currentTurnIndex);
+    t.turnStartedAt = now;
+    t.turnSeq = (t.turnSeq || 1) + 1;
+    if (t.currentTurnIndex === (t.roundStartIndex || 0)) {
+      t.roundNumber = (t.roundNumber || 1) + 1;
+    }
+    save(state);
+    return state;
+  }
+
+  /** Define que equipa começa o jogo (escolha manual ou resultado do dado). */
+  function teamsSetStartingTeam(state, teamId) {
+    const t = state.teams;
+    const idx = t.turnOrder.indexOf(teamId);
+    if (idx === -1) return state;
+    const now = Date.now();
+    t.currentTurnIndex = idx;
+    t.roundStartIndex = idx;
+    t.roundNumber = 1;
+    t.turnSeq = 1;
+    t.lifeLog = [];
+    t.turnStartedAt = now;
+    t.gameStartedAt = now;
+    t.paused = false;
+    t.pausedAt = null;
+    save(state);
+    return state;
+  }
+
+  /** Pausa/retoma os relógios de turno e de jogo. Ao retomar, desloca as
+   *  referências de tempo pelo tempo em pausa, para o tempo pausado não
+   *  contar para a duração do turno/jogo. */
+  function teamsTogglePause(state) {
+    const t = state.teams;
+    if (!t || t.ended) return state;
+    const now = Date.now();
+    if (t.paused) {
+      const pausedMs = now - (t.pausedAt || now);
+      t.turnStartedAt += pausedMs;
+      t.gameStartedAt += pausedMs;
+      t.paused = false;
+      t.pausedAt = null;
+    } else {
+      t.paused = true;
+      t.pausedAt = now;
+    }
+    save(state);
+    return state;
+  }
+
+  function teamsComputeStats(state) {
+    const t = state.teams;
+    const gameTimeMs = (t.endedAt || Date.now()) - t.gameStartedAt;
+    const rows = t.teams.map((team) => ({
+      id: team.id,
+      name: team.name + (team.players.length ? " — " + team.players.map((p) => p.name).join(", ") : ""),
+      commander: team.players[0] ? team.players[0].commander : null,
+      turnTimeMs: team.turnTimeMs,
+      turnsTaken: team.turnsTaken,
+      avgTurnMs: team.turnsTaken ? team.turnTimeMs / team.turnsTaken : 0,
+      eliminated: team.eliminated,
+    }));
+    return { gameTimeMs, winnerId: t.winnerTeamId, players: rows };
+  }
+
+  /** Termina o jogo: fecha o relógio do turno atual, guarda stats nos perfis
+   *  de todos os jogadores (won = jogar numa equipa igual à vencedora). */
+  function teamsEndGame(state, winnerTeamId) {
+    const t = state.teams;
+    if (t.ended) return teamsComputeStats(state);
+    const now = Date.now();
+    const cur = teamsCurrentTeam(state);
+    if (cur && !t.paused) {
+      cur.turnTimeMs += now - t.turnStartedAt;
+      cur.turnsTaken += 1;
+    }
+    t.turnStartedAt = now;
+    t.ended = true;
+    t.endedAt = now;
+    t.winnerTeamId = winnerTeamId || null;
+    const stats = teamsComputeStats(state);
+    if (!t.profilesApplied) {
+      t.teams.forEach((team) => {
+        team.players.forEach((p) => {
+          if (p.profileId && global.MTG.Profiles) {
+            global.MTG.Profiles.recordGameResult(p.profileId, {
+              won: team.id === winnerTeamId,
+              gameTimeMs: stats.gameTimeMs,
+              turnTimeMs: team.turnTimeMs,
+              turnsTaken: team.turnsTaken,
+              mode: "teams",
+            });
+          }
+        });
+      });
+      t.profilesApplied = true;
+    }
+    save(state);
+    return stats;
+  }
+
   global.MTG = global.MTG || {};
   global.MTG.State = {
     save,
@@ -730,15 +1139,18 @@
     stdSetProtected,
     stdSetName,
     stdSetPlayerCount,
+    stdReorderPlayers,
     stdSetStartLife,
     stdSetProfile,
     stdSetStartingPlayer,
     stdCurrentPlayer,
     stdPassTurn,
+    stdTogglePause,
     stdEndGame,
     stdComputeStats,
     createBRGame,
     brAdjustLife,
+    brReorderPlayers,
     brSetZone,
     brSetName,
     brSetCommander,
@@ -749,6 +1161,7 @@
     brApplyLoot,
     brCurrentPlayer,
     brNextTurn,
+    brTogglePause,
     brRollEvent,
     brStartFinalDuel,
     brAlivePlayers,
@@ -760,5 +1173,21 @@
     LOOT: BR_LOOT,
     FALLBACK_PALETTE,
     ensureFallbackColors,
+    createTeamsGame,
+    teamsFindPlayer,
+    teamsAdjustLife,
+    teamsAdjustCmdTax,
+    teamsSetCommander,
+    teamsSetPartnerCommander,
+    teamsSetName,
+    teamsSetProfile,
+    teamsToggleEliminated,
+    teamsReorderTeams,
+    teamsCurrentTeam,
+    teamsPassTurn,
+    teamsSetStartingTeam,
+    teamsTogglePause,
+    teamsComputeStats,
+    teamsEndGame,
   };
 })(window);

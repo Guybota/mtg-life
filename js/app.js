@@ -141,6 +141,20 @@
     return t.content.firstElementChild;
   }
 
+  // Torna os botões de ícone da board-toolbar (pausa/histórico/trocar
+  // posições) perfeitamente quadrados, com o mesmo tamanho (altura real)
+  // do botão "Terminar" ao lado, em vez de um valor fixo adivinhado.
+  function squareToolbarIcons(scope) {
+    const endBtn = scope.querySelector(".board-toolbar .btn-ghost.grow, .board-toolbar #end-game-btn");
+    const icons = scope.querySelectorAll(".board-toolbar .btn-icon");
+    if (!endBtn || !icons.length) return;
+    requestAnimationFrame(() => {
+      const h = endBtn.getBoundingClientRect().height;
+      if (!h) return;
+      icons.forEach((btn) => { btn.style.width = h + "px"; btn.style.height = h + "px"; });
+    });
+  }
+
   function nav(newScreen, params) {
     closeAnyModal();
     screen = newScreen;
@@ -744,6 +758,7 @@
       </div>
     `);
     appEl.appendChild(s);
+    squareToolbarIcons(s);
 
     const rowTop = s.querySelector("#row-top");
     const rowBottom = s.querySelector("#row-bottom");
@@ -2115,6 +2130,7 @@
       </div>
     `);
     appEl.appendChild(s);
+    squareToolbarIcons(s);
 
     const rowTop = s.querySelector("#row-top");
     const rowBottom = s.querySelector("#row-bottom");

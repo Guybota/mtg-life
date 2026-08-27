@@ -587,13 +587,23 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 /* barra de controlo inferior do tabuleiro */
 .board-toolbar{
   flex-shrink:0;
-  display:flex; align-items:center; justify-content:space-between;
+  display:flex; align-items:stretch; justify-content:space-between;
   gap:8px;
   padding: 8px 10px;
   background: var(--bg-elev);
   border-top:1px solid var(--line);
 }
 .board-toolbar .btn{ flex:1; }
+/* Botões de ícone (pausa/histórico/trocar posições) na mesma barra do
+   "Terminar": quadrados e com o mesmo estilo (cantos retos, fundo
+   transparente, borda), em vez do "pill" redondo/esticado de antes. */
+.board-toolbar .btn-icon{
+  flex: 0 0 auto;
+  width:46px; height:46px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: none;
+}
 
 /* Botão de "passar turno" dentro do próprio painel do jogador/equipa da
    vez, logo por baixo do contador de vida (em vez de ficar sempre fixo
@@ -624,7 +634,7 @@ label{ font-size:.8rem; color:var(--text-dim); font-weight:600; text-transform:u
 .screen.board-fullscreen .br-status-row,
 .screen.board-fullscreen .board-toolbar{ display:none; }
 .fullscreen-toggle-btn{
-  position:fixed; top: calc(8px + var(--safe-top)); right: calc(8px + var(--safe-right));
+  position:fixed; top:50%; left:50%; transform: translate(-50%, -50%);
   z-index:80;
   width:34px; height:34px; border-radius:50%;
   background: rgba(0,0,0,.55); color:#fff;

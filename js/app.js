@@ -3355,6 +3355,31 @@
         ${Charts.stackedBars(Array.from(byMode.values()).sort((x, y) => (y.a + y.b) - (x.a + x.b)), [tr("Vitórias"), tr("Derrotas")])}
       </div>`;
 
+    // confrontos diretos: só jogos registados com a lista de adversários.
+    // Cada adversário identifica-se pelo jogador do perfil dele (se tiver),
+    // senão pelo nome do lugar; "a – b" = vitórias deste perfil vs vitórias dele.
+    const h2h = new Map();
+    chrono.forEach((g) => {
+      (g.opponents || []).forEach((o) => {
+        const op = o.profileId ? Profiles.get(o.profileId) : null;
+        const label = (op && (op.playerName || op.name)) || o.name;
+        if (!label) return;
+        const key = label.trim().toLowerCase();
+        if (!h2h.has(key)) h2h.set(key, { label, games: 0, a: 0, b: 0 });
+        const r = h2h.get(key);
+        r.games++;
+        if (g.won) r.a++;
+        else if (o.won) r.b++;
+      });
+    });
+    const h2hRows = Array.from(h2h.values()).sort((x, y) => y.games - x.games).slice(0, 8);
+    const h2hHtml = h2hRows.length ? `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Confrontos diretos")}</div>
+        <div class="chart-sub">${tr("Jogos em que estiveram os dois à mesa: vitórias deste perfil – vitórias do adversário")}</div>
+        ${Charts.stackedBars(h2hRows.map((r) => ({ label: tr("vs {name}", { name: r.label }), a: r.a, b: r.b, valueLabel: `${r.a} – ${r.b}` })), [tr("Este perfil ganhou"), tr("Adversário ganhou")])}
+      </div>` : "";
+
     // duração dos últimos jogos com tempo contado
     const timedGames = chrono.filter((g) => g.timed !== false && g.gameTimeMs > 0).slice(-12);
     let durations = "";
@@ -3376,7 +3401,7 @@
         </div>`;
     }
 
-    body.innerHTML = head + kpis + streak + form + evo + modes + durations + `
+    body.innerHTML = head + kpis + streak + form + evo + modes + h2hHtml + durations + `
       <div class="section-title">${tr("Histórico de jogos")}</div>
       <div class="col" id="history-list"></div>`;
 

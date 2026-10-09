@@ -1672,3 +1672,4 @@ input.switch:checked::after{ transform: translateX(18px); }
 /* nome sempre legível: se não houver espaço, os emblemas (veneno/tax) descem de linha */
 .player-header{ flex-wrap: wrap; row-gap:4px; }
 .player-header .player-name{ flex: 1 1 64px; min-width:64px; }
+.chart-sub + .chart-legend{ margin-top:10px; }

@@ -568,7 +568,7 @@
         alert(tr("Não foi possível ler este ficheiro. Confirma que é um ficheiro exportado por esta app."));
         return;
       }
-      openMergeReview(list, { lastSetup: parsed.lastSetup, exportedAt: parsed.exportedAt }, done);
+      openMergeReview(list, { lastSetup: parsed.lastSetup, exportedAt: parsed.exportedAt, playerAliases: parsed.playerAliases }, done);
     };
     reader.readAsText(file);
   }
@@ -666,6 +666,7 @@
       auto.forEach((r) => { targets[r.incoming.id] = r.match.id; });
       selects.forEach((row) => { targets[pick[+row.dataset.i].incoming.id] = row.querySelector("select").value || null; });
       const before = Profiles.snapshot();
+      if (extra && extra.playerAliases) Profiles.addPlayerAliases(extra.playerAliases);
       const res = Profiles.applyMerge(list, targets);
       if (extra && extra.lastSetup && !loadLastSetup()) {
         try { localStorage.setItem(LAST_SETUP_KEY, JSON.stringify(extra.lastSetup)); } catch (e) {}
@@ -700,7 +701,7 @@
     const status = backdrop.querySelector("#qr-status");
     let frames;
     try {
-      frames = await MTG.QrSync.encode({ app: "mtg-life-counter", type: "qr-merge", version: 1, profiles: Profiles.all() });
+      frames = await MTG.QrSync.encode({ app: "mtg-life-counter", type: "qr-merge", version: 1, profiles: Profiles.all(), playerAliases: Profiles.playerAliases() });
     } catch (e) {
       status.textContent = e && e.message === "too-big" ? tr("Há dados demais para QR. Usa o ficheiro.") : tr("Não foi possível criar o QR. Usa o ficheiro.");
       return;
@@ -753,7 +754,7 @@
           backdrop.remove();
           const list = data && Array.isArray(data.profiles) ? data.profiles : null;
           if (!list) { alert(tr("Este QR não é de perfis desta app.")); return; }
-          openMergeReview(list, null, done);
+          openMergeReview(list, { playerAliases: data.playerAliases }, done);
         }).catch((e) => {
           status.textContent = e && e.message === "no-decompress" ? tr("Este telemóvel não consegue ler estes dados. Usa o ficheiro.") : tr("Não foi possível ler os dados. Tenta outra vez.");
         });
@@ -763,6 +764,176 @@
     } catch (e) {
       status.textContent = tr("Sem acesso à câmara. Dá permissão nas definições ou usa o ficheiro.");
     }
+  }
+
+  // ---------------------------------------------------------
+  // Fundir dois decks / dois jogadores deste aparelho (nomes ou
+  // alcunhas diferentes para o mesmo deck ou a mesma pessoa)
+  // ---------------------------------------------------------
+  const normName = (x) => String(x || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const sameDeck = (a, b) => {
+    const ca = a.commander && normName(a.commander.name);
+    const cb = b.commander && normName(b.commander.name);
+    return (ca && ca === cb) || normName(a.name) === normName(b.name);
+  };
+
+  /** Escolha "fica este / fica o outro" (segmented). */
+  function keepSegHtml(id, a, b, sel) {
+    return `
+      <div class="section-title">${tr("Fica com o nome")}</div>
+      <div class="seg" id="${id}" role="tablist">
+        <button type="button" class="seg-btn" data-k="a" aria-selected="${sel === "a"}">${esc(a)}</button>
+        <button type="button" class="seg-btn" data-k="b" aria-selected="${sel === "b"}">${esc(b)}</button>
+      </div>`;
+  }
+  function bindSeg(root, id, onPick) {
+    root.querySelectorAll(`#${id} .seg-btn`).forEach((btn) => btn.addEventListener("click", () => {
+      root.querySelectorAll(`#${id} .seg-btn`).forEach((x) => x.setAttribute("aria-selected", String(x === btn)));
+      onPick(btn.dataset.k);
+    }));
+  }
+
+  function openMergeDeckSheet(profileId) {
+    const me = Profiles.get(profileId);
+    if (!me) return;
+    const others = Profiles.all().filter((p) => p.id !== me.id).map((p) => ({
+      p, suggested: sameDeck(me, p), samePlayer: normName(p.playerName) === normName(me.playerName),
+    })).sort((x, y) => (y.suggested - x.suggested) || (y.samePlayer - x.samePlayer) || x.p.name.localeCompare(y.p.name));
+    if (!others.length) { toast(tr("Não há outro deck para fundir")); return; }
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet merge-sheet">
+          <h2>${tr("Fundir deck")}</h2>
+          <p class="merge-hint">${tr("Junta «{name}» com outro deck que seja o mesmo (por exemplo, criado com outro nome). Os jogos e as estatísticas somam-se e fica só um.", { name: esc(me.name) })}</p>
+          <div class="col merge-list" id="md-list">${others.map(({ p, suggested }) => `
+            <label class="merge-row pick">
+              <input type="radio" name="md-target" value="${esc(p.id)}">
+              <span class="merge-from">
+                <span class="merge-name">${esc(deckLabel(p))}</span>
+                <span class="merge-games">${tr("{n} jogo(s)", { n: p.stats.games })}</span>
+              </span>
+              ${suggested ? `<span class="merge-suggested">${tr("Parecido")}</span>` : ""}
+            </label>`).join("")}</div>
+          <div id="md-keep"></div>
+          <p class="merge-summary" id="md-summary"></p>
+          <div class="row" style="margin-top:12px">
+            <button class="btn btn-ghost grow" id="md-cancel">${tr("Cancelar")}</button>
+            <button class="btn btn-primary grow" id="md-go" disabled>${I("merge")} ${tr("Fundir")}</button>
+          </div>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.querySelector("#md-cancel").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+    let other = null;
+    let keep = "a"; // a = este deck, b = o escolhido
+    function paint() {
+      if (!other) return;
+      const kept = keep === "a" ? me : other;
+      const gone = keep === "a" ? other : me;
+      const g = me.stats.games + other.stats.games;
+      const w = me.stats.wins + other.stats.wins;
+      backdrop.querySelector("#md-summary").textContent = tr("«{kept}» fica com {g} jogo(s) e {w} vitória(s); «{gone}» deixa de existir.", { kept: kept.name, gone: gone.name, g, w });
+    }
+    backdrop.querySelectorAll('input[name="md-target"]').forEach((r) => r.addEventListener("change", () => {
+      other = Profiles.get(r.value);
+      keep = other.stats.games > me.stats.games ? "b" : "a";
+      const wrap = backdrop.querySelector("#md-keep");
+      wrap.innerHTML = keepSegHtml("md-seg", me.name, other.name, keep);
+      bindSeg(wrap, "md-seg", (k) => { keep = k; paint(); });
+      backdrop.querySelector("#md-go").disabled = false;
+      paint();
+    }));
+    backdrop.querySelector("#md-go").addEventListener("click", () => {
+      if (!other) return;
+      const kept = keep === "a" ? me : other;
+      const gone = keep === "a" ? other : me;
+      const before = Profiles.snapshot();
+      Profiles.mergeProfiles(gone.id, kept.id);
+      close();
+      nav("profile-detail", { id: kept.id, fromPlayer: screenParams.fromPlayer });
+      undoToast(tr("Decks fundidos"), () => { Profiles.replaceAll(before); nav("profile-detail", { id: me.id, fromPlayer: screenParams.fromPlayer }); }, 8000);
+    });
+  }
+
+  function openMergePlayerSheet(playerKey) {
+    const players = playersFromProfiles(Profiles.all());
+    const me = players.find((x) => x.key === playerKey);
+    if (!me) return;
+    const others = players.filter((x) => x !== me).sort((a, b) => a.name.localeCompare(b.name));
+    if (!others.length) { toast(tr("Não há outro jogador para fundir")); return; }
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet merge-sheet">
+          <h2>${tr("Fundir jogador")}</h2>
+          <p class="merge-hint">${tr("Junta «{name}» com outro jogador que seja a mesma pessoa (outro nome ou alcunha). A app passa a reconhecer os dois nomes, também ao juntar com outro telemóvel.", { name: esc(me.name) })}</p>
+          <div class="col merge-list">${others.map((o, i) => `
+            <label class="merge-row pick">
+              <input type="radio" name="mp-target" value="${i}">
+              <span class="merge-from">
+                <span class="merge-name">${esc(o.name)}</span>
+                <span class="merge-games">${tr("{n} deck(s)", { n: o.profiles.length })} · ${tr("{n} jogo(s)", { n: o.games })}</span>
+              </span>
+            </label>`).join("")}</div>
+          <div id="mp-keep"></div>
+          <div id="mp-decks"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="btn btn-ghost grow" id="mp-cancel">${tr("Cancelar")}</button>
+            <button class="btn btn-primary grow" id="mp-go" disabled>${I("merge")} ${tr("Fundir")}</button>
+          </div>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.querySelector("#mp-cancel").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+    let other = null;
+    let keep = "a";
+    let pairs = [];
+    backdrop.querySelectorAll('input[name="mp-target"]').forEach((r) => r.addEventListener("change", () => {
+      other = others[+r.value];
+      keep = other.games > me.games ? "b" : "a";
+      const wrap = backdrop.querySelector("#mp-keep");
+      wrap.innerHTML = keepSegHtml("mp-seg", me.name, other.name, keep);
+      bindSeg(wrap, "mp-seg", (k) => { keep = k; });
+      // decks dos dois que parecem o mesmo: sugere fundi-los também
+      pairs = [];
+      const used = new Set();
+      me.profiles.forEach((a) => {
+        const b = other.profiles.find((x) => !used.has(x.id) && sameDeck(a, x));
+        if (b) { used.add(b.id); pairs.push([a, b]); }
+      });
+      backdrop.querySelector("#mp-decks").innerHTML = pairs.length ? `
+        <div class="section-title">${tr("Decks repetidos")}</div>
+        <p class="merge-hint">${tr("Estes decks parecem o mesmo nos dois nomes. Marcados = fundir também.")}</p>
+        <div class="col merge-list">${pairs.map(([a, b], i) => `
+          <label class="merge-row pick">
+            <input type="checkbox" data-pair="${i}" checked>
+            <span class="merge-from"><span class="merge-name">${esc(a.name)} + ${esc(b.name)}</span>
+            <span class="merge-games">${tr("{n} jogo(s)", { n: a.stats.games + b.stats.games })}</span></span>
+          </label>`).join("")}</div>` : "";
+      backdrop.querySelector("#mp-go").disabled = false;
+    }));
+    backdrop.querySelector("#mp-go").addEventListener("click", () => {
+      if (!other) return;
+      const kept = keep === "a" ? me : other;
+      const gone = keep === "a" ? other : me;
+      const before = Profiles.snapshot();
+      Profiles.mergePlayers(gone.name, kept.name);
+      backdrop.querySelectorAll("input[data-pair]").forEach((cb) => {
+        if (!cb.checked) return;
+        const [a, b] = pairs[+cb.dataset.pair];
+        const [to, from] = a.stats.games >= b.stats.games ? [a, b] : [b, a];
+        Profiles.mergeProfiles(from.id, to.id);
+      });
+      close();
+      const key = kept.name.trim().toLowerCase();
+      nav("player-detail", { key });
+      undoToast(tr("Jogadores fundidos"), () => { Profiles.replaceAll(before); nav("player-detail", { key: me.key }); }, 8000);
+    });
   }
 
   /** Menu "Juntar com outro telemóvel": enviar os meus / receber os do outro. */
@@ -3826,7 +3997,9 @@
 
     body.innerHTML = head + kpis + streak + form + evo + modes + h2hHtml + durations + `
       <div class="section-title">${tr("Histórico de jogos")}</div>
-      <div class="col" id="history-list"></div>`;
+      <div class="col" id="history-list"></div>
+      <button class="btn btn-ghost btn-block merge-entry" id="merge-deck-btn">${I("merge")} ${tr("Fundir com outro deck")}</button>`;
+    body.querySelector("#merge-deck-btn").addEventListener("click", () => openMergeDeckSheet(profile.id));
 
     // histórico (também serve de "vista de tabela" dos gráficos)
     const list = body.querySelector("#history-list");
@@ -3919,6 +4092,8 @@
           </div>
           <span class="profile-chevron">${I("chevron-right")}</span>
         </div>`).join("")}</div>`;
+    body.insertAdjacentHTML("beforeend", `<button class="btn btn-ghost btn-block merge-entry" id="merge-player-btn">${I("merge")} ${tr("Fundir com outro jogador")}</button>`);
+    body.querySelector("#merge-player-btn").addEventListener("click", () => openMergePlayerSheet(pl.key));
     body.querySelectorAll(".profile-card[data-id]").forEach((c) => c.addEventListener("click", () => nav("profile-detail", { id: c.dataset.id, fromPlayer: pl.key })));
     Charts.bindTips(body);
     s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));

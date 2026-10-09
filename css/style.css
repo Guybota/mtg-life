@@ -1727,6 +1727,12 @@ input.switch:checked::after{ transform: translateX(18px); }
   align-self:flex-start; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
   background: var(--mint); color: var(--mint-ink); border-radius:999px; padding:2px 8px;
 }
+.merge-row.pick{ flex-direction:row; align-items:center; gap:10px; cursor:pointer; margin:0; text-transform:none; letter-spacing:normal; font-size:inherit; font-weight:inherit; color: var(--text); }
+.merge-row.pick .merge-from{ flex:1; min-width:0; }
+.merge-row.pick input{ width:18px; height:18px; flex-shrink:0; accent-color: var(--lavender-ink); }
+.merge-row.pick:has(input:checked){ outline:2px solid var(--lavender-ink); outline-offset:-2px; }
+.merge-row.pick .merge-suggested{ align-self:center; }
+.merge-entry{ margin: 18px 0 8px; }
 .merge-actions{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:12px; }
 .merge-actions .btn:only-child{ grid-column: 1 / -1; }
 

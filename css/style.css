@@ -1693,6 +1693,20 @@ input.switch:checked::after{ transform: translateX(18px); }
 }
 
 /* ---------- Toast ---------- */
+/* ---------- Lembrete de cópia de segurança ---------- */
+.backup-card{
+  width:100%; max-width:520px; box-sizing:border-box;
+  background: var(--butter); border-radius:22px; padding:16px;
+  display:flex; flex-direction:column; gap:12px; text-align:left;
+  animation: cardIn .45s var(--ease-out) both;
+}
+.backup-text{ display:flex; flex-direction:column; gap:4px; }
+.backup-card .last-kicker{ color: var(--butter-ink); }
+.backup-msg{ font-size:.9rem; line-height:1.4; color: var(--text); }
+.backup-card .last-actions{ grid-template-columns: 1.4fr 1fr; }
+.backup-card .btn{ white-space:nowrap; padding-left:12px; padding-right:12px; }
+.backup-note{ font-size:.78rem; color: var(--text-dim); text-align:center; margin: 0 0 14px; }
+
 /* ---------- Aviso de versão nova ---------- */
 .update-banner{
   position:fixed; left:16px; right:16px; top: calc(12px + var(--safe-top)); z-index:1001;

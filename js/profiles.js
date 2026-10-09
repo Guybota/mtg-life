@@ -166,33 +166,46 @@
     return JSON.stringify({ app: "mtg-life-counter", type: "profiles-export", version: 1, exportedAt: Date.now(), profiles: load() }, null, 2);
   }
 
-  /** Importa uma lista de perfis (tipicamente vinda de exportAll noutro
-   *  aparelho/browser). Cada perfil importado recebe sempre um id NOVO —
-   *  nunca substitui nem faz merge com um perfil já existente, para nunca
-   *  se perder dados por engano. Devolve quantos perfis foram importados. */
+  /** Importa uma lista de perfis (de exportAll ou de uma cópia de
+   *  segurança). Nunca substitui nem apaga um perfil existente: um perfil
+   *  que já cá esteja (mesmo id) é ignorado, por isso restaurar a mesma
+   *  cópia duas vezes não cria duplicados. Os outros mantêm o id original,
+   *  para os confrontos diretos continuarem a apontar para eles.
+   *  Devolve { added, skipped }. */
   function importList(profiles) {
-    if (!Array.isArray(profiles)) return 0;
+    const res = { added: 0, skipped: 0 };
+    if (!Array.isArray(profiles)) return res;
     const list = load();
-    let count = 0;
+    const ids = new Set(list.map((p) => p.id));
     profiles.forEach((p) => {
       if (!p || typeof p !== "object") return;
+      if (p.id && ids.has(p.id)) { res.skipped++; return; }
       let clone;
       try {
         clone = JSON.parse(JSON.stringify(p));
       } catch (e) {
         return;
       }
-      clone.id = uid();
+      if (!clone.id) clone.id = uid();
+      ids.add(clone.id);
       if (!clone.stats) clone.stats = { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 };
       if (!Array.isArray(clone.history)) clone.history = [];
       if (!clone.createdAt) clone.createdAt = Date.now();
       list.push(clone);
-      count++;
+      res.added++;
     });
-    if (count) persist(list);
-    return count;
+    if (res.added) persist(list);
+    return res;
+  }
+
+  /** N.º de jogos diferentes registados (o mesmo jogo aparece no histórico
+   *  de cada perfil que lá esteve; agrupa-se pela hora de registo). */
+  function gameCount() {
+    const seen = new Set();
+    load().forEach((p) => (p.history || []).forEach((g) => seen.add(Math.round((g.date || 0) / 5000))));
+    return seen.size;
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList };
+  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount };
 })(window);

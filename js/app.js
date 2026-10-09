@@ -510,6 +510,99 @@
   }
 
   // ===========================================================
+  // CÓPIA DE SEGURANÇA — os dados vivem só neste aparelho/browser,
+  // por isso convém guardar um ficheiro noutro sítio (Ficheiros/iCloud).
+  // ===========================================================
+  const BACKUP_KEY = "mtg_lc_backup_v1";
+  const BACKUP_EVERY = 5; // lembrar ao fim de N jogos novos sem cópia
+
+  function backupInfo() {
+    try { return JSON.parse(localStorage.getItem(BACKUP_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function setBackupInfo(patch) {
+    try { localStorage.setItem(BACKUP_KEY, JSON.stringify(Object.assign(backupInfo(), patch))); } catch (e) {}
+  }
+
+  /** Guarda a cópia: no telemóvel abre o menu de partilha (→ "Guardar em
+   *  Ficheiros", iCloud, enviar...); onde isso não existe, descarrega. */
+  async function saveBackup() {
+    const data = JSON.parse(Profiles.exportAll());
+    data.type = "backup";
+    data.lastSetup = loadLastSetup();
+    const json = JSON.stringify(data, null, 2);
+    const name = `mtg-life-counter-${new Date().toISOString().slice(0, 10)}.json`;
+    let shared = false;
+    try {
+      const file = new File([json], name, { type: "application/json" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: tr("Cópia de segurança MTG Life") });
+        shared = true;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return false; // fechou o menu sem guardar
+    }
+    if (!shared) {
+      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+    setBackupInfo({ at: Date.now(), games: Profiles.gameCount() });
+    toast(tr("Cópia de segurança guardada"));
+    return true;
+  }
+
+  /** Lê um ficheiro de cópia (ou de exportação antiga) e junta-o aos dados. */
+  function restoreBackupFile(file, done) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try { parsed = JSON.parse(String(reader.result)); } catch (e) { parsed = null; }
+      const list = parsed && (Array.isArray(parsed) ? parsed : parsed.profiles);
+      if (!Array.isArray(list)) {
+        alert(tr("Não foi possível ler este ficheiro. Confirma que é um ficheiro exportado por esta app."));
+        return;
+      }
+      const { added, skipped } = Profiles.importList(list);
+      if (parsed.lastSetup && !loadLastSetup()) {
+        try { localStorage.setItem(LAST_SETUP_KEY, JSON.stringify(parsed.lastSetup)); } catch (e) {}
+      }
+      if (added) setBackupInfo({ at: parsed.exportedAt || Date.now(), games: Profiles.gameCount() });
+      if (!added && !skipped) alert(tr("Não foram encontrados perfis válidos neste ficheiro."));
+      else if (!added) alert(tr("Estes perfis já estavam todos guardados."));
+      else if (skipped) alert(tr("{n} perfis restaurados ({m} já existiam).", { n: added, m: skipped }));
+      else alert(added === 1 ? tr("1 perfil importado com sucesso.") : tr("{n} perfis importados com sucesso.", { n: added }));
+      done && done();
+    };
+    reader.readAsText(file);
+  }
+
+  function backupReminderHtml() {
+    const games = Profiles.gameCount();
+    const info = backupInfo();
+    const since = games - (info.games || 0);
+    if (since < BACKUP_EVERY || games - (info.snooze || 0) < BACKUP_EVERY) return "";
+    const msg = info.at
+      ? tr("{n} jogos novos desde a última cópia ({when}).", { n: since, when: relativeDay(info.at) })
+      : tr("Tens {n} jogos guardados só neste aparelho. Guarda uma cópia nos Ficheiros ou no iCloud para não os perderes.", { n: games });
+    return `
+      <div class="backup-card">
+        <div class="backup-text">
+          <span class="last-kicker">${tr("Cópia de segurança")}</span>
+          <span class="backup-msg">${msg}</span>
+        </div>
+        <div class="last-actions">
+          <button class="btn btn-primary" id="backup-btn">${I("download")} ${tr("Guardar cópia")}</button>
+          <button class="btn btn-ghost" id="backup-later-btn">${tr("Agora não")}</button>
+        </div>
+      </div>`;
+  }
+
+  // ===========================================================
   // MENU PRINCIPAL
   // ===========================================================
   function renderMenu() {
@@ -521,6 +614,7 @@
           <small>${tr("Commander • Battle Royale • Livre")}</small>
         </div>
         ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">${I("play")} ${tr("Continuar jogo em curso")}</button>` : ""}
+        ${backupReminderHtml()}
         ${last ? lastSetupCardHtml(last) : ""}
         <div class="mode-grid">
           <div class="mode-card commander" data-mode="commander">
@@ -566,6 +660,12 @@
       });
     }
     s.querySelector("#profiles-btn").addEventListener("click", () => nav("profiles"));
+    const backupBtn = s.querySelector("#backup-btn");
+    if (backupBtn) {
+      const hide = () => { const c = s.querySelector(".backup-card"); if (c) c.remove(); };
+      backupBtn.addEventListener("click", () => saveBackup().then((ok) => ok && hide()));
+      s.querySelector("#backup-later-btn").addEventListener("click", () => { setBackupInfo({ snooze: Profiles.gameCount() }); hide(); });
+    }
     if (last) {
       const cloneDraft = () => JSON.parse(JSON.stringify(last.draft));
       s.querySelector("#repeat-btn").addEventListener("click", () => {
@@ -3007,11 +3107,12 @@
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
-          <div class="row" style="gap:8px; margin-bottom:12px;">
+          <div class="row" style="gap:8px; margin-bottom:6px;">
             <button class="btn btn-ghost grow" id="export-profiles-btn">${I("download")} ${tr("Exportar")}</button>
             <button class="btn btn-ghost grow" id="import-profiles-btn">${I("upload")} ${tr("Importar")}</button>
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
+          <div class="backup-note">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
           ${profiles.length ? `
           <div class="seg" role="tablist">
@@ -3037,41 +3138,13 @@
       </div>
     `);
     appEl.appendChild(s);
-    s.querySelector("#export-profiles-btn").addEventListener("click", () => {
-      const json = Profiles.exportAll();
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const stamp = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `mtg-life-counter-perfis-${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-    });
+    s.querySelector("#export-profiles-btn").addEventListener("click", () => saveBackup().then((ok) => ok && render()));
     const importInput = s.querySelector("#import-profiles-input");
     s.querySelector("#import-profiles-btn").addEventListener("click", () => importInput.click());
     importInput.addEventListener("change", () => {
       const file = importInput.files && importInput.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        let count = 0;
-        try {
-          const parsed = JSON.parse(String(reader.result));
-          const list = Array.isArray(parsed) ? parsed : parsed.profiles;
-          count = Profiles.importList(list);
-        } catch (e) {
-          count = -1;
-        }
-        importInput.value = "";
-        if (count < 0) alert(tr("Não foi possível ler este ficheiro. Confirma que é um ficheiro exportado por esta app."));
-        else if (count === 0) alert(tr("Não foram encontrados perfis válidos neste ficheiro."));
-        else alert(count === 1 ? tr("1 perfil importado com sucesso.") : tr("{n} perfis importados com sucesso.", { n: count }));
-        render();
-      };
-      reader.readAsText(file);
+      importInput.value = "";
+      if (file) restoreBackupFile(file, render);
     });
     const list = s.querySelector("#profiles-list");
     profiles.forEach((p) => {

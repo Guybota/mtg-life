@@ -129,6 +129,26 @@
     toast._t = setTimeout(() => toastEl.classList.remove("show"), ms || 2200);
   }
 
+  /** Mensagem com botão "Desfazer" (substitui as confirmações ao apagar).
+   *  Fecha sozinha ao fim de `ms`; tocar em "Desfazer" chama onUndo. */
+  function undoToast(msg, onUndo, ms) {
+    document.querySelectorAll(".undo-toast").forEach((x) => x.remove());
+    const t = el(`
+      <div class="undo-toast" role="status">
+        <span class="undo-msg"></span>
+        <span class="undo-timer" aria-hidden="true"></span>
+        <button type="button" class="undo-btn">${tr("Desfazer")}</button>
+      </div>`);
+    t.querySelector(".undo-msg").textContent = msg;
+    const dur = ms || 5000;
+    t.style.setProperty("--undo-ms", dur + "ms");
+    document.body.appendChild(t);
+    let done = false;
+    const close = () => { if (done) return; done = true; t.classList.add("closing"); setTimeout(() => t.remove(), 250); };
+    t.querySelector(".undo-btn").addEventListener("click", () => { if (done) return; close(); onUndo(); });
+    setTimeout(close, dur);
+  }
+
   /** Reinicia uma animação CSS (remove a classe, força reflow, volta a pôr). */
   function retrigger(elm, cls) {
     if (!elm) return;
@@ -3052,10 +3072,10 @@
       `);
       card.querySelector('button[data-act="delete"]').addEventListener("click", (ev) => {
         ev.stopPropagation();
-        if (confirm(tr("Apagar o perfil \"{name}\"? Esta ação não pode ser desfeita.", { name: p.name }))) {
-          Profiles.remove(p.id);
-          render();
-        }
+        const snapshot = JSON.parse(JSON.stringify(Profiles.get(p.id)));
+        Profiles.remove(p.id);
+        render();
+        undoToast(tr("Perfil \"{name}\" apagado", { name: p.name }), () => { Profiles.restore(snapshot); render(); });
       });
       const open = () => nav("profile-detail", { id: p.id });
       card.addEventListener("click", open);
@@ -3311,10 +3331,10 @@
         </div>
       `);
       row.querySelector("button[data-gid]").addEventListener("click", () => {
-        if (confirm(tr("Apagar este jogo do histórico? As stats do perfil serão atualizadas."))) {
-          Profiles.removeGame(profile.id, g.id);
-          render();
-        }
+        const snapshot = JSON.parse(JSON.stringify(g));
+        Profiles.removeGame(profile.id, g.id);
+        render();
+        undoToast(tr("Jogo apagado do histórico"), () => { Profiles.restoreGame(profile.id, snapshot); render(); });
       });
       list.appendChild(row);
     });

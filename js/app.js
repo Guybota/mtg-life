@@ -1903,7 +1903,7 @@
     });
     if (cmdEnabled) {
       panel.querySelectorAll(".cmd-badge").forEach((b) => {
-        b.addEventListener("click", (ev) => { ev.stopPropagation(); openCmdDamageModal(p.id); });
+        b.addEventListener("click", (ev) => { ev.stopPropagation(); openCmdDamageModal(p.id, b.dataset.oppId); });
       });
     }
     return panel;
@@ -2175,54 +2175,109 @@
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
-  function openCmdDamageModal(playerId) {
+  /** Dano de commander recebido por um jogador. Cada linha é um commander
+   *  adversário: valor grande com "/21", barra até ao letal e um indicador
+   *  que vai somando o que se dá/tira (ex: "+3") e some 2 s depois do
+   *  último toque — como o da vida. No topo, a vida do jogador com a
+   *  variação desde que a janela abriu. Manter premido repete. */
+  function openCmdDamageModal(playerId, focusOppId) {
     const p = game.standard.players.find((x) => x.id === playerId);
     const opponents = game.standard.players.filter((x) => x.id !== playerId);
+    if (focusOppId) opponents.sort((x, y) => (y.id === focusOppId) - (x.id === focusOppId));
+    const LETHAL = 21;
+    const lifeAtOpen = p.life;
     closeAnyModal();
     const backdrop = el(`
       <div class="modal-backdrop center">
-        <div class="modal-sheet">
-          <h2>Commander Damage — ${esc(p.name)}</h2>
-          <div class="cd-list" id="cd-list"></div>
-          <button class="btn btn-ghost btn-block" id="cd-close" style="margin-top:14px">${tr("Fechar")}</button>
+        <div class="modal-sheet cdx-sheet">
+          <h2>${tr("Dano de commander")}</h2>
+          <div class="cdx-head">
+            <span class="cdx-target">${tr("em {name}", { name: esc(p.name) })}</span>
+            <span class="cdx-life">${I("heart")} <span id="cdx-life-from" class="hidden"></span><b id="cdx-life">${p.life}</b><span class="cdx-chip" id="cdx-life-delta"></span></span>
+          </div>
+          <div class="cdx-list" id="cdx-list"></div>
+          <p class="cdx-note">${tr("O dano também é tirado à vida. Aos 21 do mesmo commander o jogador é eliminado.")}</p>
+          <button class="btn btn-ghost btn-block" id="cd-close" style="margin-top:12px">${tr("Fechar")}</button>
         </div>
       </div>
     `);
     document.body.appendChild(backdrop);
-    const list = backdrop.querySelector("#cd-list");
-    function buildRow(o, source, label, art) {
+    const list = backdrop.querySelector("#cdx-list");
+
+    function paintLife() {
+      const d = p.life - lifeAtOpen;
+      backdrop.querySelector("#cdx-life").textContent = p.life;
+      const from = backdrop.querySelector("#cdx-life-from");
+      from.textContent = `${lifeAtOpen} → `;
+      from.classList.toggle("hidden", !d);
+      const chip = backdrop.querySelector("#cdx-life-delta");
+      chip.textContent = d ? (d > 0 ? "+" : "−") + Math.abs(d) : "";
+      chip.className = "cdx-chip" + (d ? " show " + (d < 0 ? "hurt" : "heal") : "");
+    }
+
+    function buildRow(o, source) {
       const key = source === "partner" ? o.id + "::partner" : o.id;
-      const dmg = p.cmdDamage[key] || 0;
+      const cmd = source === "partner" ? o.partnerCommander : o.commander;
+      const thumb = source === "partner" ? (cmd && cmd.art ? `background-image:url('${esc(cmd.art)}')` : "") : playerBgStyle(o);
       const row = el(`
-        <div class="cd-list-item">
-          ${art ? `<img src="${esc(art)}">` : `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">${I("card")}</div>`}
-          <div class="nm">${esc(label)}${source === "partner" ? ` <span class="turn-badge-sm partner-tag">${tr("PARCEIRO")}</span>` : ""}</div>
-          <button class="btn btn-icon" data-d="-1">${I("minus")}</button>
-          <div class="val">${dmg}</div>
-          <button class="btn btn-icon" data-d="1">${I("plus")}</button>
-        </div>
-      `);
-      row.querySelectorAll("button").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          State.stdAdjustCmdDamage(game, playerId, o.id, parseInt(btn.dataset.d, 10), source);
-          updateStandardPanel(playerId);
-          paint();
-        });
-      });
+        <div class="cdx-row${o.id === focusOppId && source === "main" ? " focus" : ""}">
+          <div class="cdx-top">
+            <span class="cdx-thumb" style="${thumb}">${cmd && cmd.art ? "" : I("card")}</span>
+            <span class="cdx-who">
+              <span class="cdx-opp">${esc(o.name)}${source === "partner" ? ` <span class="turn-badge-sm partner-tag">${tr("PARCEIRO")}</span>` : ""}</span>
+              <span class="cdx-cmd">${cmd ? esc(cmd.name) : tr("Sem commander")}</span>
+            </span>
+            <span class="cdx-chip" data-delta></span>
+          </div>
+          <div class="cdx-ctrl">
+            <button class="cdx-btn minus" aria-label="${esc(tr("Tirar 1 de dano"))}">${I("minus")}</button>
+            <span class="cdx-val"><b data-val></b><small>/${LETHAL}</small></span>
+            <button class="cdx-btn plus" aria-label="${esc(tr("Dar 1 de dano"))}">${I("plus")}</button>
+          </div>
+          <div class="cdx-bar"><span data-bar></span></div>
+          <div class="cdx-left" data-left></div>
+        </div>`);
+      const valEl = row.querySelector("[data-val]");
+      const chip = row.querySelector("[data-delta]");
+      let acc = 0;
+      let accTimer = null;
+      function paint() {
+        const dmg = p.cmdDamage[key] || 0;
+        valEl.textContent = dmg;
+        const pct = Math.min(100, (dmg / LETHAL) * 100);
+        row.querySelector("[data-bar]").style.width = pct + "%";
+        row.classList.toggle("warn", dmg >= 15 && dmg < LETHAL);
+        row.classList.toggle("lethal", dmg >= LETHAL);
+        row.querySelector("[data-left]").textContent = dmg >= LETHAL ? tr("Letal") : tr("Faltam {n} para letal", { n: LETHAL - dmg });
+        row.querySelector(".cdx-btn.minus").disabled = dmg === 0;
+      }
+      function change(d) {
+        const before = p.cmdDamage[key] || 0;
+        State.stdAdjustCmdDamage(game, playerId, o.id, d, source);
+        const applied = (p.cmdDamage[key] || 0) - before;
+        if (!applied) return;
+        acc += applied;
+        chip.textContent = (acc > 0 ? "+" : "−") + Math.abs(acc);
+        chip.className = "cdx-chip show " + (acc > 0 ? "hurt" : "heal");
+        if (!acc) chip.className = "cdx-chip";
+        clearTimeout(accTimer);
+        accTimer = setTimeout(() => { acc = 0; chip.className = "cdx-chip"; }, 2000);
+        retrigger(valEl, "cdx-bump");
+        updateStandardPanel(playerId);
+        paint();
+        paintLife();
+      }
+      bindPressRepeat(row.querySelector(".cdx-btn.minus"), () => change(-1));
+      bindPressRepeat(row.querySelector(".cdx-btn.plus"), () => change(1));
+      paint();
       return row;
     }
-    function paint() {
-      list.innerHTML = "";
-      opponents.forEach((o) => {
-        const group = el(`<div class="cd-group"><div class="cd-group-title">${esc(o.name)}</div></div>`);
-        group.appendChild(buildRow(o, "main", o.commander ? o.commander.name : tr("Sem commander"), o.commander && o.commander.art));
-        if (o.partnerCommander) {
-          group.appendChild(buildRow(o, "partner", o.partnerCommander.name, o.partnerCommander.art));
-        }
-        list.appendChild(group);
-      });
-    }
-    paint();
+
+    opponents.forEach((o) => {
+      list.appendChild(buildRow(o, "main"));
+      if (o.partnerCommander) list.appendChild(buildRow(o, "partner"));
+    });
+    paintLife();
     backdrop.querySelector("#cd-close").addEventListener("click", () => backdrop.remove());
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }

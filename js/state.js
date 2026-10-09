@@ -181,10 +181,14 @@
     const key = source === "partner" ? fromId + "::partner" : fromId;
     const cur = p.cmdDamage[key] || 0;
     const next = Math.max(0, cur + delta);
+    const applied = next - cur; // 0 quando já estava a 0 e se tenta tirar
+    if (!applied) return state;
     p.cmdDamage[key] = next;
-    // dano de commander também reduz a vida normal, como nas regras oficiais
-    p.life -= delta;
+    // dano de commander também reduz a vida normal, como nas regras
+    // oficiais, e fica no histórico de vida como qualquer outra alteração
+    p.life -= applied;
     stdRecomputeEliminated(p);
+    logLifeChange(state.standard, stdCurrentPlayer(state), p, -applied);
     save(state);
     return state;
   }

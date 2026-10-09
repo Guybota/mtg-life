@@ -939,6 +939,69 @@ input.switch:checked::after{ transform: translateX(18px); }
 .cd-group-title{ font-size:.72rem; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; }
 .cd-group .cd-list-item{ margin-bottom:6px; }
 .cd-group .cd-list-item:last-child{ margin-bottom:0; }
+/* ---------- Dano de commander ---------- */
+.cdx-sheet{ max-height: 90vh; overflow-y:auto; }
+.cdx-sheet h2{ margin-bottom:4px; }
+.cdx-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
+.cdx-target{ color: var(--text-dim); font-size:.9rem; }
+.cdx-life{ display:flex; align-items:center; gap:6px; font-size:.95rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.cdx-life svg{ width:16px; height:16px; color: var(--rose-ink); }
+.cdx-life b{ color: var(--text); font-size:1.1rem; }
+.cdx-list{ display:flex; flex-direction:column; gap:10px; }
+.cdx-row{
+  background: var(--surface-2); border-radius:18px; padding:12px 12px 10px;
+  display:flex; flex-direction:column; gap:10px;
+  transition: background .25s ease, box-shadow .25s ease;
+}
+.cdx-row.focus{ box-shadow: inset 0 0 0 2px var(--lavender-ink); }
+.cdx-row.lethal{ background: var(--rose); }
+.cdx-top{ display:flex; align-items:center; gap:10px; min-width:0; }
+.cdx-thumb{
+  width:40px; height:40px; border-radius:12px; flex-shrink:0;
+  background: var(--surface-3) center/cover no-repeat;
+  display:flex; align-items:center; justify-content:center; color: var(--text-dim);
+}
+.cdx-thumb svg{ width:18px; height:18px; }
+.cdx-who{ display:flex; flex-direction:column; min-width:0; flex:1; }
+.cdx-opp{ font-weight:700; font-size:.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cdx-cmd{ font-size:.78rem; color: var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cdx-chip{
+  min-width:44px; padding:4px 10px; border-radius:999px; text-align:center;
+  font-weight:800; font-size:.95rem; font-variant-numeric: tabular-nums;
+  opacity:0; transform: scale(.85); transition: opacity .2s ease, transform .25s var(--ease-spring);
+  flex-shrink:0;
+}
+.cdx-chip.show{ opacity:1; transform:none; }
+.cdx-chip.hurt{ background: var(--rose); color: var(--rose-ink); }
+.cdx-chip.heal{ background: var(--mint); color: var(--mint-ink); }
+.cdx-row.lethal .cdx-chip.hurt{ background: var(--surface); }
+.cdx-life .cdx-chip{ min-width:0; font-size:.82rem; padding:2px 8px; }
+.cdx-ctrl{ display:grid; grid-template-columns: 56px 1fr 56px; align-items:center; gap:8px; }
+.cdx-btn{
+  height:52px; border-radius:16px; border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  background: var(--surface); color: var(--text);
+  touch-action: manipulation; -webkit-user-select:none; user-select:none;
+}
+.cdx-btn svg{ width:22px; height:22px; }
+.cdx-btn.plus{ background: var(--rose); color: var(--rose-ink); }
+.cdx-row.lethal .cdx-btn.plus{ background: var(--surface); }
+.cdx-btn:disabled{ opacity:.4; cursor:default; }
+.cdx-btn.pressed{ transform: scale(.94); }
+.cdx-val{ text-align:center; font-variant-numeric: tabular-nums; line-height:1; }
+.cdx-val b{ display:inline-block; font-size:2.4rem; font-weight:800; letter-spacing:-1px; }
+.cdx-val small{ font-size:1rem; color: var(--text-dim); font-weight:600; margin-left:2px; }
+.cdx-bump{ animation: cdxBump .25s var(--ease-spring); }
+@keyframes cdxBump{ 0%{ transform: scale(1); } 40%{ transform: scale(1.14); } 100%{ transform: scale(1); } }
+.cdx-bar{ height:6px; border-radius:3px; background: var(--surface-3); overflow:hidden; }
+.cdx-bar span{ display:block; height:100%; width:0; background: var(--chart-accent); border-radius:3px; transition: width .25s var(--ease-out), background .25s ease; }
+.cdx-row.warn .cdx-bar span{ background: var(--butter-ink); }
+.cdx-row.lethal .cdx-bar span{ background: var(--rose-ink); }
+.cdx-left{ font-size:.76rem; color: var(--text-dim); text-align:center; margin-top:-4px; }
+.cdx-row.lethal .cdx-left{ color: var(--rose-ink); font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+.cdx-note{ margin:12px 2px 0; font-size:.78rem; color: var(--text-dim); line-height:1.4; }
+@media (prefers-reduced-motion: reduce){ .cdx-bump{ animation:none; } }
+
 /* opções (radio/checkbox) dentro de modais: linhas inteiras, texto normal */
 .modal-sheet label.row{ background: var(--surface-2) ; text-transform:none; letter-spacing:0; font-size:.9rem; color: var(--text); font-weight:500; }
 

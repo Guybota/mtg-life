@@ -484,28 +484,17 @@
     const d = last.draft;
     const mode = last.kind === "br" ? "Battle Royale" : last.kind === "teams" ? tr("Equipas") : (PRESETS[d.preset] ? PRESETS[d.preset].label : tr("Jogo"));
     const life = last.kind === "br" ? 30 : d.startLife;
-    const palette = State.FALLBACK_PALETTE;
-    const avatars = players.slice(0, 6).map((p, i) => {
-      const style = p.commander && p.commander.art
-        ? `background-image:url('${esc(p.commander.art)}')`
-        : `background:${palette[(typeof p.colorIdx === "number" ? p.colorIdx : i) % palette.length][0]}`;
-      const initials = p.commander && p.commander.art ? "" : esc(p.name.trim().slice(0, 2).toUpperCase());
-      return `<span class="last-avatar" style="${style}">${initials}</span>`;
-    }).join("");
     return `
       <div class="last-card">
-        <div class="last-head">
+        <span class="last-head">
           <span class="last-kicker">${tr("Último jogo")} · ${relativeDay(last.at)}</span>
-          <span class="last-title">${esc(mode)} · ${tr("{n} jogadores", { n: players.length })}</span>
-        </div>
-        <div class="last-players">
-          <span class="last-avatars">${avatars}</span>
-          <span class="last-names">${esc(players.map((p) => p.name).join(", "))}<br>${tr("{n} vidas", { n: life })}${last.kind !== "br" && d.trackTurns === false ? " · " + tr("sem tempo") : ""}</span>
-        </div>
-        <div class="last-actions">
+          <span class="last-title">${esc(mode)}</span>
+          <span class="last-names" title="${esc(players.map((p) => p.name).join(", "))}">${tr("{n} jogadores", { n: players.length })} · ${tr("{n} vidas", { n: life })}${last.kind !== "br" && d.trackTurns === false ? " · " + tr("sem tempo") : ""}</span>
+        </span>
+        <span class="last-actions">
+          <button class="btn btn-icon" id="adjust-btn" title="${tr("Ajustar antes")}" aria-label="${tr("Ajustar antes")}">${I("sliders")}</button>
           <button class="btn btn-primary" id="repeat-btn">${I("rotate")} ${tr("Repetir")}</button>
-          <button class="btn btn-ghost" id="adjust-btn">${tr("Ajustar antes")}</button>
-        </div>
+        </span>
       </div>`;
   }
 
@@ -984,14 +973,12 @@
       : tr("Tens {n} jogos guardados só neste aparelho. Guarda uma cópia nos Ficheiros ou no iCloud para não os perderes.", { n: games });
     return `
       <div class="backup-card">
-        <div class="backup-text">
+        <span class="backup-text">
           <span class="last-kicker">${tr("Cópia de segurança")}</span>
-          <span class="backup-msg">${msg}</span>
-        </div>
-        <div class="last-actions">
-          <button class="btn btn-primary" id="backup-btn">${I("download")} ${tr("Guardar cópia")}</button>
-          <button class="btn btn-ghost" id="backup-later-btn">${tr("Agora não")}</button>
-        </div>
+          <span class="backup-msg" title="${esc(msg)}">${tr("{n} jogos sem cópia", { n: info.at ? since : games })}</span>
+        </span>
+        <button class="btn btn-primary" id="backup-btn">${tr("Guardar")}</button>
+        <button class="btn btn-icon" id="backup-later-btn" title="${tr("Agora não")}" aria-label="${tr("Agora não")}">${I("x")}</button>
       </div>`;
   }
 
@@ -1003,41 +990,50 @@
     const last = loadLastSetup();
     const s = el(`
       <div class="screen menu-screen">
-        <div class="logo">MTG <span>LIFE</span> COUNTER
-          <small>${tr("Commander • Battle Royale • Livre")}</small>
-        </div>
-        ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">${I("play")} ${tr("Continuar jogo em curso")}</button>` : ""}
+        <header class="menu-head">
+          <div class="logo">MTG <span>LIFE</span> COUNTER</div>
+          <button class="btn btn-ghost menu-profiles" id="profiles-btn">${I("user")} ${tr("Perfis")}</button>
+        </header>
+        ${saved ? `<button class="btn btn-gold btn-block menu-resume" id="resume-btn">${I("play")} ${tr("Continuar jogo em curso")}</button>` : ""}
         ${backupReminderHtml()}
         ${last ? lastSetupCardHtml(last) : ""}
         <div class="mode-grid">
-          <div class="mode-card commander" data-mode="commander">
+          <div class="mode-card commander wide" data-mode="commander">
             <div class="icon">${I("crown")}</div>
-            <div class="title">${tr("Commander Padrão")}</div>
-            <div class="desc">${tr("2–8 jogadores · 40 vidas · Commander damage")}</div>
+            <div class="mode-text">
+              <div class="title">${tr("Commander Padrão")}</div>
+              <div class="desc">${tr("2–8 jogadores · 40 vidas · Commander damage")}</div>
+            </div>
           </div>
           <div class="mode-card duel" data-mode="duel">
             <div class="icon">${I("swords")}</div>
-            <div class="title">${tr("Duelo 1v1")}</div>
-            <div class="desc">${tr("2 jogadores · 40 vidas · Commander damage")}</div>
+            <div class="mode-text">
+              <div class="title">${tr("Duelo 1v1")}</div>
+              <div class="desc">${tr("2 jogadores · 40 vidas")}</div>
+            </div>
           </div>
           <div class="mode-card free" data-mode="free">
             <div class="icon">${I("sliders")}</div>
-            <div class="title">${tr("Livre")}</div>
-            <div class="desc">${tr("Escolhe nº de jogadores e vida inicial")}</div>
+            <div class="mode-text">
+              <div class="title">${tr("Livre")}</div>
+              <div class="desc">${tr("Jogadores e vida à escolha")}</div>
+            </div>
           </div>
           <div class="mode-card br" data-mode="br">
             <div class="icon">${I("droplet")}</div>
-            <div class="title">Battle Royale</div>
-            <div class="desc">${tr("6 jogadores · zonas · loot · último vivo")}</div>
+            <div class="mode-text">
+              <div class="title">Battle Royale</div>
+              <div class="desc">${tr("6 jogadores · zonas · loot")}</div>
+            </div>
           </div>
           <div class="mode-card teams" data-mode="teams">
             <div class="icon">${I("users")}</div>
-            <div class="title">${tr("Equipas")}</div>
-            <div class="desc">${tr("Escolhe nº de equipas e jogadores por equipa · vida partilhada")}</div>
+            <div class="mode-text">
+              <div class="title">${tr("Equipas")}</div>
+              <div class="desc">${tr("Vida partilhada por equipa")}</div>
+            </div>
           </div>
         </div>
-        <div class="footer-note">${tr("As imagens dos commanders são obtidas automaticamente da Scryfall API (é necessária ligação à internet só para a pesquisa).")}</div>
-        <button class="btn btn-ghost" id="profiles-btn">${I("user")} ${tr("Perfis guardados")}</button>
       </div>
     `);
     appEl.appendChild(s);

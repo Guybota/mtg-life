@@ -1383,6 +1383,33 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Mensagem com "Desfazer" ---------- */
+.undo-toast{
+  position:fixed; left:16px; right:16px; bottom: calc(20px + var(--safe-bottom)); z-index:1000;
+  max-width:520px; margin:0 auto;
+  background: var(--text); color: var(--on-primary);
+  border-radius:16px; padding:8px 8px 8px 16px;
+  display:flex; align-items:center; gap:12px;
+  box-shadow: var(--shadow-lg);
+  animation: undoIn .3s var(--ease-spring) both;
+}
+.undo-toast.closing{ animation: fadeOut .25s ease both; }
+@keyframes undoIn{ from{ opacity:0; transform: translateY(16px); } to{ opacity:1; transform:none; } }
+.undo-msg{ flex:1; font-size:.88rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.undo-timer{
+  width:22px; height:22px; border-radius:50%; flex-shrink:0;
+  background: conic-gradient(currentColor var(--p, 100%), transparent 0);
+  -webkit-mask: radial-gradient(circle, transparent 7px, #000 8px); mask: radial-gradient(circle, transparent 7px, #000 8px);
+  opacity:.5;
+  animation: undoTimer var(--undo-ms, 5000ms) linear forwards;
+}
+@property --p{ syntax:"<percentage>"; inherits:false; initial-value:100%; }
+@keyframes undoTimer{ to{ --p: 0%; } }
+.undo-btn{
+  height:40px; padding:0 14px; border-radius:10px; border:none;
+  background: var(--lavender); color: var(--lavender-ink); font: 700 .9rem var(--font);
+}
+
 /* ---------- Editar perfil ---------- */
 .ep-commander{ display:flex; align-items:center; gap:14px; }
 .ep-commander .commander-thumb{ width:68px; height:68px; cursor:default; }

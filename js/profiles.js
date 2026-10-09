@@ -115,6 +115,32 @@
     return p;
   }
 
+  /** Repõe um perfil apagado (para o "Desfazer"), com o mesmo id. */
+  function restore(profile) {
+    if (!profile || !profile.id) return;
+    const list = load().filter((p) => p.id !== profile.id);
+    list.push(profile);
+    persist(list);
+  }
+
+  /** Repõe um jogo apagado do histórico (para o "Desfazer") e volta a
+   *  somar o seu contributo às stats agregadas. */
+  function restoreGame(id, g) {
+    const list = load();
+    const p = list.find((x) => x.id === id);
+    if (!p || !g) return null;
+    if (!p.history) p.history = [];
+    if (p.history.some((x) => x.id === g.id)) return p;
+    p.history.push(g);
+    p.stats.games += 1;
+    if (g.won) p.stats.wins += 1;
+    p.stats.totalGameTimeMs += g.gameTimeMs || 0;
+    p.stats.totalTurnTimeMs += g.turnTimeMs || 0;
+    p.stats.turnsTaken += g.turnsTaken || 0;
+    persist(list);
+    return p;
+  }
+
   /** Métricas derivadas prontas a mostrar na UI. */
   function derived(profile) {
     const s = profile.stats;
@@ -165,5 +191,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, recordGameResult, derived, historyOf, removeGame, exportAll, importList };
+  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList };
 })(window);

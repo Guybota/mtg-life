@@ -1383,6 +1383,26 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Pesquisar e ordenar perfis ---------- */
+.profiles-tools{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
+.search-field{
+  display:flex; align-items:center; gap:8px; height:44px;
+  background: var(--surface); border:1px solid var(--line); border-radius:12px; padding:0 12px;
+  text-transform:none; letter-spacing:0; font-weight:400; color: var(--text-dim);
+}
+.search-field:focus-within{ border-color: var(--lavender-ink); box-shadow: 0 0 0 3px var(--lavender); }
+.search-field input{ border:none; outline:none; background:transparent; flex:1; min-width:0; padding:0; font: .92rem var(--font); color: var(--text); box-shadow:none; }
+.search-field input:focus{ box-shadow:none; }
+.search-field .ic{ width:16px; height:16px; }
+.sort-row{ display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; }
+.sort-row::-webkit-scrollbar{ display:none; }
+.sort-chip{
+  flex-shrink:0; height:34px; padding:0 12px; border-radius:999px;
+  border:1px solid var(--line); background: var(--surface);
+  font: 600 .8rem var(--font); color: var(--text);
+}
+.sort-chip[aria-pressed="true"]{ background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+
 /* ---------- Mensagem com "Desfazer" ---------- */
 .undo-toast{
   position:fixed; left:16px; right:16px; bottom: calc(20px + var(--safe-bottom)); z-index:1000;

@@ -2993,6 +2993,8 @@
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
+  let profileSort = "recent";   // ordenação escolhida no ecrã de perfis
+  let profileSearch = "";        // texto da pesquisa (mantém-se ao voltar)
   function renderProfilesScreen() {
     const profiles = Profiles.all();
     const s = el(`
@@ -3010,7 +3012,16 @@
           </div>
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
           ${profilesOverviewHtml(profiles)}
-          ${profiles.length ? `<div class="section-title">${tr("Perfis")}</div>` : ""}
+          ${profiles.length ? `
+          <div class="section-title">${tr("Perfis")}</div>
+          <div class="profiles-tools">
+            <label class="search-field">${I("search")}<input type="search" id="profile-search" placeholder="${tr("Procurar perfil, commander ou jogador")}" aria-label="${tr("Procurar perfis")}" value="${esc(profileSearch)}"></label>
+            <div class="sort-row" role="group" aria-label="${tr("Ordenar")}">
+              ${[["recent", tr("Mais recentes")], ["winrate", tr("% vitórias")], ["games", tr("Mais jogos")], ["name", tr("Nome")]].map(([k, l]) =>
+                `<button type="button" class="sort-chip" data-sort="${k}" aria-pressed="${profileSort === k}">${l}</button>`).join("")}
+            </div>
+          </div>
+          <div class="footer-note hidden" id="profiles-empty">${tr("Nenhum perfil corresponde à pesquisa.")}</div>` : ""}
           <div class="col" id="profiles-list"></div>
         </div>
       </div>
@@ -3080,8 +3091,42 @@
       const open = () => nav("profile-detail", { id: p.id });
       card.addEventListener("click", open);
       card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      card._profile = p;
+      card._derived = d;
       list.appendChild(card);
     });
+
+    // ordenar + pesquisar (reordena os cartões já criados, sem os recriar)
+    const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const lastUse = (p) => (p.history && p.history.length ? Math.max(...p.history.map((h) => h.date || 0)) : p.createdAt || 0);
+    function paintList() {
+      const q = norm(profileSearch.trim());
+      const cards = Array.from(list.children);
+      const cmp = {
+        recent: (a, b) => lastUse(b._profile) - lastUse(a._profile),
+        winrate: (a, b) => (b._derived.winRate - a._derived.winRate) || (b._derived.games - a._derived.games),
+        games: (a, b) => b._derived.games - a._derived.games,
+        name: (a, b) => a._profile.name.localeCompare(b._profile.name),
+      }[profileSort];
+      cards.sort(cmp).forEach((c) => list.appendChild(c));
+      let shown = 0;
+      cards.forEach((c) => {
+        const p = c._profile;
+        const hit = !q || [p.name, p.playerName, p.commander && p.commander.name].some((t) => norm(t).includes(q));
+        c.classList.toggle("hidden", !hit);
+        if (hit) shown++;
+      });
+      const empty = s.querySelector("#profiles-empty");
+      if (empty) empty.classList.toggle("hidden", shown > 0);
+    }
+    const searchEl = s.querySelector("#profile-search");
+    if (searchEl) searchEl.addEventListener("input", () => { profileSearch = searchEl.value; paintList(); });
+    s.querySelectorAll(".sort-chip").forEach((b) => b.addEventListener("click", () => {
+      profileSort = b.dataset.sort;
+      s.querySelectorAll(".sort-chip").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      paintList();
+    }));
+    paintList();
     Charts.bindTips(s);
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
   }

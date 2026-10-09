@@ -4,6 +4,7 @@
 (function () {
   const { Scryfall, State, Profiles, Icons } = window.MTG;
   const I = (name, cls) => Icons.svg(name, cls);
+  const tr = window.MTG.i18n.t;
   const appEl = document.getElementById("app");
   const toastEl = document.getElementById("toast");
   const turnAudioEl = document.getElementById("turn-sound");
@@ -76,13 +77,13 @@
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   }
 
-  const MODE_LABELS = { commander: "Commander", duel: "Duelo 1v1", free: "Livre", standard: "Padrão", br: "Battle Royale" };
-  function modeLabel(mode) { return MODE_LABELS[mode] || mode || "Jogo"; }
+  const MODE_LABELS = { commander: "Commander", duel: tr("Duelo 1v1"), free: tr("Livre"), standard: tr("Padrão"), br: "Battle Royale", teams: tr("Equipas") };
+  function modeLabel(mode) { return MODE_LABELS[mode] || mode || tr("Jogo"); }
 
   const PRESETS = {
     commander: {
       key: "commander",
-      label: "Commander Padrão",
+      label: tr("Commander Padrão"),
       minPlayers: 2,
       maxPlayers: 8,
       defaultPlayers: 4,
@@ -92,7 +93,7 @@
     },
     duel: {
       key: "duel",
-      label: "Duelo 1v1",
+      label: tr("Duelo 1v1"),
       minPlayers: 2,
       maxPlayers: 2,
       defaultPlayers: 2,
@@ -102,7 +103,7 @@
     },
     free: {
       key: "free",
-      label: "Livre",
+      label: tr("Livre"),
       minPlayers: 2,
       maxPlayers: 8,
       defaultPlayers: 4,
@@ -222,11 +223,11 @@
    *  jogos com contagem de tempo e turnos. */
   function turnChipsHtml(turnName, roundNumber, paused) {
     return `
-      <div class="br-chip turn">${I("user")} Vez: ${esc(turnName)}</div>
-      <div class="br-chip">${I("repeat")} Ronda ${roundNumber || 1}</div>
-      <div class="br-chip">${I("clock")}<span id="chip-turn-time">Turno 00:00</span></div>
-      <div class="br-chip">${I("hourglass")}<span id="chip-total-time">Total 00:00</span></div>
-      ${paused ? `<div class="br-chip paused">${I("pause")} Pausado</div>` : ""}`;
+      <div class="br-chip turn">${I("user")} ${tr("Vez: {name}", { name: esc(turnName) })}</div>
+      <div class="br-chip">${I("repeat")} ${tr("Ronda {n}", { n: roundNumber || 1 })}</div>
+      <div class="br-chip">${I("clock")}<span id="chip-turn-time">${tr("Turno {time}", { time: "00:00" })}</span></div>
+      <div class="br-chip">${I("hourglass")}<span id="chip-total-time">${tr("Total {time}", { time: "00:00" })}</span></div>
+      ${paused ? `<div class="br-chip paused">${I("pause")} ${tr("Pausado")}</div>` : ""}`;
   }
 
   /** Relógio ao vivo (turno/total) dos chips acima. modeState: game.standard /
@@ -237,8 +238,8 @@
       const chipTotal = scope.querySelector("#chip-total-time");
       if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
       const now = modeState.paused ? modeState.pausedAt : Date.now();
-      chipTurn.textContent = "Turno " + formatDuration(now - modeState.turnStartedAt);
-      chipTotal.textContent = "Total " + formatDuration(now - modeState.gameStartedAt);
+      chipTurn.textContent = tr("Turno {time}", { time: formatDuration(now - modeState.turnStartedAt) });
+      chipTotal.textContent = tr("Total {time}", { time: formatDuration(now - modeState.gameStartedAt) });
     }
     tick();
     liveTimer = setInterval(tick, 1000);
@@ -249,8 +250,8 @@
     return `
       <label class="switch-field">
         <span class="switch-text">
-          <span class="switch-title">Contar tempo e turnos</span>
-          <span class="switch-sub">Desliga para jogar só com a vida — sem relógios, rondas nem passar turno.</span>
+          <span class="switch-title">${tr("Contar tempo e turnos")}</span>
+          <span class="switch-sub">${tr("Desliga para jogar só com a vida — sem relógios, rondas nem passar turno.")}</span>
         </span>
         <input type="checkbox" id="cfg-track" class="switch" ${checked ? "checked" : ""}>
       </label>`;
@@ -258,7 +259,7 @@
 
   /** Conteúdo do botão de perfil de um jogador (ícone + nome do perfil). */
   function profileBtnHtml(profile) {
-    return I("user") + " " + (profile ? esc(profile.name) : "Sem perfil");
+    return I("user") + " " + (profile ? esc(profile.name) : tr("Sem perfil"));
   }
 
   function commanderThumbStyle(commander) {
@@ -347,38 +348,38 @@
     const s = el(`
       <div class="screen menu-screen">
         <div class="logo">MTG <span>LIFE</span> COUNTER
-          <small>Commander • Battle Royale • Livre</small>
+          <small>${tr("Commander • Battle Royale • Livre")}</small>
         </div>
-        ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">${I("play")} Continuar jogo em curso</button>` : ""}
+        ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">${I("play")} ${tr("Continuar jogo em curso")}</button>` : ""}
         <div class="mode-grid">
           <div class="mode-card commander" data-mode="commander">
             <div class="icon">${I("crown")}</div>
-            <div class="title">Commander Padrão</div>
-            <div class="desc">2–8 jogadores · 40 vidas · Commander damage</div>
+            <div class="title">${tr("Commander Padrão")}</div>
+            <div class="desc">${tr("2–8 jogadores · 40 vidas · Commander damage")}</div>
           </div>
           <div class="mode-card duel" data-mode="duel">
             <div class="icon">${I("swords")}</div>
-            <div class="title">Duelo 1v1</div>
-            <div class="desc">2 jogadores · 40 vidas · Commander damage</div>
+            <div class="title">${tr("Duelo 1v1")}</div>
+            <div class="desc">${tr("2 jogadores · 40 vidas · Commander damage")}</div>
           </div>
           <div class="mode-card free" data-mode="free">
             <div class="icon">${I("sliders")}</div>
-            <div class="title">Livre</div>
-            <div class="desc">Escolhe nº de jogadores e vida inicial</div>
+            <div class="title">${tr("Livre")}</div>
+            <div class="desc">${tr("Escolhe nº de jogadores e vida inicial")}</div>
           </div>
           <div class="mode-card br" data-mode="br">
             <div class="icon">${I("droplet")}</div>
             <div class="title">Battle Royale</div>
-            <div class="desc">6 jogadores · zonas · loot · último vivo</div>
+            <div class="desc">${tr("6 jogadores · zonas · loot · último vivo")}</div>
           </div>
           <div class="mode-card teams" data-mode="teams">
             <div class="icon">${I("users")}</div>
-            <div class="title">Equipas</div>
-            <div class="desc">Escolhe nº de equipas e jogadores por equipa · vida partilhada</div>
+            <div class="title">${tr("Equipas")}</div>
+            <div class="desc">${tr("Escolhe nº de equipas e jogadores por equipa · vida partilhada")}</div>
           </div>
         </div>
-        <div class="footer-note">As imagens dos commanders são obtidas automaticamente da Scryfall API (é necessária ligação à internet só para a pesquisa).</div>
-        <button class="btn btn-ghost" id="profiles-btn">${I("user")} Perfis guardados</button>
+        <div class="footer-note">${tr("As imagens dos commanders são obtidas automaticamente da Scryfall API (é necessária ligação à internet só para a pesquisa).")}</div>
+        <button class="btn btn-ghost" id="profiles-btn">${I("user")} ${tr("Perfis guardados")}</button>
       </div>
     `);
     appEl.appendChild(s);
@@ -397,7 +398,7 @@
     s.querySelectorAll(".mode-card").forEach((card) => {
       card.addEventListener("click", () => {
         const mode = card.dataset.mode;
-        if (saved && !confirm("Já existe um jogo em curso. Começar um novo jogo vai substituí-lo. Continuar?")) return;
+        if (saved && !confirm(tr("Já existe um jogo em curso. Começar um novo jogo vai substituí-lo. Continuar?"))) return;
         if (mode === "br") {
           draft = { names: ["", "", "", "", "", ""], commanders: [null, null, null, null, null, null], profileIds: [null, null, null, null, null, null] };
           nav("setup-br");
@@ -428,20 +429,20 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet">
-          <h2>${esc(title || "Escolher commander")}</h2>
-          <input type="text" id="cp-input" placeholder="Nome do commander (ex: Atraxa, Krenko...)" autocomplete="off" autocorrect="off" spellcheck="false">
+          <h2>${esc(title || tr("Escolher commander"))}</h2>
+          <input type="text" id="cp-input" placeholder="${tr("Nome do commander (ex: Atraxa, Krenko...)")}" autocomplete="off" autocorrect="off" spellcheck="false">
           <div class="search-status hidden" id="cp-status"></div>
           <div class="search-results" id="cp-results"></div>
           <div class="row" style="margin-top:10px">
-            <button class="btn btn-ghost grow" id="cp-manual">${I("image")} Imagem manual</button>
-            <button class="btn btn-ghost grow" id="cp-none">${I("ban")} Sem imagem</button>
+            <button class="btn btn-ghost grow" id="cp-manual">${I("image")} ${tr("Imagem manual")}</button>
+            <button class="btn btn-ghost grow" id="cp-none">${I("ban")} ${tr("Sem imagem")}</button>
           </div>
           <div id="cp-manual-form" class="col hidden" style="margin-top:10px">
-            <input type="text" id="cp-manual-name" placeholder="Nome do commander">
-            <input type="text" id="cp-manual-url" placeholder="URL da imagem (https://...)">
-            <button class="btn btn-primary" id="cp-manual-confirm">Usar esta imagem</button>
+            <input type="text" id="cp-manual-name" placeholder="${tr("Nome do commander")}">
+            <input type="text" id="cp-manual-url" placeholder="${tr("URL da imagem (https://...)")}">
+            <button class="btn btn-primary" id="cp-manual-confirm">${tr("Usar esta imagem")}</button>
           </div>
-          <button class="btn btn-ghost" id="cp-cancel" style="margin-top:10px">Cancelar</button>
+          <button class="btn btn-ghost" id="cp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
         </div>
       </div>
     `);
@@ -459,10 +460,10 @@
 
     const doSearch = debounce(async (q) => {
       if (q.trim().length < 2) { results.innerHTML = ""; setStatus(""); return; }
-      setStatus("A pesquisar na Scryfall…");
+      setStatus(tr("A pesquisar na Scryfall…"));
       try {
         const cards = await Scryfall.searchCommanders(q);
-        setStatus(cards.length ? "" : "Sem resultados para esse nome.");
+        setStatus(cards.length ? "" : tr("Sem resultados para esse nome."));
         results.innerHTML = "";
         cards.forEach((card) => {
           const item = el(`
@@ -472,7 +473,7 @@
                 <div class="name">${esc(card.name)}</div>
                 <div class="type">${esc(card.typeLine)}</div>
               </div>
-              ${card.printsUri ? `<button class="btn btn-icon versions-btn" title="Escolher arte/versão alternativa">${I("palette")}</button>` : ""}
+              ${card.printsUri ? `<button class="btn btn-icon versions-btn" title="${tr("Escolher arte/versão alternativa")}">${I("palette")}</button>` : ""}
             </div>
           `);
           item.addEventListener("click", () => {
@@ -489,7 +490,7 @@
           results.appendChild(item);
         });
       } catch (err) {
-        setStatus("Sem ligação à Scryfall. Tenta a imagem manual abaixo.");
+        setStatus(tr("Sem ligação à Scryfall. Tenta a imagem manual abaixo."));
       }
     }, 350);
 
@@ -502,7 +503,7 @@
     backdrop.querySelector("#cp-manual-confirm").addEventListener("click", () => {
       const name = backdrop.querySelector("#cp-manual-name").value.trim() || "Commander";
       const url = backdrop.querySelector("#cp-manual-url").value.trim();
-      if (!url) { toast("Indica uma URL de imagem válida."); return; }
+      if (!url) { toast(tr("Indica uma URL de imagem válida.")); return; }
       onSelect({ id: "manual_" + Date.now(), name, art: url, artNormal: url });
       backdrop.remove();
     });
@@ -518,10 +519,10 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet">
-          <h2>Escolher arte — ${esc(baseCard.name)}</h2>
-          <div class="search-status" id="vp-status">A carregar edições…</div>
+          <h2>${tr("Escolher arte — {name}", { name: esc(baseCard.name) })}</h2>
+          <div class="search-status" id="vp-status">${tr("A carregar edições…")}</div>
           <div class="search-results" id="vp-results"></div>
-          <button class="btn btn-ghost" id="vp-cancel" style="margin-top:10px">Cancelar</button>
+          <button class="btn btn-ghost" id="vp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
         </div>
       </div>
     `);
@@ -539,7 +540,7 @@
       try {
         const prints = await Scryfall.getPrints(baseCard.printsUri);
         if (!prints.length) {
-          status.textContent = "Não há outras edições/artes disponíveis para esta carta.";
+          status.textContent = tr("Não há outras edições/artes disponíveis para esta carta.");
           return;
         }
         status.classList.add("hidden");
@@ -549,7 +550,7 @@
               <img src="${card.art ? esc(card.art) : ""}" onerror="this.style.visibility='hidden'">
               <div class="info">
                 <div class="name">${esc(card.setName || card.set)}</div>
-                <div class="type">${esc(card.artist ? "Arte de " + card.artist : "")}${card.collectorNumber ? " · #" + esc(card.collectorNumber) : ""}</div>
+                <div class="type">${esc(card.artist ? tr("Arte de {artist}", { artist: card.artist }) : "")}${card.collectorNumber ? " · #" + esc(card.collectorNumber) : ""}</div>
               </div>
             </div>
           `);
@@ -557,7 +558,7 @@
           results.appendChild(item);
         });
       } catch (err) {
-        status.textContent = "Não foi possível carregar as edições/artes. Tenta novamente.";
+        status.textContent = tr("Não foi possível carregar as edições/artes. Tenta novamente.");
       }
     })();
 
@@ -574,25 +575,25 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet">
-          <h2>Perfil do jogador</h2>
-          <div class="footer-note" style="margin-bottom:10px">Os perfis guardam as estatísticas deste commander entre jogos (vitórias, tempo médio por turno/jogo, etc).</div>
+          <h2>${tr("Perfil do jogador")}</h2>
+          <div class="footer-note" style="margin-bottom:10px">${tr("Os perfis guardam as estatísticas deste commander entre jogos (vitórias, tempo médio por turno/jogo, etc).")}</div>
           <div class="col" id="pp-list" style="max-height:38vh;overflow-y:auto"></div>
           <div class="row" style="margin-top:10px">
-            <button class="btn btn-ghost grow" id="pp-new">${I("plus")} Criar novo perfil</button>
-            ${currentProfileId ? `<button class="btn btn-ghost grow" id="pp-clear">${I("x")} Remover perfil</button>` : ""}
+            <button class="btn btn-ghost grow" id="pp-new">${I("plus")} ${tr("Criar novo perfil")}</button>
+            ${currentProfileId ? `<button class="btn btn-ghost grow" id="pp-clear">${I("x")} ${tr("Remover perfil")}</button>` : ""}
           </div>
           <div id="pp-new-form" class="col hidden" style="margin-top:10px">
-            <input type="text" id="pp-new-name" placeholder="Nome do perfil" value="${commander ? esc(commander.name) : ""}">
-            <button class="btn btn-primary" id="pp-new-confirm">Criar e ligar</button>
+            <input type="text" id="pp-new-name" placeholder="${tr("Nome do perfil")}" value="${commander ? esc(commander.name) : ""}">
+            <button class="btn btn-primary" id="pp-new-confirm">${tr("Criar e ligar")}</button>
           </div>
-          <button class="btn btn-ghost" id="pp-cancel" style="margin-top:10px">Cancelar</button>
+          <button class="btn btn-ghost" id="pp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
         </div>
       </div>
     `);
     document.body.appendChild(backdrop);
     const list = backdrop.querySelector("#pp-list");
     if (!profiles.length) {
-      list.appendChild(el(`<div class="search-status">Ainda não tens perfis guardados.</div>`));
+      list.appendChild(el(`<div class="search-status">${tr("Ainda não tens perfis guardados.")}</div>`));
     }
     profiles.forEach((p) => {
       const d = Profiles.derived(p);
@@ -601,7 +602,7 @@
           ${p.commander && p.commander.art ? `<img src="${esc(p.commander.art)}">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center">${I("card")}</div>`}
           <div>
             <div class="name">${esc(p.name)}</div>
-            <div class="type">${d.games} jogos · ${d.wins} vitórias${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
+            <div class="type">${tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins })}${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
           </div>
         </div>
       `);
@@ -612,7 +613,7 @@
     const clearBtn = backdrop.querySelector("#pp-clear");
     if (clearBtn) clearBtn.addEventListener("click", () => { onSelect(null); backdrop.remove(); });
     backdrop.querySelector("#pp-new").addEventListener("click", () => {
-      if (!commander) { toast("Escolhe primeiro um commander para este jogador."); return; }
+      if (!commander) { toast(tr("Escolhe primeiro um commander para este jogador.")); return; }
       backdrop.querySelector("#pp-new-form").classList.toggle("hidden");
     });
     backdrop.querySelector("#pp-new-confirm").addEventListener("click", () => {
@@ -640,7 +641,7 @@
           <div class="setup-controls">
             ${preset.minPlayers !== preset.maxPlayers ? `
             <div class="field">
-              <label>Jogadores</label>
+              <label>${tr("Jogadores")}</label>
               <div class="stepper-field">
                 <button class="btn btn-icon" type="button" id="players-minus">${I("minus")}</button>
                 <input type="number" id="cfg-players" min="${preset.minPlayers}" max="${preset.maxPlayers}" value="${draft.playerCount}">
@@ -648,7 +649,7 @@
               </div>
             </div>` : ""}
             <div class="field">
-              <label>Vida inicial</label>
+              <label>${tr("Vida inicial")}</label>
               <input type="number" id="cfg-life" min="1" value="${draft.startLife}">
             </div>
             ${preset.cmdDmgToggle ? `
@@ -663,7 +664,7 @@
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-primary btn-block" id="start-btn">Começar jogo</button>
+          <button class="btn btn-primary btn-block" id="start-btn">${tr("Começar jogo")}</button>
         </div>
       </div>
     `);
@@ -683,13 +684,13 @@
             <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">
               ${p.commander ? "" : I("card")}
             </div>
-            <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">
+            <div class="commander-thumb thumb-sm" data-role="partner" title="${tr("Commander parceiro")}" style="${commanderThumbStyle(p.partnerCommander)}">
               ${p.partnerCommander ? "" : "+"}
             </div>
           </div>
           <div class="player-setup-fields">
-            <input type="text" data-i="${i}" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
-            <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
+            <input type="text" data-i="${i}" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(p.name)}">
+            <div class="commander-name">${p.commander ? esc(p.commander.name) : tr("Sem commander escolhido")}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
             <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profileBtnHtml(profile)}</button>
           </div>
         </div>
@@ -698,7 +699,7 @@
         openCommanderPicker((card2) => { draft.players[i].commander = card2; renderPlayersList(); });
       });
       card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
-        openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, "Escolher commander parceiro");
+        openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, tr("Escolher commander parceiro"));
       });
       card.querySelector(".name-input").addEventListener("input", (e) => {
         draft.players[i].name = e.target.value;
@@ -728,7 +729,7 @@
       const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
       partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
       partnerThumb.textContent = p.partnerCommander ? "" : "+";
-      card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : "Sem commander escolhido") + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
+      card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : tr("Sem commander escolhido")) + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
       card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
       const nameInput = card.querySelector(".name-input");
       if (document.activeElement !== nameInput) nameInput.value = p.name;
@@ -816,13 +817,13 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">${I("minimize")}</button>` : ""}
+        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>` : ""}
         <div class="topbar">
           <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
-          <h1>${esc(PRESETS[game.presetName] ? PRESETS[game.presetName].label : "Jogo")}</h1>
+          <h1>${esc(PRESETS[game.presetName] ? PRESETS[game.presetName].label : tr("Jogo"))}</h1>
           <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">${I("rotate")}</button>
-            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
+            <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
+            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
           </div>
         </div>
         ${timed ? `<div class="br-status-row">${turnChipsHtml(currentPlayer ? currentPlayer.name : "-", game.standard.roundNumber, paused)}</div>` : ""}
@@ -831,10 +832,10 @@
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
-          ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${I(paused ? "play" : "pause")}</button>` : ""}
-          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">${I("history")}</button>
-          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">${I("reorder")}</button>
-          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} Terminar</button>
+          ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
+          <button class="btn btn-icon" id="history-btn" title="${tr("Histórico de vida")}">${I("history")}</button>
+          <button class="btn btn-icon" id="reorder-btn" title="${tr("Trocar posições")}">${I("reorder")}</button>
+          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} ${tr("Terminar")}</button>
         </div>
       </div>
     `);
@@ -853,10 +854,10 @@
     if (timed) startLiveClock(s, game.standard);
 
     s.querySelector("#menu-btn").addEventListener("click", () => {
-      if (confirm("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde.")) nav("menu");
+      if (confirm(tr("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde."))) nav("menu");
     });
     s.querySelector("#reset-btn").addEventListener("click", () => {
-      if (!confirm(timed ? "Reiniciar vidas, commander damage e os relógios de turno/jogo de todos os jogadores?" : "Reiniciar vidas e commander damage de todos os jogadores?")) return;
+      if (!confirm(timed ? tr("Reiniciar vidas, commander damage e os relógios de turno/jogo de todos os jogadores?") : tr("Reiniciar vidas e commander damage de todos os jogadores?"))) return;
       const now = Date.now();
       game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
       game.standard.roundNumber = 1;
@@ -892,23 +893,23 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>Terminar jogo</h2>
-          <div class="footer-note" style="margin-bottom:10px">Quem venceu esta partida? (fica registado nos perfis ligados)</div>
+          <h2>${tr("Terminar jogo")}</h2>
+          <div class="footer-note" style="margin-bottom:10px">${tr("Quem venceu esta partida? (fica registado nos perfis ligados)")}</div>
           <div class="col" id="winner-list">
             ${players.map((p) => `
               <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
                 <input type="radio" name="winner" value="${p.id}" style="width:auto">
-                <span class="grow">${esc(p.name)}${p.eliminated ? " (eliminado)" : ""}</span>
+                <span class="grow">${esc(p.name)}${p.eliminated ? tr(" (eliminado)") : ""}</span>
               </label>
             `).join("")}
             <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
               <input type="radio" name="winner" value="" style="width:auto" checked>
-              <span class="grow">Sem vencedor / não contar</span>
+              <span class="grow">${tr("Sem vencedor / não contar")}</span>
             </label>
           </div>
           <div class="row" style="margin-top:14px">
-            <button class="btn btn-ghost grow" id="eg-cancel">Cancelar</button>
-            <button class="btn btn-primary grow" id="eg-confirm">Confirmar</button>
+            <button class="btn btn-ghost grow" id="eg-cancel">${tr("Cancelar")}</button>
+            <button class="btn btn-primary grow" id="eg-confirm">${tr("Confirmar")}</button>
           </div>
         </div>
       </div>
@@ -942,7 +943,7 @@
         ${panelBgHtml(p)}
         <div class="mini-actions"><button class="mini-btn" data-action="edit">${I("pencil")}</button></div>
         <div class="content">
-          ${isActive ? `<div class="turn-badge">A jogar</div>` : ""}
+          ${isActive ? `<div class="turn-badge">${tr("A jogar")}</div>` : ""}
         <div class="player-header">
             <div class="player-name">${esc(p.name)}</div>
             <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
@@ -954,7 +955,7 @@
             <div class="life-total">${p.life}</div>
           </div>
           ${cmdEnabled ? `<div class="commander-badges">${cmdBadgeList.join("")}</div>` : ""}
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>${I("skip")} Passar turno</button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}</button>` : ""}
         </div>
       </div>
     `);
@@ -1031,9 +1032,9 @@
       <div class="modal-backdrop center">
         <div class="modal-sheet">
           <h2>Commander tax — ${esc(p.name)}</h2>
-          <div class="footer-note" style="margin-bottom:10px">Cada vez que conjuras o commander da zona de comando, o custo sobe {2}. Toca em "+" de cada vez que o conjurares.</div>
+          <div class="footer-note" style="margin-bottom:10px">${tr("Cada vez que conjuras o commander da zona de comando, o custo sobe {2}. Toca em \"+\" de cada vez que o conjurares.")}</div>
           <div class="cd-list" id="tax-list"></div>
-          <button class="btn btn-ghost btn-block" id="tax-close" style="margin-top:14px">Fechar</button>
+          <button class="btn btn-ghost btn-block" id="tax-close" style="margin-top:14px">${tr("Fechar")}</button>
         </div>
       </div>
     `);
@@ -1082,12 +1083,12 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>Quem começa?</h2>
-          <div class="footer-note" style="margin-bottom:10px">Escolhe manualmente ou roda os dados — ganha quem tirar o valor mais alto (empates voltam a rolar).</div>
+          <h2>${tr("Quem começa?")}</h2>
+          <div class="footer-note" style="margin-bottom:10px">${tr("Escolhe manualmente ou roda os dados — ganha quem tirar o valor mais alto (empates voltam a rolar).")}</div>
           <div class="cd-list" id="who-manual-list"></div>
-          <button class="btn btn-accent btn-block" id="who-roll-btn" style="margin-top:14px">${I("dice")} Rolar dados por todos</button>
+          <button class="btn btn-accent btn-block" id="who-roll-btn" style="margin-top:14px">${I("dice")} ${tr("Rolar dados por todos")}</button>
           <div id="who-roll-results" style="margin-top:12px"></div>
-          <button class="btn btn-ghost btn-block" id="who-cancel" style="margin-top:14px">Cancelar</button>
+          <button class="btn btn-ghost btn-block" id="who-cancel" style="margin-top:14px">${tr("Cancelar")}</button>
         </div>
       </div>
     `);
@@ -1146,7 +1147,7 @@
         });
         resultsEl.appendChild(list);
         if (tied) {
-          resultsEl.appendChild(el(`<div class="footer-note" style="margin-top:6px">Empate — a rodar de novo só entre quem empatou...</div>`));
+          resultsEl.appendChild(el(`<div class="footer-note" style="margin-top:6px">${tr("Empate — a rodar de novo só entre quem empatou...")}</div>`));
         }
       }
       backdrop.querySelector("#who-roll-btn").disabled = true;
@@ -1177,7 +1178,7 @@
     const content = panel.querySelector(".content");
     let elimBadge = panel.querySelector(".eliminated-badge");
     if (p.eliminated && !elimBadge) {
-      elimBadge = el(`<div class="eliminated-badge" title="Toca se uma carta evita a eliminação">ELIMINADO</div>`);
+      elimBadge = el(`<div class="eliminated-badge" title="${tr("Toca se uma carta evita a eliminação")}">${tr("ELIMINADO")}</div>`);
       elimBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openEliminationGuardModal(p.id, true); });
       content.appendChild(elimBadge);
     } else if (!p.eliminated && elimBadge) {
@@ -1185,7 +1186,7 @@
     }
     let protBadge = panel.querySelector(".protected-badge");
     if (p.protected && !p.eliminated && !protBadge) {
-      protBadge = el(`<div class="protected-badge" title="Toca se a carta de proteção saiu do campo">PROTEGIDO</div>`);
+      protBadge = el(`<div class="protected-badge" title="${tr("Toca se a carta de proteção saiu do campo")}">${tr("PROTEGIDO")}</div>`);
       protBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openEliminationGuardModal(p.id, false); });
       content.appendChild(protBadge);
     } else if ((!p.protected || p.eliminated) && protBadge) {
@@ -1217,17 +1218,17 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>${isEliminated ? "Jogador eliminado" : "Jogador protegido"}</h2>
+          <h2>${isEliminated ? tr("Jogador eliminado") : tr("Jogador protegido")}</h2>
           <div class="footer-note" style="margin-bottom:14px">
             ${isEliminated
-              ? `${esc(p.name)} está eliminado (0 ou menos vidas, ou 21+ de commander damage). Se tens em jogo uma carta que evita a eliminação (ex: Platinum Angel, Worship...), podes mantê-lo no jogo.`
-              : `${esc(p.name)} está a ser mantido no jogo apesar de já ter sofrido a eliminação, graças a uma carta de proteção. Assim que essa carta sair do campo, volta a eliminá-lo aqui.`}
+              ? tr("{name} está eliminado (0 ou menos vidas, ou 21+ de commander damage). Se tens em jogo uma carta que evita a eliminação (ex: Platinum Angel, Worship...), podes mantê-lo no jogo.", { name: esc(p.name) })
+              : tr("{name} está a ser mantido no jogo apesar de já ter sofrido a eliminação, graças a uma carta de proteção. Assim que essa carta sair do campo, volta a eliminá-lo aqui.", { name: esc(p.name) })}
           </div>
           <div class="col">
             ${isEliminated
-              ? `<button class="btn btn-gold btn-block" id="eg-keep">${I("shield")} Manter no jogo</button>`
-              : `<button class="btn btn-primary btn-block" id="eg-reeliminate">A carta saiu — eliminar agora</button>`}
-            <button class="btn btn-ghost btn-block" id="eg-cancel">Cancelar</button>
+              ? `<button class="btn btn-gold btn-block" id="eg-keep">${I("shield")} ${tr("Manter no jogo")}</button>`
+              : `<button class="btn btn-primary btn-block" id="eg-reeliminate">${tr("A carta saiu — eliminar agora")}</button>`}
+            <button class="btn btn-ghost btn-block" id="eg-cancel">${tr("Cancelar")}</button>
           </div>
         </div>
       </div>
@@ -1258,7 +1259,7 @@
         <div class="modal-sheet">
           <h2>Commander Damage — ${esc(p.name)}</h2>
           <div class="cd-list" id="cd-list"></div>
-          <button class="btn btn-ghost btn-block" id="cd-close" style="margin-top:14px">Fechar</button>
+          <button class="btn btn-ghost btn-block" id="cd-close" style="margin-top:14px">${tr("Fechar")}</button>
         </div>
       </div>
     `);
@@ -1270,7 +1271,7 @@
       const row = el(`
         <div class="cd-list-item">
           ${art ? `<img src="${esc(art)}">` : `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">${I("card")}</div>`}
-          <div class="nm">${esc(label)}${source === "partner" ? ` <span class="turn-badge-sm partner-tag">PARCEIRO</span>` : ""}</div>
+          <div class="nm">${esc(label)}${source === "partner" ? ` <span class="turn-badge-sm partner-tag">${tr("PARCEIRO")}</span>` : ""}</div>
           <button class="btn btn-icon" data-d="-1">${I("minus")}</button>
           <div class="val">${dmg}</div>
           <button class="btn btn-icon" data-d="1">${I("plus")}</button>
@@ -1289,7 +1290,7 @@
       list.innerHTML = "";
       opponents.forEach((o) => {
         const group = el(`<div class="cd-group"><div class="cd-group-title">${esc(o.name)}</div></div>`);
-        group.appendChild(buildRow(o, "main", o.commander ? o.commander.name : "Sem commander", o.commander && o.commander.art));
+        group.appendChild(buildRow(o, "main", o.commander ? o.commander.name : tr("Sem commander"), o.commander && o.commander.art));
         if (o.partnerCommander) {
           group.appendChild(buildRow(o, "partner", o.partnerCommander.name, o.partnerCommander.art));
         }
@@ -1312,25 +1313,25 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>Editar jogador</h2>
+          <h2>${tr("Editar jogador")}</h2>
           <div class="col">
-            <label>Nome</label>
+            <label>${tr("Nome")}</label>
             <input type="text" id="ep-name" value="${esc(p.name)}">
             <div class="row" style="align-items:center;margin-top:6px">
               <div class="commander-thumb" id="ep-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
-              <button class="btn btn-ghost grow" id="ep-commander">Alterar Commander</button>
+              <button class="btn btn-ghost grow" id="ep-commander">${tr("Alterar Commander")}</button>
             </div>
             ${(mode === "standard" || mode === "teams") ? `
             <div class="row" style="align-items:center;margin-top:6px">
               <div class="commander-thumb" id="ep-thumb-partner" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : I("card")}</div>
-              <button class="btn btn-ghost grow" id="ep-partner">${p.partnerCommander ? "Alterar Parceiro" : "Adicionar commander parceiro"}</button>
+              <button class="btn btn-ghost grow" id="ep-partner">${p.partnerCommander ? tr("Alterar Parceiro") : tr("Adicionar commander parceiro")}</button>
             </div>` : ""}
-            <button class="btn btn-ghost btn-sm" id="ep-profile" style="margin-top:6px">${profileBtnHtml(pendingProfileId ? (Profiles.get(pendingProfileId) || { name: "Perfil" }) : null)}</button>
-            ${mode === "standard" ? `<button class="btn ${p.eliminated ? "btn-primary" : "btn-ghost"}" id="ep-elim" style="margin-top:6px">${p.eliminated ? "Reviver jogador" : "Marcar como eliminado"}</button>` : ""}
+            <button class="btn btn-ghost btn-sm" id="ep-profile" style="margin-top:6px">${profileBtnHtml(pendingProfileId ? (Profiles.get(pendingProfileId) || { name: tr("Perfil") }) : null)}</button>
+            ${mode === "standard" ? `<button class="btn ${p.eliminated ? "btn-primary" : "btn-ghost"}" id="ep-elim" style="margin-top:6px">${p.eliminated ? tr("Reviver jogador") : tr("Marcar como eliminado")}</button>` : ""}
           </div>
           <div class="row" style="margin-top:14px">
-            <button class="btn btn-ghost grow" id="ep-cancel">Cancelar</button>
-            <button class="btn btn-primary grow" id="ep-save">Guardar</button>
+            <button class="btn btn-ghost grow" id="ep-cancel">${tr("Cancelar")}</button>
+            <button class="btn btn-primary grow" id="ep-save">${tr("Guardar")}</button>
           </div>
         </div>
       </div>
@@ -1352,8 +1353,8 @@
           const thumb = backdrop.querySelector("#ep-thumb-partner");
           thumb.style.cssText = commanderThumbStyle(c);
           thumb.innerHTML = c ? "" : I("card");
-          partnerBtn.textContent = c ? "Alterar Parceiro" : "Adicionar commander parceiro";
-        }, "Escolher commander parceiro");
+          partnerBtn.textContent = c ? tr("Alterar Parceiro") : tr("Adicionar commander parceiro");
+        }, tr("Escolher commander parceiro"));
       });
     }
     backdrop.querySelector("#ep-profile").addEventListener("click", () => {
@@ -1382,7 +1383,7 @@
     if (elimBtn) {
       elimBtn.addEventListener("click", () => {
         toggledElim = !toggledElim;
-        elimBtn.textContent = toggledElim ? "Reviver jogador" : "Marcar como eliminado";
+        elimBtn.textContent = toggledElim ? tr("Reviver jogador") : tr("Marcar como eliminado");
         elimBtn.className = "btn " + (toggledElim ? "btn-primary" : "btn-ghost");
       });
     }
@@ -1423,11 +1424,11 @@
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
-          <div class="footer-note" style="margin-bottom:12px">6 jogadores · 30 vidas cada · zona inicial sorteada aleatoriamente · sem commander damage. Consulta as regras completas no ecrã de jogo (ícone de informação).</div>
+          <div class="footer-note" style="margin-bottom:12px">${tr("6 jogadores · 30 vidas cada · zona inicial sorteada aleatoriamente · sem commander damage. Consulta as regras completas no ecrã de jogo (ícone de informação).")}</div>
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-accent btn-block" id="start-btn">Começar Battle Royale</button>
+          <button class="btn btn-accent btn-block" id="start-btn">${tr("Começar Battle Royale")}</button>
         </div>
       </div>
     `);
@@ -1440,8 +1441,8 @@
         <div class="player-setup-card">
           <div class="commander-thumb" data-i="${i}" style="${commanderThumbStyle(draft.commanders[i])}">${draft.commanders[i] ? "" : I("card")}</div>
           <div class="player-setup-fields">
-            <input type="text" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(name)}">
-            <div class="commander-name">${draft.commanders[i] ? esc(draft.commanders[i].name) : "Sem commander escolhido"}</div>
+            <input type="text" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(name)}">
+            <div class="commander-name">${draft.commanders[i] ? esc(draft.commanders[i].name) : tr("Sem commander escolhido")}</div>
             <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
           </div>
         </div>
@@ -1451,7 +1452,7 @@
           draft.commanders[i] = c;
           card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(c);
           card.querySelector(".commander-thumb").innerHTML = c ? "" : I("card");
-          card.querySelector(".commander-name").textContent = c ? c.name : "Sem commander escolhido";
+          card.querySelector(".commander-name").textContent = c ? c.name : tr("Sem commander escolhido");
         });
       });
       card.querySelector(".name-input").addEventListener("input", (e) => { draft.names[i] = e.target.value; });
@@ -1516,28 +1517,28 @@
           <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
           <h1>Battle Royale</h1>
           <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="history-btn" title="Histórico de vida">${I("history")}</button>
-            <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">${I("reorder")}</button>
-            <button class="btn btn-icon" id="info-btn" title="Regras">${I("info")}</button>
+            <button class="btn btn-icon" id="history-btn" title="${tr("Histórico de vida")}">${I("history")}</button>
+            <button class="btn btn-icon" id="reorder-btn" title="${tr("Trocar posições")}">${I("reorder")}</button>
+            <button class="btn btn-icon" id="info-btn" title="${tr("Regras")}">${I("info")}</button>
           </div>
         </div>
         <div class="br-status-row">
-          <div class="br-chip turn">${I("repeat")} Ronda ${br.roundNumber}</div>
-          <div class="br-chip">${I("user")} Vez de: ${current ? esc(current.name) : "-"}</div>
-          <div class="br-chip">${I("clock")}<span id="chip-turn-time">Turno 00:00</span></div>
-          <div class="br-chip">${I("hourglass")}<span id="chip-total-time">Total 00:00</span></div>
+          <div class="br-chip turn">${I("repeat")} ${tr("Ronda {n}", { n: br.roundNumber })}</div>
+          <div class="br-chip">${I("user")} ${tr("Vez: {name}", { name: current ? esc(current.name) : "-" })}</div>
+          <div class="br-chip">${I("clock")}<span id="chip-turn-time">${tr("Turno {time}", { time: "00:00" })}</span></div>
+          <div class="br-chip">${I("hourglass")}<span id="chip-total-time">${tr("Total {time}", { time: "00:00" })}</span></div>
           <div class="br-chip ${br.phase !== "normal" ? "phase-final" : ""}">${phaseLabel(br.phase)}</div>
-          <div class="br-chip">Zonas fechadas: ${br.closedZones.length}/5</div>
-          ${paused ? `<div class="br-chip paused">${I("pause")} Pausado</div>` : ""}
+          <div class="br-chip">${tr("Zonas fechadas: {n}/5", { n: br.closedZones.length })}</div>
+          ${paused ? `<div class="br-chip paused">${I("pause")} ${tr("Pausado")}</div>` : ""}
         </div>
         <div class="zone-map" id="zone-map"></div>
-        ${br.phase === "final_circle" ? `<div class="banner">FINAL CIRCLE — não podes ganhar vidas · todos atacam todos · criaturas com haste · +2 Treasure no início de cada turno</div>` : ""}
-        ${br.phase === "final_duel_pending" ? `<div class="banner gold">Restam 2 jogadores! <button class="btn btn-gold btn-sm" id="start-duel-btn" style="margin-left:8px">Iniciar Duelo Final</button></div>` : ""}
-        ${br.phase === "final_duel" ? `<div class="banner gold">FINAL DUEL em curso — até à morte!</div>` : ""}
+        ${br.phase === "final_circle" ? `<div class="banner">${tr("FINAL CIRCLE — não podes ganhar vidas · todos atacam todos · criaturas com haste · +2 Treasure no início de cada turno")}</div>` : ""}
+        ${br.phase === "final_duel_pending" ? `<div class="banner gold">${tr("Restam 2 jogadores!")} <button class="btn btn-gold btn-sm" id="start-duel-btn" style="margin-left:8px">${tr("Iniciar Duelo Final")}</button></div>` : ""}
+        ${br.phase === "final_duel" ? `<div class="banner gold">${tr("FINAL DUEL em curso — até à morte!")}</div>` : ""}
         <div class="row" style="padding:0 12px 8px;gap:8px;flex-shrink:0">
-          <button class="btn btn-accent grow" id="roll-event-btn" ${br.roundEventRolled ? "disabled" : ""}>${I("dice")} Rolar evento</button>
-          <button class="btn btn-primary grow" id="next-turn-btn" ${paused ? "disabled" : ""}>Próximo turno ${I("arrow-right")}</button>
-          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${I(paused ? "play" : "pause")}</button>
+          <button class="btn btn-accent grow" id="roll-event-btn" ${br.roundEventRolled ? "disabled" : ""}>${I("dice")} ${tr("Rolar evento")}</button>
+          <button class="btn btn-primary grow" id="next-turn-btn" ${paused ? "disabled" : ""}>${tr("Próximo turno")} ${I("arrow-right")}</button>
+          <button class="btn btn-icon" id="pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>
         </div>
         <div class="event-log" id="event-log"></div>
         <div class="br-players" id="br-players"></div>
@@ -1572,7 +1573,7 @@
     startLiveClock(s, game.br);
 
     s.querySelector("#menu-btn").addEventListener("click", () => {
-      if (confirm("Voltar ao menu? O jogo fica guardado.")) nav("menu");
+      if (confirm(tr("Voltar ao menu? O jogo fica guardado."))) nav("menu");
     });
     s.querySelector("#info-btn").addEventListener("click", showBRRules);
     s.querySelector("#history-btn").addEventListener("click", () => openLifeHistoryModal());
@@ -1597,7 +1598,7 @@
   }
 
   function phaseLabel(phase) {
-    return { normal: "Fase normal", final_circle: "Final Circle", final_duel_pending: "Preparar duelo", final_duel: "Final Duel", ended: "Terminado" }[phase] || phase;
+    return { normal: tr("Fase normal"), final_circle: "Final Circle", final_duel_pending: tr("Preparar duelo"), final_duel: "Final Duel", ended: tr("Terminado") }[phase] || phase;
   }
 
   function buildBRRow(p, current) {
@@ -1606,11 +1607,11 @@
       <div class="br-player-row ${isActive ? "active" : ""} ${p.eliminated ? "eliminated" : ""}">
         <div class="br-avatar" style="${playerBgStyle(p)}"></div>
         <div class="br-info">
-          <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">A jogar</span>` : ""}</div>
-          <div class="meta">${p.eliminated ? `Eliminado` : `${I("gift")} ${p.lootUsed.length}/6`}</div>
+          <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">${tr("A jogar")}</span>` : ""}</div>
+          <div class="meta">${p.eliminated ? tr("Eliminado") : `${I("gift")} ${p.lootUsed.length}/6`}</div>
         </div>
         ${!p.eliminated ? `
-        <select class="br-zone-select" data-act="zone" title="Zona atual">
+        <select class="br-zone-select" data-act="zone" title="${tr("Zona atual")}">
           ${State.ZONES.map((z) => `<option value="${z}" ${z === p.zone ? "selected" : ""}>${z}</option>`).join("")}
         </select>
         <div class="br-life-stepper">
@@ -1621,7 +1622,7 @@
         ` : ""}
         <div class="br-actions-mini">
           <button class="btn btn-icon" data-act="edit">${I("pencil")}</button>
-          ${!p.eliminated ? `<button class="btn btn-icon" data-act="kill" title="Eliminar">${I("skull")}</button>` : ""}
+          ${!p.eliminated ? `<button class="btn btn-icon" data-act="kill" title="${tr("Eliminar")}">${I("skull")}</button>` : ""}
         </div>
       </div>
     `);
@@ -1634,7 +1635,7 @@
     row.querySelector('[data-act="edit"]').addEventListener("click", () => openEditPlayerModal({ mode: "br", playerId: p.id }));
     const killBtn = row.querySelector('[data-act="kill"]');
     if (killBtn) killBtn.addEventListener("click", () => {
-      if (!confirm(`Eliminar ${p.name} do jogo?`)) return;
+      if (!confirm(tr("Eliminar {name} do jogo?", { name: p.name }))) return;
       State.brEliminate(game, p.id, []);
       State.save(game);
       openKillCreditFlow(p.id, () => render());
@@ -1662,7 +1663,7 @@
             <div class="ev-title">${esc(event.title)}</div>
             <div class="ev-desc">${esc(event.desc)}</div>
           </div>
-          <button class="btn btn-primary btn-block" id="ev-ok" style="margin-top:14px">Continuar</button>
+          <button class="btn btn-primary btn-block" id="ev-ok" style="margin-top:14px">${tr("Continuar")}</button>
         </div>
       </div>
     `);
@@ -1678,8 +1679,8 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>${esc(eliminated.name)} foi eliminado!</h2>
-          <div class="footer-note" style="margin-bottom:10px">Quem participou no abate? (se dois jogadores atacaram o mesmo alvo, escolhe ambos — os dois recebem recompensa)</div>
+          <h2>${tr("{name} foi eliminado!", { name: esc(eliminated.name) })}</h2>
+          <div class="footer-note" style="margin-bottom:10px">${tr("Quem participou no abate? (se dois jogadores atacaram o mesmo alvo, escolhe ambos — os dois recebem recompensa)")}</div>
           <div class="col" id="killer-list">
             ${alive.map((a) => `
               <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:8px 10px;">
@@ -1689,8 +1690,8 @@
             `).join("")}
           </div>
           <div class="row" style="margin-top:14px">
-            <button class="btn btn-ghost grow" id="kc-skip">Ninguém escolhe recompensa</button>
-            <button class="btn btn-primary grow" id="kc-confirm">Confirmar</button>
+            <button class="btn btn-ghost grow" id="kc-skip">${tr("Ninguém escolhe recompensa")}</button>
+            <button class="btn btn-primary grow" id="kc-confirm">${tr("Confirmar")}</button>
           </div>
         </div>
       </div>
@@ -1717,9 +1718,9 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>Recompensa para ${esc(p.name)}</h2>
+          <h2>${tr("Recompensa para {name}", { name: esc(p.name) })}</h2>
           <div class="loot-grid" id="loot-grid"></div>
-          <button class="btn btn-ghost btn-block" id="loot-skip" style="margin-top:12px">Não escolher recompensa</button>
+          <button class="btn btn-ghost btn-block" id="loot-skip" style="margin-top:12px">${tr("Não escolher recompensa")}</button>
         </div>
       </div>
     `);
@@ -1751,20 +1752,13 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet" style="max-height:88vh">
-          <h2>Regras — Battle Royale</h2>
+          <h2>${tr("Regras — Battle Royale")}</h2>
           <div class="scroll" style="padding:0">
             <div class="footer-note col gap-sm" style="font-size:.78rem;line-height:1.5">
-              <div><strong>Vida:</strong> todos começam com 30. Sem commander damage. A 0 estás eliminado — tudo o que controlas sai do jogo.</div>
-              <div><strong>Combate:</strong> podes atacar qualquer jogador na tua zona ou zona adjacente. Se 2 jogadores atacarem o mesmo alvo e ele morrer, ambos escolhem recompensa.</div>
-              <div><strong>Loot:</strong> ao eliminar alguém, escolhe 1 recompensa (só uma vez por recompensa por jogo): 3 Treasure, compra 3 cartas, ganha 10 vidas, ficha 6/6, recupera carta do cemitério, ou 1 carta grátis este turno.</div>
-              <div><strong>Mapa:</strong> zonas A–F em linha. Move-te para uma zona adjacente no início do teu turno, ou fica.</div>
-              <div><strong>Círculo:</strong> a cada 3ª ronda da mesa (todos jogam 3 vezes), fecha a zona mais distante do centro (ordem: A, F, B, E, C, D). Quem estiver lá perde 5 vidas no início do seu turno. A zona inicial de cada jogador é sorteada aleatoriamente.</div>
-              <div><strong>Evento aleatório:</strong> 1 dado por ronda — Blood Moon (-3 todos), Supply Drop (+1 treasure todos), Frenzy (+2/+0), Blackout (máx 1 compra), Healing Zone (+5 todos), Air Drop (jogador com menos vida compra 5).</div>
-              <div><strong>Final Circle</strong> (restam 3): sem ganhar vidas, todos atacam todos, +2 Treasure no início do turno, criaturas com haste.</div>
-              <div><strong>Final Duel</strong> (restam 2): +10 vidas, desviram tudo, compram 3, criam 3 Treasure — até à morte. O campeão escolhe o próximo evento aleatório.</div>
+              ${tr("__br_rules__")}
             </div>
           </div>
-          <button class="btn btn-primary btn-block" id="rules-close" style="margin-top:12px">Entendido</button>
+          <button class="btn btn-primary btn-block" id="rules-close" style="margin-top:12px">${tr("Entendido")}</button>
         </div>
       </div>
     `);
@@ -1781,11 +1775,11 @@
           <div class="champion-avatar" style="${champ ? playerBgStyle(champ) : ""}"></div>
           <div class="trophy">${I("trophy")}</div>
           <div class="cname">${champ ? esc(champ.name) : "?"}</div>
-          <div class="footer-note">Campeão do Battle Royale</div>
+          <div class="footer-note">${tr("Campeão do Battle Royale")}</div>
         </div>
         <div class="scroll" style="width:100%">${buildStatsBlock(stats)}</div>
         <div class="board-toolbar" style="width:100%">
-          <button class="btn btn-accent grow" id="new-br-btn">Novo Battle Royale</button>
+          <button class="btn btn-accent grow" id="new-br-btn">${tr("Novo Battle Royale")}</button>
           <button class="btn btn-ghost" id="menu-btn2">Menu</button>
         </div>
       </div>
@@ -1793,7 +1787,7 @@
     appEl.appendChild(s);
     if (champ && celebratedGameAt !== game.createdAt) {
       celebratedGameAt = game.createdAt;
-      celebrateVictory({ name: champ.name, commander: champ.commander, bgStyle: playerBgStyle(champ), subtitle: "Campeão do Battle Royale" });
+      celebrateVictory({ name: champ.name, commander: champ.commander, bgStyle: playerBgStyle(champ), subtitle: tr("Campeão do Battle Royale") });
     }
     s.querySelector("#new-br-btn").addEventListener("click", () => {
       State.clear();
@@ -1811,7 +1805,7 @@
     for (let t = 0; t < numTeams; t++) {
       const players = [];
       for (let i = 0; i < playersPerTeam; i++) players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
-      teams.push({ name: `Equipa ${t + 1}`, players });
+      teams.push({ name: tr("Equipa {n}", { n: t + 1 }), players });
     }
     return { numTeams, playersPerTeam, startLife, teams };
   }
@@ -1821,13 +1815,13 @@
       <div class="screen">
         <div class="topbar">
           <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
-          <h1>Equipas</h1>
+          <h1>${tr("Equipas")}</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
           <div class="setup-controls">
             <div class="field">
-              <label>Equipas</label>
+              <label>${tr("Equipas")}</label>
               <div class="stepper-field">
                 <button class="btn btn-icon" type="button" id="teams-minus">${I("minus")}</button>
                 <input type="number" id="cfg-teams" min="2" max="4" value="${draft.numTeams}">
@@ -1835,7 +1829,7 @@
               </div>
             </div>
             <div class="field">
-              <label>Jogadores/equipa</label>
+              <label>${tr("Jogadores/equipa")}</label>
               <div class="stepper-field">
                 <button class="btn btn-icon" type="button" id="ppt-minus">${I("minus")}</button>
                 <input type="number" id="cfg-ppt" min="1" max="4" value="${draft.playersPerTeam}">
@@ -1843,16 +1837,16 @@
               </div>
             </div>
             <div class="field">
-              <label>Vida inicial (por equipa)</label>
+              <label>${tr("Vida inicial (por equipa)")}</label>
               <input type="number" id="cfg-life" min="1" value="${draft.startLife}">
             </div>
           </div>
           ${trackTurnsFieldHtml(draft.trackTurns !== false)}
-          <div class="footer-note" style="margin-bottom:12px">Vida partilhada por equipa (estilo Two-Headed Giant): a equipa toda soma/perde vida em conjunto. Os turnos alternam entre equipas.</div>
+          <div class="footer-note" style="margin-bottom:12px">${tr("Vida partilhada por equipa (estilo Two-Headed Giant): a equipa toda soma/perde vida em conjunto. Os turnos alternam entre equipas.")}</div>
           <div id="teams-list"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-primary btn-block" id="start-btn">Começar jogo</button>
+          <button class="btn btn-primary btn-block" id="start-btn">${tr("Começar jogo")}</button>
         </div>
       </div>
     `);
@@ -1868,11 +1862,11 @@
         <div class="player-setup-card">
           <div class="commander-thumbs">
             <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
-            <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "+"}</div>
+            <div class="commander-thumb thumb-sm" data-role="partner" title="${tr("Commander parceiro")}" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "+"}</div>
           </div>
           <div class="player-setup-fields">
-            <input type="text" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
-            <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
+            <input type="text" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(p.name)}">
+            <div class="commander-name">${p.commander ? esc(p.commander.name) : tr("Sem commander escolhido")}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
             <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
           </div>
         </div>
@@ -1881,7 +1875,7 @@
         openCommanderPicker((c) => { draft.teams[t].players[i].commander = c; renderTeamsList(); });
       });
       card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
-        openCommanderPicker((c) => { draft.teams[t].players[i].partnerCommander = c; renderTeamsList(); }, "Escolher commander parceiro");
+        openCommanderPicker((c) => { draft.teams[t].players[i].partnerCommander = c; renderTeamsList(); }, tr("Escolher commander parceiro"));
       });
       card.querySelector(".name-input").addEventListener("input", (e) => { draft.teams[t].players[i].name = e.target.value; });
       card.querySelector(".profile-btn").addEventListener("click", () => {
@@ -1909,7 +1903,7 @@
       const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
       partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
       partnerThumb.textContent = p.partnerCommander ? "" : "+";
-      card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : "Sem commander escolhido") + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
+      card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : tr("Sem commander escolhido")) + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
       card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
       const nameInput = card.querySelector(".name-input");
       if (document.activeElement !== nameInput) nameInput.value = p.name;
@@ -1957,7 +1951,7 @@
         for (let t = cur; t < n; t++) {
           const players = [];
           for (let i = 0; i < draft.playersPerTeam; i++) players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
-          draft.teams.push({ name: `Equipa ${t + 1}`, players });
+          draft.teams.push({ name: tr("Equipa {n}", { n: t + 1 }), players });
         }
       } else {
         draft.teams.length = n;
@@ -2029,7 +2023,7 @@
     const content = panel.querySelector(".content");
     let badge = panel.querySelector(".eliminated-badge");
     if (team.eliminated && !badge) {
-      badge = el(`<div class="eliminated-badge" title="Toca para reverter">ELIMINADA</div>`);
+      badge = el(`<div class="eliminated-badge" title="${tr("Toca para reverter")}">${tr("ELIMINADA")}</div>`);
       badge.addEventListener("click", (ev) => {
         ev.stopPropagation();
         State.teamsToggleEliminated(game, team.id);
@@ -2047,7 +2041,7 @@
       <div class="player-panel team-panel ${rotated ? "rot180" : ""} ${hasArt(team.players) ? "has-art" : ""} ${team.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-team-id="${team.id}">
         ${teamBgHtml(team)}
         <div class="content">
-          ${isActive ? `<div class="turn-badge">A jogar</div>` : ""}
+          ${isActive ? `<div class="turn-badge">${tr("A jogar")}</div>` : ""}
           <div class="player-header">
             <div class="player-name">${esc(team.name)}</div>
           </div>
@@ -2057,7 +2051,7 @@
             <div class="life-delta-fixed"></div>
             <div class="life-total">${team.life}</div>
           </div>
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>${I("skip")} Passar turno</button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}</button>` : ""}
           <div class="team-roster">${team.players.map((p) => teamRosterRowHtml(p, isActive)).join("")}</div>
         </div>
       </div>
@@ -2129,23 +2123,23 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>Terminar jogo</h2>
-          <div class="footer-note" style="margin-bottom:10px">Que equipa venceu esta partida? (fica registado nos perfis ligados de todos os jogadores dessa equipa)</div>
+          <h2>${tr("Terminar jogo")}</h2>
+          <div class="footer-note" style="margin-bottom:10px">${tr("Que equipa venceu esta partida? (fica registado nos perfis ligados de todos os jogadores dessa equipa)")}</div>
           <div class="col" id="winner-list">
             ${teams.map((t) => `
               <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
                 <input type="radio" name="winner" value="${t.id}" style="width:auto">
-                <span class="grow">${esc(t.name)}${t.eliminated ? " (eliminada)" : ""}</span>
+                <span class="grow">${esc(t.name)}${t.eliminated ? tr(" (eliminada)") : ""}</span>
               </label>
             `).join("")}
             <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
               <input type="radio" name="winner" value="" style="width:auto" checked>
-              <span class="grow">Sem vencedor / não contar</span>
+              <span class="grow">${tr("Sem vencedor / não contar")}</span>
             </label>
           </div>
           <div class="row" style="margin-top:14px">
-            <button class="btn btn-ghost grow" id="eg-cancel">Cancelar</button>
-            <button class="btn btn-primary grow" id="eg-confirm">Confirmar</button>
+            <button class="btn btn-ghost grow" id="eg-cancel">${tr("Cancelar")}</button>
+            <button class="btn btn-primary grow" id="eg-confirm">${tr("Confirmar")}</button>
           </div>
         </div>
       </div>
@@ -2173,13 +2167,13 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">${I("minimize")}</button>` : ""}
+        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>` : ""}
         <div class="topbar">
           <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
-          <h1>Equipas</h1>
+          <h1>${tr("Equipas")}</h1>
           <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">${I("rotate")}</button>
-            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
+            <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
+            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
           </div>
         </div>
         ${timed ? `<div class="br-status-row">${turnChipsHtml(currentTeam ? currentTeam.name : "-", game.teams.roundNumber, paused)}</div>` : ""}
@@ -2188,10 +2182,10 @@
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
-          ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${I(paused ? "play" : "pause")}</button>` : ""}
-          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">${I("history")}</button>
-          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">${I("reorder")}</button>
-          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} Terminar</button>
+          ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
+          <button class="btn btn-icon" id="history-btn" title="${tr("Histórico de vida")}">${I("history")}</button>
+          <button class="btn btn-icon" id="reorder-btn" title="${tr("Trocar posições")}">${I("reorder")}</button>
+          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} ${tr("Terminar")}</button>
         </div>
       </div>
     `);
@@ -2206,10 +2200,10 @@
     if (timed) startLiveClock(s, game.teams);
 
     s.querySelector("#menu-btn").addEventListener("click", () => {
-      if (confirm("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde.")) nav("menu");
+      if (confirm(tr("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde."))) nav("menu");
     });
     s.querySelector("#reset-btn").addEventListener("click", () => {
-      if (!confirm(timed ? "Reiniciar vidas de todas as equipas e os relógios de turno/jogo?" : "Reiniciar vidas de todas as equipas?")) return;
+      if (!confirm(timed ? tr("Reiniciar vidas de todas as equipas e os relógios de turno/jogo?") : tr("Reiniciar vidas de todas as equipas?"))) return;
       const now = Date.now();
       game.teams.teams.forEach((team) => {
         team.life = game.teams.startLife;
@@ -2272,10 +2266,10 @@
         <canvas class="victory-confetti"></canvas>
         <div class="victory-card">
           <div class="victory-avatar" style="${bgStyle || ""}"><span class="victory-crown">${I("crown")}</span></div>
-          <div class="victory-label">Vitória</div>
+          <div class="victory-label">${tr("Vitória")}</div>
           <div class="victory-name">${esc(name)}</div>
           ${subtitle ? `<div class="victory-sub">${esc(subtitle)}</div>` : ""}
-          <div class="victory-hint">Toca para continuar</div>
+          <div class="victory-hint">${tr("Toca para continuar")}</div>
         </div>
       </div>
     `);
@@ -2349,7 +2343,7 @@
             ${avatar(p)}
             <div class="stat-info">
               <div class="stat-name">${isWinnerId(p.id) ? I("crown", "ic-win") + " " : ""}${esc(p.name)}</div>
-              <div class="stat-meta">${isWinnerId(p.id) ? "Vencedor" : p.eliminated ? "Eliminado" : "Em jogo no fim"}</div>
+              <div class="stat-meta">${isWinnerId(p.id) ? tr("Vencedor") : p.eliminated ? tr("Eliminado") : tr("Em jogo no fim")}</div>
             </div>
           </div>`)
         .join("");
@@ -2367,15 +2361,15 @@
           <div class="stat-row ${isWinner ? "winner" : ""}">
             ${avatar(p)}
             <div class="stat-info">
-              <div class="stat-name">${isWinner ? I("crown", "ic-win") + " " : ""}${esc(p.name)}${p.eliminated ? ` <span class="stat-tag">eliminado</span>` : ""}</div>
+              <div class="stat-name">${isWinner ? I("crown", "ic-win") + " " : ""}${esc(p.name)}${p.eliminated ? ` <span class="stat-tag">${tr("eliminado")}</span>` : ""}</div>
               <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${barPct}%"></div></div>
-              <div class="stat-meta">${formatDuration(p.turnTimeMs)} em turno · ${p.turnsTaken} turno(s) · média ${formatDuration(p.avgTurnMs)}/turno · ${pct}% do jogo</div>
+              <div class="stat-meta">${tr("{turn} em turno · {n} turno(s) · média {avg}/turno · {pct}% do jogo", { turn: formatDuration(p.turnTimeMs), n: p.turnsTaken, avg: formatDuration(p.avgTurnMs), pct })}</div>
             </div>
           </div>`;
       })
       .join("");
     return `
-      <div class="stats-total">Duração total do jogo <strong>${formatDuration(stats.gameTimeMs)}</strong></div>
+      <div class="stats-total">${tr("Duração total do jogo")} <strong>${formatDuration(stats.gameTimeMs)}</strong></div>
       <div class="stats-list">${rows}</div>
     `;
   }
@@ -2386,7 +2380,7 @@
       <div class="screen">
         <div class="topbar">
           <div style="width:40px"></div>
-          <h1>Resultado</h1>
+          <h1>${tr("Resultado")}</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">${buildStatsBlock(stats)}</div>
@@ -2416,16 +2410,18 @@
     if (mode === "standard") items = game.standard.players.map((p) => ({ id: p.id, name: p.name }));
     else if (mode === "teams") items = game.teams.teams.map((t) => ({ id: t.id, name: t.name }));
     else items = game.br.players.map((p) => ({ id: p.id, name: p.name }));
-    const noun = mode === "teams" ? "equipa" : "jogador";
+    const reorderHint = mode === "teams"
+      ? tr("Usa as setas para mudar a posição de cada equipa no tabuleiro — não afeta a ordem dos turnos.")
+      : tr("Usa as setas para mudar a posição de cada jogador no tabuleiro — não afeta a ordem dos turnos.");
 
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>Trocar posições</h2>
-          <div class="footer-note" style="margin-bottom:10px">Usa as setas para mudar a posição de cada ${noun} no tabuleiro — não afeta a ordem dos turnos.</div>
+          <h2>${tr("Trocar posições")}</h2>
+          <div class="footer-note" style="margin-bottom:10px">${reorderHint}</div>
           <div class="col" id="reorder-list"></div>
           <div class="row" style="margin-top:14px">
-            <button class="btn btn-primary grow" id="reorder-done-btn">Concluído</button>
+            <button class="btn btn-primary grow" id="reorder-done-btn">${tr("Concluído")}</button>
           </div>
         </div>
       </div>
@@ -2495,12 +2491,12 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>Histórico de vida</h2>
+          <h2>${tr("Histórico de vida")}</h2>
           <div class="scroll" style="padding:0; flex:1; min-height:0;">
-            ${groups.length ? `<div id="life-history-list"></div>` : `<div class="footer-note">Ainda não há alterações de vida registadas neste jogo.</div>`}
+            ${groups.length ? `<div id="life-history-list"></div>` : `<div class="footer-note">${tr("Ainda não há alterações de vida registadas neste jogo.")}</div>`}
           </div>
           <div class="row" style="margin-top:12px;">
-            <button class="btn btn-ghost grow" id="close-lh-btn">Fechar</button>
+            <button class="btn btn-ghost grow" id="close-lh-btn">${tr("Fechar")}</button>
           </div>
         </div>
       </div>
@@ -2532,7 +2528,7 @@
         const bursts = mergeBursts(g.entries.slice().sort((a, b) => a.ts - b.ts)).filter((b) => b.delta !== 0);
         if (!timedLog) bursts.reverse(); // sem turnos: lista simples, mais recente primeiro
         if (!bursts.length) return;
-        if (timedLog) list.appendChild(el(`<div class="lh-turn"><span class="lh-turn-round">Ronda ${g.roundNumber}</span> · Turno de ${esc(g.turnName)}</div>`));
+        if (timedLog) list.appendChild(el(`<div class="lh-turn"><span class="lh-turn-round">${tr("Ronda {n}", { n: g.roundNumber })}</span> · ${tr("Turno de {name}", { name: esc(g.turnName) })}</div>`));
         bursts.forEach((entry) => {
           const sign = entry.delta > 0 ? "plus" : "minus";
           const row = el(`
@@ -2547,7 +2543,7 @@
           list.appendChild(row);
         });
       });
-      if (!list.children.length) list.appendChild(el(`<div class="footer-note">Ainda não há alterações de vida registadas neste jogo.</div>`));
+      if (!list.children.length) list.appendChild(el(`<div class="footer-note">${tr("Ainda não há alterações de vida registadas neste jogo.")}</div>`));
     }
     backdrop.querySelector("#close-lh-btn").addEventListener("click", () => backdrop.remove());
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
@@ -2559,16 +2555,16 @@
       <div class="screen">
         <div class="topbar">
           <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
-          <h1>Perfis</h1>
+          <h1>${tr("Perfis")}</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
           <div class="row" style="gap:8px; margin-bottom:12px;">
-            <button class="btn btn-ghost grow" id="export-profiles-btn">${I("download")} Exportar</button>
-            <button class="btn btn-ghost grow" id="import-profiles-btn">${I("upload")} Importar</button>
+            <button class="btn btn-ghost grow" id="export-profiles-btn">${I("download")} ${tr("Exportar")}</button>
+            <button class="btn btn-ghost grow" id="import-profiles-btn">${I("upload")} ${tr("Importar")}</button>
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
-          ${profiles.length ? "" : `<div class="footer-note">Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.</div>`}
+          ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
           <div class="col" id="profiles-list"></div>
         </div>
       </div>
@@ -2603,9 +2599,9 @@
           count = -1;
         }
         importInput.value = "";
-        if (count < 0) alert("Não foi possível ler este ficheiro. Confirma que é um ficheiro exportado por esta app.");
-        else if (count === 0) alert("Não foram encontrados perfis válidos neste ficheiro.");
-        else alert(`${count} perfil${count === 1 ? "" : "s"} importado${count === 1 ? "" : "s"} com sucesso.`);
+        if (count < 0) alert(tr("Não foi possível ler este ficheiro. Confirma que é um ficheiro exportado por esta app."));
+        else if (count === 0) alert(tr("Não foram encontrados perfis válidos neste ficheiro."));
+        else alert(count === 1 ? tr("1 perfil importado com sucesso.") : tr("{n} perfis importados com sucesso.", { n: count }));
         render();
       };
       reader.readAsText(file);
@@ -2618,24 +2614,24 @@
           <div class="commander-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
           <div class="profile-info">
             <div class="profile-name">${esc(p.name)}</div>
-            <div class="profile-sub">${p.commander ? esc(p.commander.name) : "Sem commander"}</div>
+            <div class="profile-sub">${p.commander ? esc(p.commander.name) : tr("Sem commander")}</div>
             <div class="profile-stats-grid">
-              <div>${d.games} jogo(s)</div>
-              <div>${d.wins} vitória(s)${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
-              <div>Média/turno: ${formatDuration(d.avgTurnTimeMs)}</div>
-              <div>Média/jogo: ${formatDuration(d.avgGameTimeMs)}</div>
-              <div>Total jogado: ${formatDuration(d.totalGameTimeMs)}</div>
-              <div>Turnos totais: ${d.turnsTaken}</div>
+              <div>${tr("{n} jogo(s)", { n: d.games })}</div>
+              <div>${tr("{n} vitória(s)", { n: d.wins })}${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
+              <div>${tr("Média/turno: {time}", { time: formatDuration(d.avgTurnTimeMs) })}</div>
+              <div>${tr("Média/jogo: {time}", { time: formatDuration(d.avgGameTimeMs) })}</div>
+              <div>${tr("Total jogado: {time}", { time: formatDuration(d.totalGameTimeMs) })}</div>
+              <div>${tr("Turnos totais: {n}", { n: d.turnsTaken })}</div>
             </div>
           </div>
           <div class="col gap-sm">
-            <button class="btn btn-icon" data-act="history" data-id="${p.id}" title="Ver histórico">${I("history")}</button>
-            <button class="btn btn-icon" data-act="delete" data-id="${p.id}" title="Apagar perfil">${I("trash")}</button>
+            <button class="btn btn-icon" data-act="history" data-id="${p.id}" title="${tr("Ver histórico")}">${I("history")}</button>
+            <button class="btn btn-icon" data-act="delete" data-id="${p.id}" title="${tr("Apagar perfil")}">${I("trash")}</button>
           </div>
         </div>
       `);
       card.querySelector('button[data-act="delete"]').addEventListener("click", () => {
-        if (confirm(`Apagar o perfil "${p.name}"? Esta ação não pode ser desfeita.`)) {
+        if (confirm(tr("Apagar o perfil \"{name}\"? Esta ação não pode ser desfeita.", { name: p.name }))) {
           Profiles.remove(p.id);
           render();
         }
@@ -2659,12 +2655,12 @@
       if (!profile) { backdrop.remove(); return; }
       const history = Profiles.historyOf(profileId);
       sheet.innerHTML = `
-        <h2>Histórico — ${esc(profile.name)}</h2>
+        <h2>${tr("Histórico — {name}", { name: esc(profile.name) })}</h2>
         <div class="scroll" style="padding:0; flex:1; min-height:0;">
-          ${history.length ? `<div class="col" id="history-list"></div>` : `<div class="footer-note">Ainda não há jogos registados para este perfil.</div>`}
+          ${history.length ? `<div class="col" id="history-list"></div>` : `<div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div>`}
         </div>
         <div class="row" style="margin-top:12px;">
-          <button class="btn btn-ghost grow" id="close-history-btn">Fechar</button>
+          <button class="btn btn-ghost grow" id="close-history-btn">${tr("Fechar")}</button>
         </div>
       `;
       const list = sheet.querySelector("#history-list");
@@ -2673,15 +2669,15 @@
           const row = el(`
             <div class="cd-list-item" style="align-items:flex-start;">
               <div style="flex:1; min-width:0;">
-                <div class="nm">${g.won ? "Vitória" : "Derrota"} — ${esc(modeLabel(g.mode))}</div>
+                <div class="nm">${g.won ? tr("Vitória") : tr("Derrota")} — ${esc(modeLabel(g.mode))}</div>
                 <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
-                ${g.timed === false ? `<div class="history-meta">Jogo sem contagem de tempo/turnos</div>` : `<div class="history-meta">Jogo: ${formatDuration(g.gameTimeMs)} · Nos teus turnos: ${formatDuration(g.turnTimeMs)} (${g.turnsTaken} turno${g.turnsTaken === 1 ? "" : "s"})</div>`}
+                ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>` : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
               </div>
-              <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="Apagar este jogo">${I("trash")}</button>
+              <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="${tr("Apagar este jogo")}">${I("trash")}</button>
             </div>
           `);
           row.querySelector("button[data-gid]").addEventListener("click", () => {
-            if (confirm("Apagar este jogo do histórico? As stats do perfil serão atualizadas.")) {
+            if (confirm(tr("Apagar este jogo do histórico? As stats do perfil serão atualizadas."))) {
               Profiles.removeGame(profileId, g.id);
               paint();
             }

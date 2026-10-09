@@ -38,7 +38,7 @@
     const list = load();
     const profile = {
       id: uid(),
-      name: name && name.trim() ? name.trim() : commander ? commander.name : "Novo perfil",
+      name: name && name.trim() ? name.trim() : commander ? commander.name : (global.MTG && global.MTG.i18n ? global.MTG.i18n.t("Novo perfil") : "Novo perfil"),
       playerName: playerName && playerName.trim() ? playerName.trim() : "",
       commander: commander || null,
       stats: { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 },

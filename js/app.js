@@ -3293,6 +3293,25 @@
         ${kpiHtml(tr("Média por turno"), d.turnsTaken ? formatDuration(d.avgTurnTimeMs) : "—")}
       </div>`;
 
+    // sequências: a atual (vitórias ou derrotas seguidas, a contar do jogo
+    // mais recente) e a melhor sequência de vitórias de sempre
+    let curLen = 0;
+    const curWon = history.length ? history[0].won : false;
+    for (const g of history) { if (g.won === curWon) curLen++; else break; }
+    let best = 0, run = 0;
+    chrono.forEach((g) => { run = g.won ? run + 1 : 0; best = Math.max(best, run); });
+    const streak = `
+      <div class="streak-card">
+        <span class="streak-icon ${curWon ? "win" : "loss"}">${I(curWon ? "trophy" : "repeat")}</span>
+        <span class="streak-text">
+          <span class="kpi-label">${tr("Sequência atual")}</span>
+          <span class="streak-value">${curWon
+            ? (curLen === 1 ? tr("1 vitória") : tr("{n} vitórias seguidas", { n: curLen }))
+            : (curLen === 1 ? tr("1 derrota") : tr("{n} derrotas seguidas", { n: curLen }))}</span>
+        </span>
+        <span class="streak-best"><span class="kpi-label">${tr("Melhor")}</span><strong>${best}</strong></span>
+      </div>`;
+
     // forma recente: últimos 10 resultados (mais antigo → mais recente)
     const recent = chrono.slice(-10);
     const form = `
@@ -3357,7 +3376,7 @@
         </div>`;
     }
 
-    body.innerHTML = head + kpis + form + evo + modes + durations + `
+    body.innerHTML = head + kpis + streak + form + evo + modes + durations + `
       <div class="section-title">${tr("Histórico de jogos")}</div>
       <div class="col" id="history-list"></div>`;
 

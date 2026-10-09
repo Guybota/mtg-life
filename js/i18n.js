@@ -266,6 +266,29 @@
     "Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))": "Game: {game} · On your turns: {turns} ({n} turn(s))",
     "Apagar este jogo": "Delete this game",
     "Apagar este jogo do histórico? As stats do perfil serão atualizadas.": "Delete this game from the history? The profile stats will be updated.",
+
+    // estatísticas e gráficos dos perfis
+    "{w} de {g} vitórias": "{w} of {g} wins",
+    "Jogos registados": "Games recorded",
+    "Melhor taxa de vitórias": "Best win rate",
+    "Taxa de vitórias por perfil": "Win rate by profile",
+    "Jogos": "Games",
+    "Vitórias": "Wins",
+    "Derrotas": "Losses",
+    "Média por jogo": "Avg per game",
+    "Média por turno": "Avg per turn",
+    "Forma recente": "Recent form",
+    "Últimos {n} jogos, do mais antigo para o mais recente": "Last {n} games, oldest to newest",
+    "V": "W",
+    "D": "L",
+    "Jogo {n}": "Game {n}",
+    "Evolução da taxa de vitórias": "Win rate over time",
+    "Percentagem de vitórias acumulada, jogo a jogo": "Cumulative win percentage, game by game",
+    "Resultados por modo": "Results by mode",
+    "Duração dos jogos": "Game length",
+    "Últimos {n} jogos com tempo contado, em minutos": "Last {n} timed games, in minutes",
+    "Histórico de jogos": "Game history",
+    "Ainda sem jogos": "No games yet",
   };
 
   const missing = new Set();

@@ -57,6 +57,37 @@
    *  turno/ronda era e de quem era a vez nesse momento. turnEntity/
    *  targetEntity podem ser um jogador OU uma equipa (só precisam de
    *  id/name). */
+  /** Regista de quem é cada turno (para o gráfico de vida no fim). */
+  function logTurn(modeState, entity) {
+    if (!modeState.turnLog) modeState.turnLog = [];
+    modeState.turnLog.push({ seq: modeState.turnSeq || 1, round: modeState.roundNumber || 1, id: entity ? entity.id : null, name: entity ? entity.name : "" });
+    if (modeState.turnLog.length > 1000) modeState.turnLog.splice(0, modeState.turnLog.length - 1000);
+  }
+
+  /** Vida de cada jogador/equipa no fim de cada turno, para o gráfico do
+   *  ecrã de resultado. values[0] = início do jogo, values[i] = fim do
+   *  turno i. Parte da vida final e anda para trás pelo histórico de
+   *  alterações, por isso acaba sempre na vida real de cada um. */
+  function lifeTimeline(modeState, entities) {
+    const n = Math.max(1, modeState.turnSeq || 1);
+    const log = modeState.lifeLog || [];
+    const info = {};
+    (modeState.turnLog || []).forEach((t) => { info[t.seq] = t; });
+    log.forEach((e) => { if (!info[e.turnSeq]) info[e.turnSeq] = { seq: e.turnSeq, round: e.roundNumber, name: e.turnName }; });
+    const turns = [];
+    for (let i = 1; i <= n; i++) turns.push(info[i] ? { round: info[i].round || null, name: info[i].name || "" } : { round: null, name: "" });
+    const series = entities.map((en) => {
+      const byTurn = {};
+      log.forEach((e) => { if (e.targetId === en.id) byTurn[e.turnSeq] = (byTurn[e.turnSeq] || 0) + e.delta; });
+      const values = new Array(n + 1);
+      let life = en.life;
+      values[n] = life;
+      for (let i = n; i >= 1; i--) { life -= byTurn[i] || 0; values[i - 1] = life; }
+      return { id: en.id, name: en.name, values };
+    });
+    return { turns, series };
+  }
+
   function logLifeChange(modeState, turnEntity, targetEntity, delta) {
     if (!delta) return;
     if (!modeState.lifeLog) modeState.lifeLog = [];
@@ -310,6 +341,7 @@
     if (std.currentTurnIndex === (std.roundStartIndex || 0)) {
       std.roundNumber = (std.roundNumber || 1) + 1;
     }
+    logTurn(std, stdCurrentPlayer(state));
     save(state);
     return state;
   }
@@ -326,10 +358,12 @@
     std.roundNumber = 1;
     std.turnSeq = 1;
     std.lifeLog = [];
+    std.turnLog = [];
     std.turnStartedAt = now;
     std.gameStartedAt = now;
     std.paused = false;
     std.pausedAt = null;
+    logTurn(std, stdCurrentPlayer(state));
     save(state);
     return state;
   }
@@ -362,6 +396,7 @@
       gameTimeMs,
       timed: std.trackTurns !== false,
       winnerId: std.winnerId,
+      lifeTimeline: std.trackTurns !== false ? lifeTimeline(std, std.players) : null,
       players: std.players.map((p) => ({
         id: p.id,
         name: p.name,
@@ -472,6 +507,7 @@
     state.standard.roundNumber = 1;
     state.standard.turnSeq = 1;
     state.standard.lifeLog = [];
+    state.standard.turnLog = [];
     state.standard.gameStartedAt = now;
     state.standard.turnStartedAt = now;
     state.standard.paused = false;
@@ -639,6 +675,7 @@
     br.currentTurnIndex = idx;
     br.globalTurnCount = 0;
     br.lifeLog = [];
+    br.turnLog = [];
     br.turnStartedAt = now;
     br.gameStartedAt = now;
     br.paused = false;
@@ -1054,6 +1091,7 @@
     if (t.currentTurnIndex === (t.roundStartIndex || 0)) {
       t.roundNumber = (t.roundNumber || 1) + 1;
     }
+    logTurn(t, teamsCurrentTeam(state));
     save(state);
     return state;
   }
@@ -1069,10 +1107,12 @@
     t.roundNumber = 1;
     t.turnSeq = 1;
     t.lifeLog = [];
+    t.turnLog = [];
     t.turnStartedAt = now;
     t.gameStartedAt = now;
     t.paused = false;
     t.pausedAt = null;
+    logTurn(t, teamsCurrentTeam(state));
     save(state);
     return state;
   }
@@ -1110,7 +1150,7 @@
       avgTurnMs: team.turnsTaken ? team.turnTimeMs / team.turnsTaken : 0,
       eliminated: team.eliminated,
     }));
-    return { gameTimeMs, timed: t.trackTurns !== false, winnerId: t.winnerTeamId, players: rows };
+    return { gameTimeMs, timed: t.trackTurns !== false, winnerId: t.winnerTeamId, players: rows, lifeTimeline: t.trackTurns !== false ? lifeTimeline(t, t.teams) : null };
   }
 
   /** Termina o jogo: fecha o relógio do turno atual, guarda stats nos perfis

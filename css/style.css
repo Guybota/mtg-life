@@ -1383,6 +1383,23 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Folha "Começar já" ---------- */
+.quick-sheet{ gap:16px; }
+.quick-sheet .field{ display:flex; flex-direction:column; gap:8px; }
+.quick-head{ display:flex; align-items:center; gap:12px; }
+.quick-head h2{ margin:0 0 2px; font-size:1.2rem; }
+.quick-icon{ width:44px; height:44px; border-radius:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.quick-icon .ic{ width:22px; height:22px; }
+.quick-icon.commander{ background: var(--rose); color: var(--rose-ink); }
+.quick-icon.duel{ background: var(--butter); color: var(--butter-ink); }
+.quick-icon.free{ background: var(--mint); color: var(--mint-ink); }
+.quick-stepper{ display:flex; align-items:center; justify-content:space-between; background: var(--surface-2); border-radius:18px; padding:8px; }
+.quick-stepper .btn-icon{ width:56px; height:56px; border-radius:14px; background: var(--surface); }
+.quick-count{ font-size:2.8rem; font-weight:800; letter-spacing:-2px; font-feature-settings: normal; }
+.quick-note{ display:flex; gap:10px; align-items:flex-start; background: var(--lavender); color: var(--lavender-ink); border-radius:14px; padding:10px 12px; font-size:.82rem; line-height:1.4; }
+.quick-note .ic{ width:16px; height:16px; margin-top:1px; }
+.quick-go{ height:54px; font-size:1.05rem; }
+
 /* ---------- Vista "Mesa" no setup ---------- */
 .mesa-card{ margin-bottom:12px; }
 .mesa{

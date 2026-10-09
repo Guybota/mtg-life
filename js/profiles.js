@@ -65,7 +65,7 @@
 
   /** Regista o resultado de um jogo terminado nas stats agregadas do perfil
    *  e acrescenta uma entrada ao histórico de jogos desse perfil. */
-  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode }) {
+  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode, timed }) {
     const list = load();
     const p = list.find((x) => x.id === id);
     if (!p) return null;
@@ -83,6 +83,7 @@
       gameTimeMs: gameTimeMs || 0,
       turnTimeMs: turnTimeMs || 0,
       turnsTaken: turnsTaken || 0,
+      timed: timed !== false, // false = jogo sem contagem de tempo/turnos
     });
     persist(list);
     return p;

@@ -1383,6 +1383,38 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Botões rápidos (chips) e "Mais opções" no setup ---------- */
+.chip-row{ display:grid; gap:6px; }
+.chip-btn{
+  height:42px; border-radius:12px;
+  border:1px solid var(--line); background: var(--surface);
+  font: 600 .95rem var(--font); color: var(--text);
+  transition: background .15s ease, color .15s ease, border-color .15s ease, transform .15s var(--ease-spring);
+}
+.chip-btn:active{ transform: scale(.94); }
+.chip-btn[aria-pressed="true"]{ background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight:700; }
+.chip-btn.chip-other{ border-style:dashed; color: var(--text-dim); font-size:.85rem; }
+.chip-btn.chip-other[aria-pressed="true"]{ border-style:solid; color: var(--on-primary); }
+.setup-controls{ flex-direction:column; }
+.setup-controls .field{ min-width:0; }
+.more-options{
+  background: var(--surface); border:1px solid var(--line); border-radius: var(--radius);
+  margin-bottom:12px; overflow:hidden;
+}
+.more-options summary{
+  list-style:none; cursor:pointer;
+  display:flex; align-items:center; gap:12px;
+  padding: 12px 14px;
+}
+.more-options summary::-webkit-details-marker{ display:none; }
+.more-text{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.more-title{ font-size:.92rem; font-weight:600; }
+.more-sub{ font-size:.76rem; color: var(--text-dim); }
+.more-chevron{ color: var(--text-dim); transition: transform .25s var(--ease-out); }
+.more-options[open] .more-chevron{ transform: rotate(180deg); }
+.more-body{ padding: 0 10px 10px; display:flex; flex-direction:column; gap:8px; animation: cardIn .25s var(--ease-out) both; }
+.more-body .switch-field{ margin:0; border:none; background: var(--surface-2); }
+
 /* ===========================================================
    FEEDBACK AO TOCAR (onda + pop) — ver app.js
    =========================================================== */
@@ -1440,3 +1472,4 @@ input.switch:checked::after{ transform: translateX(18px); }
     transition-duration: .01ms !important;
   }
 }
+.more-options summary:focus:not(:focus-visible){ outline:none; }

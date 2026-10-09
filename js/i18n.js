@@ -294,6 +294,8 @@
     "Último jogo": "Last game",
     "Lugares": "Seats",
     "Decks": "Decks",
+    "Nova versão disponível": "New version available",
+    "Atualizar": "Update",
     "Jogadores": "Players",
     "Taxa de vitórias por jogador": "Win rate by player",
     "Ainda não há jogadores. Indica o jogador de cada perfil (em Editar perfil) para veres aqui as estatísticas de cada pessoa com todos os seus decks.": "No players yet. Set the player of each profile (in Edit profile) to see each person's stats across all their decks here.",

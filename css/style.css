@@ -1693,6 +1693,23 @@ input.switch:checked::after{ transform: translateX(18px); }
 }
 
 /* ---------- Toast ---------- */
+/* ---------- Aviso de versão nova ---------- */
+.update-banner{
+  position:fixed; left:16px; right:16px; top: calc(12px + var(--safe-top)); z-index:1001;
+  max-width:520px; margin:0 auto;
+  background: var(--text); color: var(--on-primary);
+  border-radius:16px; padding:8px 8px 8px 16px;
+  display:flex; align-items:center; gap:12px;
+  box-shadow: var(--shadow-lg);
+  animation: bannerIn .35s var(--ease-spring) both;
+}
+@keyframes bannerIn{ from{ opacity:0; transform: translateY(-16px); } to{ opacity:1; transform:none; } }
+.update-msg{ flex:1; font-size:.88rem; }
+.update-btn{
+  height:40px; padding:0 14px; border-radius:10px; border:none;
+  background: var(--mint); color: var(--mint-ink); font: 700 .9rem var(--font);
+}
+
 #toast{
   position:fixed; left:50%; bottom: calc(88px + var(--safe-bottom)); /* acima das barras de botões */
   transform: translateX(-50%) translateY(10px);

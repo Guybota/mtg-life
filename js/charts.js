@@ -74,7 +74,7 @@
   function hbars(rows) {
     return `<div class="chart-hbars">${rows.map((r) => `
       <div class="hbar-row">
-        <div class="hbar-head"><span class="hbar-label">${esc(r.label)}</span><span class="hbar-value">${esc(r.valueLabel)}</span></div>
+        <div class="hbar-head"><span class="hbar-label">${r.labelHtml || esc(r.label)}</span><span class="hbar-value">${esc(r.valueLabel)}</span></div>
         <div class="hbar-track"><div class="hbar-fill${r.muted ? " muted" : ""}" style="width:${Math.max(r.value > 0 ? 2 : 0, Math.round(r.value * 100))}%" data-tip="${esc(r.tip || r.valueLabel)}" data-tip-label="${esc(r.tipLabel || r.label)}"></div></div>
       </div>`).join("")}</div>`;
   }
@@ -91,7 +91,7 @@
       </div>
       <div class="chart-hbars">${rows.map((r) => `
         <div class="hbar-row">
-          <div class="hbar-head"><span class="hbar-label">${esc(r.label)}</span><span class="hbar-value">${esc(r.valueLabel || `${r.a} / ${r.a + r.b}`)}</span></div>
+          <div class="hbar-head"><span class="hbar-label">${r.labelHtml || esc(r.label)}</span><span class="hbar-value">${esc(r.valueLabel || `${r.a} / ${r.a + r.b}`)}</span></div>
           <div class="hbar-track stack" style="width:${Math.round(((r.a + r.b) / max) * 100)}%">
             ${r.a ? `<div class="hbar-fill" style="flex:${r.a}" data-tip="${r.a}" data-tip-label="${esc(r.label)} · ${esc(legend[0])}"></div>` : ""}
             ${r.b ? `<div class="hbar-fill muted" style="flex:${r.b}" data-tip="${r.b}" data-tip-label="${esc(r.label)} · ${esc(legend[1])}"></div>` : ""}

@@ -3070,7 +3070,7 @@
         <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
           <div class="commander-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
           <div class="profile-info">
-            <div class="profile-name">${esc(p.name)}</div>
+            <div class="profile-name">${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}</div>
             <div class="profile-sub">${p.commander ? esc(p.commander.name) : tr("Sem commander")}</div>
             <div class="profile-summary">${d.games ? tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins }) + ` (${Math.round(d.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
             ${d.games ? `<div class="meter" data-tip="${Math.round(d.winRate * 100)}%" data-tip-label="${esc(tr("{w} de {g} vitórias", { w: d.wins, g: d.games }))}"><div class="meter-fill" style="width:${Math.round(d.winRate * 100)}%"></div></div>` : ""}
@@ -3155,6 +3155,52 @@
       </div>
       <div class="chart-card">
         <div class="chart-title">${tr("Taxa de vitórias por perfil")}</div>
+        ${Charts.hbars(rows)}
+      </div>
+      ${winRateByColorHtml(profiles)}`;
+  }
+
+  /** Identidade de cor do commander em "pips" (letra + cor, nunca só cor). */
+  const MANA = ["W", "U", "B", "R", "G"];
+  const MANA_NAMES = { W: "Branco", U: "Azul", B: "Preto", R: "Vermelho", G: "Verde", C: "Incolor" };
+  function colorIdentityOf(profile) {
+    const c = profile && profile.commander;
+    if (!c || !Array.isArray(c.colorIdentity)) return null;
+    return c.colorIdentity.length ? MANA.filter((m) => c.colorIdentity.includes(m)) : ["C"];
+  }
+  function pipsHtml(ids) {
+    if (!ids || !ids.length) return "";
+    return `<span class="pips" aria-label="${esc(ids.map((m) => tr(MANA_NAMES[m])).join(", "))}">${ids.map((m) => `<span class="pip pip-${m}" title="${tr(MANA_NAMES[m])}">${m}</span>`).join("")}</span>`;
+  }
+  /** Taxa de vitórias por cor: soma os jogos dos perfis cujo commander
+   *  tem essa cor na identidade (um deck de 2 cores conta para as duas). */
+  function winRateByColorHtml(profiles) {
+    const agg = {};
+    profiles.forEach((p) => {
+      const ids = colorIdentityOf(p);
+      const d = Profiles.derived(p);
+      if (!ids || !d.games) return;
+      ids.forEach((m) => {
+        if (!agg[m]) agg[m] = { games: 0, wins: 0, decks: 0 };
+        agg[m].games += d.games; agg[m].wins += d.wins; agg[m].decks++;
+      });
+    });
+    const rows = MANA.concat("C").filter((m) => agg[m]).map((m) => {
+      const a = agg[m], rate = a.wins / a.games;
+      return {
+        label: tr(MANA_NAMES[m]),
+        labelHtml: `${pipsHtml([m])} ${esc(tr(MANA_NAMES[m]))}`,
+        value: rate,
+        valueLabel: `${Math.round(rate * 100)}% · ${tr("{n} jogo(s)", { n: a.games })}`,
+        tip: `${Math.round(rate * 100)}%`,
+        tipLabel: `${tr(MANA_NAMES[m])} · ${tr("{w} de {g} vitórias", { w: a.wins, g: a.games })} · ${tr("{n} deck(s)", { n: a.decks })}`,
+      };
+    }).sort((x, y) => y.value - x.value);
+    if (!rows.length) return "";
+    return `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Taxa de vitórias por cor")}</div>
+        <div class="chart-sub">${tr("Pela identidade de cor do commander; um deck com várias cores conta para cada uma")}</div>
         ${Charts.hbars(rows)}
       </div>`;
   }
@@ -3268,7 +3314,7 @@
       <div class="pd-head">
         <div class="commander-thumb" style="${seatThumbStyle(profile)}">${profile.commander && profile.commander.art ? "" : I("card")}</div>
         <div class="pd-head-info">
-          <div class="profile-sub">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")}</div>
+          <div class="profile-sub">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")} ${pipsHtml(colorIdentityOf(profile))}</div>
           ${profile.playerName ? `<div class="profile-sub">${I("user")} ${esc(profile.playerName)}</div>` : ""}
         </div>
       </div>`;

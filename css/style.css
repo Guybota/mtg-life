@@ -1383,6 +1383,10 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Editar perfil ---------- */
+.ep-commander{ display:flex; align-items:center; gap:14px; }
+.ep-commander .commander-thumb{ width:68px; height:68px; cursor:default; }
+
 /* ---------- Contador de veneno no painel ---------- */
 .header-badges{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
 .poison-badge{

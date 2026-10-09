@@ -967,6 +967,7 @@
         seat.profileId = pr.id;
         if (pr.commander) seat.commander = pr.commander;
         if (pr.playerName) seat.name = pr.playerName;
+        if (typeof pr.colorIdx === "number") seat.colorIdx = pr.colorIdx;
         rerender();
         return;
       }
@@ -3097,6 +3098,85 @@
     return `<div class="kpi"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${esc(value)}</div>${sub ? `<div class="kpi-sub">${esc(sub)}</div>` : ""}</div>`;
   }
 
+  /** Editar um perfil: nome, jogador, commander (e arte) e cor quando não
+   *  há arte. As estatísticas e o histórico ficam iguais. */
+  function openEditProfileModal(profileId) {
+    const profile = Profiles.get(profileId);
+    if (!profile) return;
+    let pendingCommander = profile.commander || null;
+    let pendingColor = typeof profile.colorIdx === "number" ? profile.colorIdx : null;
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet">
+          <h2>${tr("Editar perfil")}</h2>
+          <div class="ep-commander">
+            <div class="commander-thumb" id="epf-thumb"></div>
+            <div class="col gap-sm" style="flex:1;min-width:0">
+              <div class="profile-name" id="epf-cmd-name"></div>
+              <div class="row" style="gap:6px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" id="epf-change">${tr("Trocar commander")}</button>
+                <button class="btn btn-ghost btn-sm" id="epf-art">${tr("Outra arte")}</button>
+              </div>
+            </div>
+          </div>
+          <div class="col" style="margin-top:12px">
+            <label for="epf-name">${tr("Nome do perfil")}</label>
+            <input type="text" id="epf-name" value="${esc(profile.name)}">
+            <label for="epf-player">${tr("Jogador")}</label>
+            <input type="text" id="epf-player" value="${esc(profile.playerName || "")}" placeholder="${tr("Nome de quem joga com este deck")}">
+            <div id="epf-colors-wrap">
+              <label>${tr("Cor quando não há arte")}</label>
+              <div class="seat-colors" id="epf-colors" style="margin-top:8px">${State.FALLBACK_PALETTE.map((c, k) => `
+                <button type="button" class="color-dot" data-color="${k}" aria-label="${tr("Cor {n}", { n: k + 1 })}" style="background:${c[0]}"></button>`).join("")}</div>
+            </div>
+          </div>
+          <div class="row" style="margin-top:16px">
+            <button class="btn btn-ghost grow" id="epf-cancel">${tr("Cancelar")}</button>
+            <button class="btn btn-primary grow" id="epf-save">${tr("Guardar")}</button>
+          </div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    function paint() {
+      const fake = { commander: pendingCommander, colorIdx: pendingColor };
+      const thumb = backdrop.querySelector("#epf-thumb");
+      thumb.style.cssText = seatThumbStyle(fake);
+      thumb.innerHTML = pendingCommander && pendingCommander.art ? "" : I("card");
+      backdrop.querySelector("#epf-cmd-name").textContent = pendingCommander ? pendingCommander.name : tr("Sem commander");
+      backdrop.querySelector("#epf-art").classList.toggle("hidden", !(pendingCommander && pendingCommander.printsUri));
+      backdrop.querySelector("#epf-colors-wrap").classList.toggle("hidden", !!(pendingCommander && pendingCommander.art));
+      backdrop.querySelectorAll("#epf-colors .color-dot").forEach((b) => b.setAttribute("aria-pressed", String(parseInt(b.dataset.color, 10) === pendingColor)));
+    }
+    paint();
+    backdrop.querySelector("#epf-change").addEventListener("click", () => {
+      openCommanderPicker((c) => { pendingCommander = c; paint(); });
+    });
+    backdrop.querySelector("#epf-art").addEventListener("click", () => {
+      openVersionPicker(pendingCommander, (c) => { pendingCommander = c; paint(); });
+    });
+    backdrop.querySelector("#epf-colors").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-color]");
+      if (!b) return;
+      pendingColor = parseInt(b.dataset.color, 10);
+      paint();
+    });
+    backdrop.querySelector("#epf-cancel").addEventListener("click", () => backdrop.remove());
+    backdrop.querySelector("#epf-save").addEventListener("click", () => {
+      Profiles.update(profileId, {
+        name: backdrop.querySelector("#epf-name").value.trim() || profile.name,
+        playerName: backdrop.querySelector("#epf-player").value.trim(),
+        commander: pendingCommander,
+        colorIdx: pendingColor,
+      });
+      backdrop.remove();
+      render();
+      toast(tr("Perfil guardado"));
+    });
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
+  }
+
   // ===========================================================
   // DETALHE DE UM PERFIL — estatísticas, gráficos e histórico
   // ===========================================================
@@ -3111,7 +3191,7 @@
         <div class="topbar">
           <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
           <h1>${esc(profile.name)}</h1>
-          <div style="width:40px"></div>
+          <button class="btn btn-icon" id="edit-profile-btn" title="${tr("Editar perfil")}" aria-label="${tr("Editar perfil")}">${I("pencil")}</button>
         </div>
         <div class="scroll" id="pd-scroll"></div>
       </div>
@@ -3121,13 +3201,14 @@
 
     const head = `
       <div class="pd-head">
-        <div class="commander-thumb" style="${commanderThumbStyle(profile.commander)}">${profile.commander ? "" : I("card")}</div>
+        <div class="commander-thumb" style="${seatThumbStyle(profile)}">${profile.commander && profile.commander.art ? "" : I("card")}</div>
         <div class="pd-head-info">
           <div class="profile-sub">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")}</div>
           ${profile.playerName ? `<div class="profile-sub">${I("user")} ${esc(profile.playerName)}</div>` : ""}
         </div>
       </div>`;
 
+    s.querySelector("#edit-profile-btn").addEventListener("click", () => openEditProfileModal(profile.id));
     if (!d.games) {
       body.innerHTML = head + `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div></div>`;
       s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));

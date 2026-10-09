@@ -438,6 +438,7 @@
     else if (screen === "stats-standard") renderStatsStandard();
     else if (screen === "profiles") renderProfilesScreen();
     else if (screen === "profile-detail") renderProfileDetail();
+    else if (screen === "player-detail") renderPlayerDetail();
     // Re-renders do mesmo ecrã (ex: passar turno) não repetem a animação
     // de entrada — senão o tabuleiro inteiro "pisca" a cada turno.
     if (sameScreen && appEl.firstElementChild) appEl.firstElementChild.classList.add("no-enter");
@@ -2993,6 +2994,7 @@
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
+  let profileTab = "decks";     // separador do ecrã de perfis: "decks" | "players"
   let profileSort = "recent";   // ordenação escolhida no ecrã de perfis
   let profileSearch = "";        // texto da pesquisa (mantém-se ao voltar)
   function renderProfilesScreen() {
@@ -3011,6 +3013,13 @@
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
+          ${profiles.length ? `
+          <div class="seg" role="tablist">
+            <button type="button" class="seg-btn" role="tab" data-tab="decks" aria-selected="${profileTab === "decks"}">${tr("Decks")}</button>
+            <button type="button" class="seg-btn" role="tab" data-tab="players" aria-selected="${profileTab === "players"}">${tr("Jogadores")}</button>
+          </div>` : ""}
+          <div id="players-view" class="${profileTab === "players" ? "" : "hidden"}"></div>
+          <div id="decks-view" class="${profileTab === "decks" ? "" : "hidden"}">
           ${profilesOverviewHtml(profiles)}
           ${profiles.length ? `
           <div class="section-title">${tr("Perfis")}</div>
@@ -3023,6 +3032,7 @@
           </div>
           <div class="footer-note hidden" id="profiles-empty">${tr("Nenhum perfil corresponde à pesquisa.")}</div>` : ""}
           <div class="col" id="profiles-list"></div>
+          </div>
         </div>
       </div>
     `);
@@ -3127,6 +3137,42 @@
       paintList();
     }));
     paintList();
+
+    // separador "Jogadores": os decks agrupados por jogador
+    const playersView = s.querySelector("#players-view");
+    const players = playersFromProfiles(profiles).sort((a, b) => b.games - a.games || a.name.localeCompare(b.name));
+    const noPlayer = profiles.filter((p) => !(p.playerName || "").trim()).length;
+    playersView.innerHTML = (players.length ? `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Taxa de vitórias por jogador")}</div>
+        ${Charts.hbars(players.filter((pl) => pl.games).map((pl) => ({
+          label: pl.name, value: pl.winRate,
+          valueLabel: `${Math.round(pl.winRate * 100)}% · ${tr("{n} jogo(s)", { n: pl.games })}`,
+          tip: `${Math.round(pl.winRate * 100)}%`, tipLabel: `${pl.name} · ${tr("{w} de {g} vitórias", { w: pl.wins, g: pl.games })}`,
+        })).sort((a, b) => b.value - a.value))}
+      </div>
+      <div class="col">${players.map((pl, i) => `
+        <div class="profile-card player-card" data-player="${esc(pl.key)}" role="button" tabindex="0">
+          ${initialsAvatar(pl.name, i)}
+          <div class="profile-info">
+            <div class="profile-name">${esc(pl.name)}</div>
+            <div class="profile-sub">${tr("{n} deck(s)", { n: pl.profiles.length })} · ${pl.games ? tr("{g} jogos · {w} vitórias", { g: pl.games, w: pl.wins }) + ` (${Math.round(pl.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
+            ${pl.games ? `<div class="meter"><div class="meter-fill" style="width:${Math.round(pl.winRate * 100)}%"></div></div>` : ""}
+          </div>
+          <span class="profile-chevron">${I("chevron-right")}</span>
+        </div>`).join("")}</div>` : `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogadores. Indica o jogador de cada perfil (em Editar perfil) para veres aqui as estatísticas de cada pessoa com todos os seus decks.")}</div></div>`) +
+      (players.length && noPlayer ? `<div class="footer-note" style="margin-top:10px">${tr("{n} perfil(is) sem jogador indicado não aparecem aqui.", { n: noPlayer })}</div>` : "");
+    playersView.querySelectorAll(".player-card").forEach((c) => {
+      const open = () => nav("player-detail", { key: c.dataset.player });
+      c.addEventListener("click", open);
+      c.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
+    s.querySelectorAll(".seg-btn").forEach((b) => b.addEventListener("click", () => {
+      profileTab = b.dataset.tab;
+      s.querySelectorAll(".seg-btn").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+      s.querySelector("#players-view").classList.toggle("hidden", profileTab !== "players");
+      s.querySelector("#decks-view").classList.toggle("hidden", profileTab !== "decks");
+    }));
     Charts.bindTips(s);
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
   }
@@ -3203,6 +3249,60 @@
         <div class="chart-sub">${tr("Pela identidade de cor do commander; um deck com várias cores conta para cada uma")}</div>
         ${Charts.hbars(rows)}
       </div>`;
+  }
+
+  /** Cartão "Confrontos diretos" a partir de uma lista de jogos (de um ou
+   *  vários perfis). Cada adversário é identificado pelo jogador do perfil
+   *  dele (se tiver) ou pelo nome do lugar. `exclude` = nomes a ignorar
+   *  (ex: o próprio jogador, quando junta vários decks seus). */
+  function headToHeadHtml(games, sub, selfLabel, exclude) {
+    const skip = new Set((exclude || []).map((x) => x.trim().toLowerCase()));
+    const h2h = new Map();
+    games.forEach((g) => {
+      (g.opponents || []).forEach((o) => {
+        const op = o.profileId ? Profiles.get(o.profileId) : null;
+        const label = (op && (op.playerName || op.name)) || o.name;
+        if (!label) return;
+        const key = label.trim().toLowerCase();
+        if (skip.has(key)) return;
+        if (!h2h.has(key)) h2h.set(key, { label, games: 0, a: 0, b: 0 });
+        const r = h2h.get(key);
+        r.games++;
+        if (g.won) r.a++;
+        else if (o.won) r.b++;
+      });
+    });
+    const rows = Array.from(h2h.values()).sort((x, y) => y.games - x.games).slice(0, 8);
+    if (!rows.length) return "";
+    return `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Confrontos diretos")}</div>
+        <div class="chart-sub">${sub}</div>
+        ${Charts.stackedBars(rows.map((r) => ({ label: tr("vs {name}", { name: r.label }), a: r.a, b: r.b, valueLabel: `${r.a} – ${r.b}` })), [selfLabel, tr("Adversário ganhou")])}
+      </div>`;
+  }
+
+  /** Agrupa os perfis (decks) pelo jogador (campo "Jogador" do perfil). */
+  function playersFromProfiles(profiles) {
+    const map = new Map();
+    profiles.forEach((p) => {
+      const name = (p.playerName || "").trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (!map.has(key)) map.set(key, { key, name, profiles: [] });
+      map.get(key).profiles.push(p);
+    });
+    return Array.from(map.values()).map((pl) => {
+      const games = pl.profiles.reduce((a, p) => a + p.stats.games, 0);
+      const wins = pl.profiles.reduce((a, p) => a + p.stats.wins, 0);
+      const history = pl.profiles.reduce((acc, p) => acc.concat((p.history || []).map((g) => Object.assign({ deck: p.name, deckId: p.id }, g))), []).sort((a, b) => a.date - b.date);
+      return Object.assign(pl, { games, wins, winRate: games ? wins / games : 0, history });
+    });
+  }
+
+  function initialsAvatar(name, i) {
+    const pal = State.FALLBACK_PALETTE;
+    return `<span class="player-avatar" style="background:${pal[i % pal.length][0]}">${esc(name.trim().slice(0, 2).toUpperCase())}</span>`;
   }
 
   function kpiHtml(label, value, sub) {
@@ -3322,7 +3422,7 @@
     s.querySelector("#edit-profile-btn").addEventListener("click", () => openEditProfileModal(profile.id));
     if (!d.games) {
       body.innerHTML = head + `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div></div>`;
-      s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));
+      s.querySelector("#back-btn").addEventListener("click", () => (screenParams.fromPlayer ? nav("player-detail", { key: screenParams.fromPlayer }) : nav("profiles")));
       return;
     }
 
@@ -3404,27 +3504,7 @@
     // confrontos diretos: só jogos registados com a lista de adversários.
     // Cada adversário identifica-se pelo jogador do perfil dele (se tiver),
     // senão pelo nome do lugar; "a – b" = vitórias deste perfil vs vitórias dele.
-    const h2h = new Map();
-    chrono.forEach((g) => {
-      (g.opponents || []).forEach((o) => {
-        const op = o.profileId ? Profiles.get(o.profileId) : null;
-        const label = (op && (op.playerName || op.name)) || o.name;
-        if (!label) return;
-        const key = label.trim().toLowerCase();
-        if (!h2h.has(key)) h2h.set(key, { label, games: 0, a: 0, b: 0 });
-        const r = h2h.get(key);
-        r.games++;
-        if (g.won) r.a++;
-        else if (o.won) r.b++;
-      });
-    });
-    const h2hRows = Array.from(h2h.values()).sort((x, y) => y.games - x.games).slice(0, 8);
-    const h2hHtml = h2hRows.length ? `
-      <div class="chart-card">
-        <div class="chart-title">${tr("Confrontos diretos")}</div>
-        <div class="chart-sub">${tr("Jogos em que estiveram os dois à mesa: vitórias deste perfil – vitórias do adversário")}</div>
-        ${Charts.stackedBars(h2hRows.map((r) => ({ label: tr("vs {name}", { name: r.label }), a: r.a, b: r.b, valueLabel: `${r.a} – ${r.b}` })), [tr("Este perfil ganhou"), tr("Adversário ganhou")])}
-      </div>` : "";
+    const h2hHtml = headToHeadHtml(chrono, tr("Jogos em que estiveram os dois à mesa: vitórias deste perfil – vitórias do adversário"), tr("Este perfil ganhou"));
 
     // duração dos últimos jogos com tempo contado
     const timedGames = chrono.filter((g) => g.timed !== false && g.gameTimeMs > 0).slice(-12);
@@ -3476,6 +3556,74 @@
 
     Charts.bindTips(body);
     if (evoPoints) Charts.bindLine(body, evoPoints);
+    s.querySelector("#back-btn").addEventListener("click", () => (screenParams.fromPlayer ? nav("player-detail", { key: screenParams.fromPlayer }) : nav("profiles")));
+  }
+
+  // ===========================================================
+  // DETALHE DE UM JOGADOR — todos os seus decks juntos
+  // ===========================================================
+  function renderPlayerDetail() {
+    const pl = playersFromProfiles(Profiles.all()).find((x) => x.key === screenParams.key);
+    if (!pl) { nav("profiles"); return; }
+    const s = el(`
+      <div class="screen">
+        <div class="topbar">
+          <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
+          <h1>${esc(pl.name)}</h1>
+          <div style="width:40px"></div>
+        </div>
+        <div class="scroll" id="pl-scroll"></div>
+      </div>
+    `);
+    appEl.appendChild(s);
+    const body = s.querySelector("#pl-scroll");
+    const pct = Math.round(pl.winRate * 100);
+    const recent = pl.history.slice(-10);
+    const decks = pl.profiles.map((p) => ({ p, d: Profiles.derived(p) })).sort((a, b) => (b.d.winRate - a.d.winRate) || (b.d.games - a.d.games));
+    body.innerHTML = `
+      <div class="pd-head">
+        ${initialsAvatar(pl.name, 0).replace("player-avatar", "player-avatar lg")}
+        <div class="pd-head-info"><div class="profile-sub">${tr("{n} deck(s)", { n: pl.profiles.length })}</div></div>
+      </div>
+      <div class="kpi-row kpi-row-2">
+        ${kpiHtml(tr("Jogos"), pl.games)}
+        <div class="kpi">
+          <div class="kpi-label">${tr("Vitórias")}</div>
+          <div class="kpi-value">${pl.wins} <small>${pct}%</small></div>
+          <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
+        </div>
+      </div>
+      ${recent.length ? `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Forma recente")}</div>
+        <div class="chart-sub">${tr("Últimos {n} jogos, do mais antigo para o mais recente", { n: recent.length })}</div>
+        <div class="form-strip">${recent.map((g) => `
+          <span class="form-chip ${g.won ? "win" : "loss"}" data-tip="${g.won ? esc(tr("Vitória")) : esc(tr("Derrota"))}" data-tip-label="${esc(g.deck)} · ${esc(modeLabel(g.mode))} · ${esc(formatDateTime(g.date))}">${g.won ? tr("V") : tr("D")}</span>`).join("")}
+        </div>
+      </div>` : ""}
+      <div class="chart-card">
+        <div class="chart-title">${tr("Decks de {name}", { name: esc(pl.name) })}</div>
+        <div class="chart-sub">${tr("Taxa de vitórias de cada deck")}</div>
+        ${Charts.hbars(decks.map(({ p, d }) => ({
+          label: p.name, labelHtml: `${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}`,
+          value: d.winRate, valueLabel: `${Math.round(d.winRate * 100)}% · ${tr("{n} jogo(s)", { n: d.games })}`,
+          tip: `${Math.round(d.winRate * 100)}%`, tipLabel: `${p.name} · ${tr("{w} de {g} vitórias", { w: d.wins, g: d.games })}`,
+          muted: !d.games,
+        })))}
+      </div>
+      ${headToHeadHtml(pl.history, tr("Jogos em que estiveram os dois à mesa, com qualquer deck: vitórias de {name} – vitórias do adversário", { name: esc(pl.name) }), tr("{name} ganhou", { name: esc(pl.name) }), [pl.name])}
+      <div class="section-title">${tr("Decks")}</div>
+      <div class="col">${decks.map(({ p, d }) => `
+        <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
+          <div class="commander-thumb" style="${seatThumbStyle(p)}">${p.commander && p.commander.art ? "" : I("card")}</div>
+          <div class="profile-info">
+            <div class="profile-name">${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}</div>
+            <div class="profile-summary">${d.games ? tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins }) + ` (${Math.round(d.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
+          </div>
+          <span class="profile-chevron">${I("chevron-right")}</span>
+        </div>`).join("")}</div>`;
+    body.querySelectorAll(".profile-card[data-id]").forEach((c) => c.addEventListener("click", () => nav("profile-detail", { id: c.dataset.id, fromPlayer: pl.key })));
+    Charts.bindTips(body);
     s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));
   }
 

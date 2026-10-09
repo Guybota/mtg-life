@@ -680,6 +680,91 @@
     });
   }
 
+  /** Mostra os meus perfis como QR animado (várias partes em ciclo). */
+  async function openQrShow() {
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet qr-sheet">
+          <h2>${tr("Mostrar QR")}</h2>
+          <p class="merge-hint">${tr("No outro telemóvel: Perfis → Juntar com outro telemóvel → Ler QR. Mantém este ecrã aberto até ele dizer que terminou.")}</p>
+          <div class="qr-box"><canvas id="qr-canvas"></canvas></div>
+          <div class="qr-status" id="qr-status">${tr("A preparar…")}</div>
+          <button class="btn btn-ghost btn-block" id="qr-close" style="margin-top:12px">${tr("Fechar")}</button>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    let timer = null;
+    const close = () => { clearInterval(timer); backdrop.remove(); };
+    backdrop.querySelector("#qr-close").addEventListener("click", close);
+    const status = backdrop.querySelector("#qr-status");
+    let frames;
+    try {
+      frames = await MTG.QrSync.encode({ app: "mtg-life-counter", type: "qr-merge", version: 1, profiles: Profiles.all() });
+    } catch (e) {
+      status.textContent = e && e.message === "too-big" ? tr("Há dados demais para QR. Usa o ficheiro.") : tr("Não foi possível criar o QR. Usa o ficheiro.");
+      return;
+    }
+    const canvas = backdrop.querySelector("#qr-canvas");
+    const size = Math.min(320, window.innerWidth - 72);
+    let i = 0;
+    const show = () => {
+      if (!backdrop.isConnected) { clearInterval(timer); return; }
+      MTG.QrSync.draw(canvas, frames[i], size).catch(() => {});
+      status.textContent = frames.length > 1 ? tr("Parte {i} de {n}", { i: i + 1, n: frames.length }) : tr("Pronto a ler");
+      i = (i + 1) % frames.length;
+    };
+    show();
+    if (frames.length > 1) timer = setInterval(show, 350);
+  }
+
+  /** Lê com a câmara o QR (animado) do outro telemóvel e abre a revisão. */
+  async function openQrScan(done) {
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet qr-sheet">
+          <h2>${tr("Ler QR")}</h2>
+          <p class="merge-hint">${tr("Aponta para o QR do outro telemóvel. Se mudar de parte em parte, mantém-no apontado até a barra encher.")}</p>
+          <div class="qr-video"><video id="qr-video" playsinline muted></video><span class="qr-frame" aria-hidden="true"></span></div>
+          <div class="qr-progress"><span id="qr-bar"></span></div>
+          <div class="qr-status" id="qr-status">${tr("A abrir a câmara…")}</div>
+          <button class="btn btn-ghost btn-block" id="qr-close" style="margin-top:12px">${tr("Cancelar")}</button>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    const status = backdrop.querySelector("#qr-status");
+    const bar = backdrop.querySelector("#qr-bar");
+    let stop = () => {};
+    let finished = false;
+    const close = () => { stop(); backdrop.remove(); };
+    backdrop.querySelector("#qr-close").addEventListener("click", close);
+    const col = MTG.QrSync.collector();
+    try {
+      stop = await MTG.QrSync.scan(backdrop.querySelector("#qr-video"), (bytes) => {
+        if (finished || !col.add(bytes)) return;
+        bar.style.width = Math.round((col.got / col.total) * 100) + "%";
+        status.textContent = tr("{got} de {n} partes lidas", { got: col.got, n: col.total });
+        if (navigator.vibrate) navigator.vibrate(15);
+        if (!col.done) return;
+        finished = true;
+        stop();
+        col.result().then((data) => {
+          backdrop.remove();
+          const list = data && Array.isArray(data.profiles) ? data.profiles : null;
+          if (!list) { alert(tr("Este QR não é de perfis desta app.")); return; }
+          openMergeReview(list, null, done);
+        }).catch((e) => {
+          status.textContent = e && e.message === "no-decompress" ? tr("Este telemóvel não consegue ler estes dados. Usa o ficheiro.") : tr("Não foi possível ler os dados. Tenta outra vez.");
+        });
+      });
+      if (!backdrop.isConnected) stop(); // fechou enquanto a câmara abria
+      else if (!finished) status.textContent = tr("À procura do QR…");
+    } catch (e) {
+      status.textContent = tr("Sem acesso à câmara. Dá permissão nas definições ou usa o ficheiro.");
+    }
+  }
+
   /** Menu "Juntar com outro telemóvel": enviar os meus / receber os do outro. */
   function openMergeMenu(done) {
     closeAnyModal();
@@ -690,10 +775,12 @@
           <p class="merge-hint">${tr("Para os dois ficarem com os mesmos perfis e jogos, cada um envia os seus e recebe os do outro. Os jogos que já existam não se repetem.")}</p>
           <div class="section-title">${tr("Enviar os meus")}</div>
           <div class="merge-actions">
+            <button class="btn btn-ghost" id="mm-send-qr">${I("qr")} ${tr("Mostrar QR")}</button>
             <button class="btn btn-ghost" id="mm-send-file">${I("upload")} ${tr("Enviar ficheiro")}</button>
           </div>
           <div class="section-title">${tr("Receber do outro")}</div>
           <div class="merge-actions">
+            <button class="btn btn-ghost" id="mm-recv-qr">${I("scan")} ${tr("Ler QR")}</button>
             <button class="btn btn-ghost" id="mm-recv-file">${I("download")} ${tr("Abrir ficheiro")}</button>
           </div>
           <input type="file" id="mm-file" accept="application/json,.json" style="display:none">
@@ -705,6 +792,8 @@
     backdrop.querySelector("#mm-close").addEventListener("click", close);
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
     backdrop.querySelector("#mm-send-file").addEventListener("click", () => saveBackup());
+    backdrop.querySelector("#mm-send-qr").addEventListener("click", () => openQrShow());
+    backdrop.querySelector("#mm-recv-qr").addEventListener("click", () => openQrScan(done));
     const input = backdrop.querySelector("#mm-file");
     backdrop.querySelector("#mm-recv-file").addEventListener("click", () => input.click());
     input.addEventListener("change", () => {

@@ -1730,6 +1730,20 @@ input.switch:checked::after{ transform: translateX(18px); }
 .merge-actions{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:12px; }
 .merge-actions .btn:only-child{ grid-column: 1 / -1; }
 
+.qr-sheet{ text-align:center; }
+.qr-sheet .merge-hint{ text-align:left; }
+.qr-box{
+  display:flex; justify-content:center; align-items:center;
+  background:#fff; border-radius:18px; padding:8px; margin: 4px auto 0; width:max-content; max-width:100%;
+}
+.qr-box canvas{ display:block; image-rendering: pixelated; }
+.qr-status{ margin-top:10px; font-size:.86rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.qr-video{ position:relative; width:100%; max-width:340px; aspect-ratio:1; margin:0 auto; border-radius:18px; overflow:hidden; background:#000; }
+.qr-video video{ width:100%; height:100%; object-fit:cover; display:block; }
+.qr-frame{ position:absolute; inset:14%; border:3px solid rgba(255,255,255,.85); border-radius:16px; }
+.qr-progress{ height:6px; border-radius:3px; background: var(--surface-3); margin:12px auto 0; max-width:340px; overflow:hidden; }
+.qr-progress span{ display:block; height:100%; width:0; background: var(--chart-accent); transition: width .2s var(--ease-out); }
+
 /* ---------- Aviso de versão nova ---------- */
 .update-banner{
   position:fixed; left:16px; right:16px; top: calc(12px + var(--safe-top)); z-index:1001;

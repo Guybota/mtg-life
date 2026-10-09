@@ -1383,6 +1383,17 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Separador Decks / Jogadores ---------- */
+.seg{ display:grid; grid-template-columns:1fr 1fr; gap:4px; background: var(--surface-3); border-radius:14px; padding:4px; margin-bottom:12px; }
+.seg-btn{ height:38px; border:none; border-radius:10px; background:transparent; font: 600 .9rem var(--font); color: var(--text-dim); }
+.seg-btn[aria-selected="true"]{ background: var(--surface); color: var(--text); font-weight:700; box-shadow: var(--shadow-sm); }
+.player-avatar{
+  width:52px; height:52px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:1rem; color:#2e2a35;
+}
+.player-avatar.lg{ width:64px; height:64px; font-size:1.2rem; }
+
 /* ---------- Identidade de cor (pips) ---------- */
 .pips{ display:inline-flex; gap:2px; vertical-align:middle; }
 .pip{

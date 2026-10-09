@@ -292,6 +292,11 @@
     // setup refinado
     "Outra": "Other",
     "Último jogo": "Last game",
+    "Perfis recentes": "Recent profiles",
+    "Usar o perfil {name}": "Use the profile {name}",
+    "Cor sem commander": "Colour without commander",
+    "Cor {n}": "Colour {n}",
+    "Este perfil já está no lugar {n} — as estatísticas contariam duas vezes.": "This profile is already in seat {n} — its stats would be counted twice.",
     "hoje": "today",
     "ontem": "yesterday",
     "há {n} dias": "{n} days ago",

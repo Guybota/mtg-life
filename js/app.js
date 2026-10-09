@@ -791,6 +791,64 @@
   }
 
   // ===========================================================
+  // EXTRAS DE CADA LUGAR NO SETUP: perfis recentes, cor, perfil repetido
+  // ===========================================================
+  /** Perfis usados mais recentemente (último jogo, ou data de criação),
+   *  sem os que já estão sentados noutros lugares. */
+  function recentProfiles(excludeIds, n) {
+    const used = new Set(excludeIds.filter(Boolean));
+    const lastUse = (pr) => (pr.history && pr.history.length ? Math.max(...pr.history.map((h) => h.date || 0)) : pr.createdAt || 0);
+    return Profiles.all().filter((pr) => !used.has(pr.id)).sort((a, b) => lastUse(b) - lastUse(a)).slice(0, n);
+  }
+  /** Miniatura do lugar: a arte do commander, ou a cor escolhida para ele. */
+  function seatThumbStyle(p) {
+    if (p.commander && p.commander.art) return commanderThumbStyle(p.commander);
+    if (typeof p.colorIdx === "number" && State.FALLBACK_PALETTE[p.colorIdx]) {
+      const [c1, c2] = State.FALLBACK_PALETTE[p.colorIdx];
+      return `background:linear-gradient(160deg, ${c1}, ${c2})`;
+    }
+    return "";
+  }
+  /** HTML dos extras de um lugar. `seats` = todos os lugares (para saber
+   *  que perfis já estão ocupados e se este perfil está repetido). */
+  function seatExtrasHtml(p, idx, seats) {
+    const others = seats.filter((_, j) => j !== idx).map((x) => x.profileId);
+    const dupAt = p.profileId ? seats.findIndex((x, j) => j !== idx && x.profileId === p.profileId) : -1;
+    const recents = p.profileId ? [] : recentProfiles(others, 3);
+    const palette = State.FALLBACK_PALETTE;
+    return `
+      ${recents.length ? `<div class="seat-recents" role="group" aria-label="${tr("Perfis recentes")}">${recents.map((pr) => `
+        <button type="button" class="recent-chip" data-recent="${pr.id}" title="${tr("Usar o perfil {name}", { name: esc(pr.name) })}">
+          <span class="recent-avatar" style="${pr.commander && pr.commander.art ? commanderThumbStyle(pr.commander) : ""}">${pr.commander && pr.commander.art ? "" : esc(pr.name.slice(0, 2).toUpperCase())}</span>
+          <span class="recent-name">${esc(pr.name)}</span>
+        </button>`).join("")}</div>` : ""}
+      ${!p.commander ? `<div class="seat-colors" role="group" aria-label="${tr("Cor sem commander")}">${palette.map((c, k) => `
+        <button type="button" class="color-dot" data-color="${k}" aria-pressed="${p.colorIdx === k}" aria-label="${tr("Cor {n}", { n: k + 1 })}" style="background:${c[0]}"></button>`).join("")}</div>` : ""}
+      ${dupAt >= 0 ? `<div class="seat-warn">${I("info")}<span>${tr("Este perfil já está no lugar {n} — as estatísticas contariam duas vezes.", { n: dupAt + 1 })}</span></div>` : ""}`;
+  }
+  /** Liga (uma vez) os cliques dos extras de um cartão de lugar. */
+  function bindSeatExtras(card, getSeat, rerender) {
+    card.addEventListener("click", (e) => {
+      const rb = e.target.closest("[data-recent]");
+      if (rb) {
+        const pr = Profiles.get(rb.dataset.recent);
+        const seat = getSeat();
+        if (!pr || !seat) return;
+        seat.profileId = pr.id;
+        if (pr.commander) seat.commander = pr.commander;
+        if (pr.playerName) seat.name = pr.playerName;
+        rerender();
+        return;
+      }
+      const cb = e.target.closest("[data-color]");
+      if (cb) {
+        getSeat().colorIdx = parseInt(cb.dataset.color, 10);
+        rerender();
+      }
+    });
+  }
+
+  // ===========================================================
   // SETUP — Commander padrão / Duelo / Livre
   // ===========================================================
   function renderSetupStandard() {
@@ -850,9 +908,11 @@
             <input type="text" data-i="${i}" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(p.name)}">
             <div class="commander-name">${p.commander ? esc(p.commander.name) : tr("Sem commander escolhido")}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
             <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profileBtnHtml(profile)}</button>
+            <div class="seat-extras"></div>
           </div>
         </div>
       `);
+      bindSeatExtras(card, () => draft.players[i], renderPlayersList);
       card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
         openCommanderPicker((card2) => { draft.players[i].commander = card2; renderPlayersList(); });
       });
@@ -882,24 +942,23 @@
       const p = draft.players[i];
       const profile = p.profileId ? Profiles.get(p.profileId) : null;
       const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
-      mainThumb.style.cssText = commanderThumbStyle(p.commander);
+      mainThumb.style.cssText = seatThumbStyle(p);
       mainThumb.innerHTML = p.commander ? "" : I("card");
       const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
       partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
       partnerThumb.textContent = p.partnerCommander ? "" : "+";
       card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : tr("Sem commander escolhido")) + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
       card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
+      card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(p, i, draft.players);
       const nameInput = card.querySelector(".name-input");
       if (document.activeElement !== nameInput) nameInput.value = p.name;
     }
     function renderPlayersList() {
       const list = s.querySelector("#players-list");
-      const existing = Array.from(list.children);
-      draft.players.forEach((p, i) => {
-        if (existing[i]) updatePlayerCard(existing[i], i);
-        else list.appendChild(buildPlayerCard(i));
-      });
+      draft.players.forEach((p, i) => { if (!list.children[i]) list.appendChild(buildPlayerCard(i)); });
       while (list.children.length > draft.players.length) list.removeChild(list.lastChild);
+      // atualiza TODOS (os avisos de perfil repetido dependem dos outros lugares)
+      draft.players.forEach((p, i) => updatePlayerCard(list.children[i], i));
     }
     renderPlayersList();
 
@@ -2022,9 +2081,11 @@
             <input type="text" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(p.name)}">
             <div class="commander-name">${p.commander ? esc(p.commander.name) : tr("Sem commander escolhido")}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
             <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
+            <div class="seat-extras"></div>
           </div>
         </div>
       `);
+      bindSeatExtras(card, () => draft.teams[t].players[i], renderTeamsList);
       card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
         openCommanderPicker((c) => { draft.teams[t].players[i].commander = c; renderTeamsList(); });
       });
@@ -2052,13 +2113,16 @@
       const p = draft.teams[t].players[i];
       const profile = p.profileId ? Profiles.get(p.profileId) : null;
       const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
-      mainThumb.style.cssText = commanderThumbStyle(p.commander);
+      mainThumb.style.cssText = seatThumbStyle(p);
       mainThumb.innerHTML = p.commander ? "" : I("card");
       const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
       partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
       partnerThumb.textContent = p.partnerCommander ? "" : "+";
       card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : tr("Sem commander escolhido")) + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
       card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
+      const allSeats = draft.teams.reduce((acc, tm) => acc.concat(tm.players), []);
+      const flatIdx = draft.teams.slice(0, t).reduce((a, tm) => a + tm.players.length, 0) + i;
+      card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(p, flatIdx, allSeats);
       const nameInput = card.querySelector(".name-input");
       if (document.activeElement !== nameInput) nameInput.value = p.name;
     }
@@ -2086,14 +2150,12 @@
           if (document.activeElement !== nameInput) nameInput.value = team.name;
         }
         const playersContainer = teamCard.querySelector(".team-players");
-        const existingPlayerCards = Array.from(playersContainer.children);
-        team.players.forEach((p, i) => {
-          if (existingPlayerCards[i]) updateTeamPlayerCard(existingPlayerCards[i], t, i);
-          else playersContainer.appendChild(buildTeamPlayerCard(t, i));
-        });
+        team.players.forEach((p, i) => { if (!playersContainer.children[i]) playersContainer.appendChild(buildTeamPlayerCard(t, i)); });
         while (playersContainer.children.length > team.players.length) playersContainer.removeChild(playersContainer.lastChild);
       });
       while (list.children.length > draft.teams.length) list.removeChild(list.lastChild);
+      // atualiza TODOS (os avisos de perfil repetido dependem dos outros lugares)
+      draft.teams.forEach((team, t) => team.players.forEach((p, i) => updateTeamPlayerCard(list.children[t].querySelector(".team-players").children[i], t, i)));
     }
     renderTeamsList();
 

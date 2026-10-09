@@ -427,16 +427,80 @@
   }
 
   // ===========================================================
+  // ÚLTIMO SETUP ("Repetir último jogo")
+  // ===========================================================
+  const LAST_SETUP_KEY = "mtg_lc_last_setup_v1";
+  function rememberSetup(kind, d) {
+    try { localStorage.setItem(LAST_SETUP_KEY, JSON.stringify({ kind, draft: d, at: Date.now() })); } catch (e) {}
+  }
+  function loadLastSetup() {
+    try {
+      const raw = localStorage.getItem(LAST_SETUP_KEY);
+      const v = raw ? JSON.parse(raw) : null;
+      return v && v.kind && v.draft ? v : null;
+    } catch (e) { return null; }
+  }
+  /** Jogadores (nome + commander) de um rascunho, em qualquer modo. */
+  function setupPlayers(last) {
+    const d = last.draft;
+    if (last.kind === "br") return d.names.map((n, i) => ({ name: n || tr("Jogador {n}", { n: i + 1 }), commander: d.commanders[i] }));
+    if (last.kind === "teams") {
+      let seat = 0;
+      return d.teams.reduce((acc, t) => acc.concat(t.players.map((p) => ({ name: p.name || tr("Jogador {n}", { n: ++seat }), commander: p.commander }))), []);
+    }
+    return d.players.map((p, i) => ({ name: p.name || tr("Jogador {n}", { n: i + 1 }), commander: p.commander, colorIdx: p.colorIdx }));
+  }
+  function relativeDay(ts) {
+    const day = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+    const diff = Math.round((day(Date.now()) - day(ts)) / 86400000);
+    if (diff <= 0) return tr("hoje");
+    if (diff === 1) return tr("ontem");
+    if (diff < 7) return tr("há {n} dias", { n: diff });
+    return formatDateTime(ts).split(" ")[0];
+  }
+  function lastSetupCardHtml(last) {
+    const players = setupPlayers(last);
+    const d = last.draft;
+    const mode = last.kind === "br" ? "Battle Royale" : last.kind === "teams" ? tr("Equipas") : (PRESETS[d.preset] ? PRESETS[d.preset].label : tr("Jogo"));
+    const life = last.kind === "br" ? 30 : d.startLife;
+    const palette = State.FALLBACK_PALETTE;
+    const avatars = players.slice(0, 6).map((p, i) => {
+      const style = p.commander && p.commander.art
+        ? `background-image:url('${esc(p.commander.art)}')`
+        : `background:${palette[(typeof p.colorIdx === "number" ? p.colorIdx : i) % palette.length][0]}`;
+      const initials = p.commander && p.commander.art ? "" : esc(p.name.trim().slice(0, 2).toUpperCase());
+      return `<span class="last-avatar" style="${style}">${initials}</span>`;
+    }).join("");
+    return `
+      <div class="last-card">
+        <div class="last-head">
+          <span class="last-kicker">${tr("Último jogo")} · ${relativeDay(last.at)}</span>
+          <span class="last-title">${esc(mode)} · ${tr("{n} jogadores", { n: players.length })}</span>
+        </div>
+        <div class="last-players">
+          <span class="last-avatars">${avatars}</span>
+          <span class="last-names">${esc(players.map((p) => p.name).join(", "))}<br>${tr("{n} vidas", { n: life })}${last.kind !== "br" && d.trackTurns === false ? " · " + tr("sem tempo") : ""}</span>
+        </div>
+        <div class="last-actions">
+          <button class="btn btn-primary" id="repeat-btn">${I("rotate")} ${tr("Repetir")}</button>
+          <button class="btn btn-ghost" id="adjust-btn">${tr("Ajustar antes")}</button>
+        </div>
+      </div>`;
+  }
+
+  // ===========================================================
   // MENU PRINCIPAL
   // ===========================================================
   function renderMenu() {
     const saved = State.load();
+    const last = loadLastSetup();
     const s = el(`
       <div class="screen menu-screen">
         <div class="logo">MTG <span>LIFE</span> COUNTER
           <small>${tr("Commander • Battle Royale • Livre")}</small>
         </div>
         ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">${I("play")} ${tr("Continuar jogo em curso")}</button>` : ""}
+        ${last ? lastSetupCardHtml(last) : ""}
         <div class="mode-grid">
           <div class="mode-card commander" data-mode="commander">
             <div class="icon">${I("crown")}</div>
@@ -481,6 +545,21 @@
       });
     }
     s.querySelector("#profiles-btn").addEventListener("click", () => nav("profiles"));
+    if (last) {
+      const cloneDraft = () => JSON.parse(JSON.stringify(last.draft));
+      s.querySelector("#repeat-btn").addEventListener("click", () => {
+        if (saved && !confirm(tr("Já existe um jogo em curso. Começar um novo jogo vai substituí-lo. Continuar?"))) return;
+        draft = cloneDraft();
+        if (last.kind === "br") startBRFromDraft(draft);
+        else if (last.kind === "teams") startTeamsFromDraft(draft);
+        else startStandardFromDraft(draft);
+      });
+      s.querySelector("#adjust-btn").addEventListener("click", () => {
+        if (saved && !confirm(tr("Já existe um jogo em curso. Começar um novo jogo vai substituí-lo. Continuar?"))) return;
+        draft = cloneDraft();
+        nav(last.kind === "br" ? "setup-br" : last.kind === "teams" ? "setup-teams" : "setup-standard");
+      });
+    }
     s.querySelectorAll(".mode-card").forEach((card) => {
       card.addEventListener("click", () => {
         const mode = card.dataset.mode;
@@ -841,33 +920,41 @@
     }
     s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
-    s.querySelector("#start-btn").addEventListener("click", () => {
-      const st = State.createStandardGame({
-        playerCount: draft.players.length,
-        startLife: draft.startLife,
-        commanderDamageEnabled: preset.cmdDmgToggle ? draft.cmdDmgEnabled : preset.cmdDmgDefault,
-        presetName: preset.key,
-        trackTurns: draft.trackTurns !== false,
-      });
-      st.standard.players.forEach((p, i) => {
-        if (draft.players[i].name.trim()) p.name = draft.players[i].name.trim();
-        p.commander = draft.players[i].commander;
-        p.partnerCommander = draft.players[i].partnerCommander || null;
-        p.profileId = draft.players[i].profileId || null;
-      });
-      State.ensureFallbackColors(st.standard.players);
-      State.save(st);
-      game = st;
-      // sem contagem de turnos não interessa quem começa
-      if (!st.standard.trackTurns) { nav("game-standard"); return; }
-      openWhoStartsModal(
-        st.standard.players.map((p) => ({ id: p.id, name: p.name })),
-        (winnerId) => {
-          State.stdSetStartingPlayer(game, winnerId);
-          nav("game-standard");
-        }
-      );
+    s.querySelector("#start-btn").addEventListener("click", () => startStandardFromDraft(draft));
+  }
+
+  /** Cria e arranca um jogo Commander/Duelo/Livre a partir de um rascunho de
+   *  setup (usado pelo botão "Começar jogo" e pelo "Repetir último jogo"). */
+  function startStandardFromDraft(d) {
+    const preset = PRESETS[d.preset];
+    rememberSetup("standard", d);
+    const st = State.createStandardGame({
+      playerCount: d.players.length,
+      startLife: d.startLife,
+      commanderDamageEnabled: preset.cmdDmgToggle ? d.cmdDmgEnabled : preset.cmdDmgDefault,
+      presetName: preset.key,
+      trackTurns: d.trackTurns !== false,
     });
+    st.standard.players.forEach((p, i) => {
+      const dp = d.players[i];
+      if (dp.name && dp.name.trim()) p.name = dp.name.trim();
+      p.commander = dp.commander;
+      p.partnerCommander = dp.partnerCommander || null;
+      p.profileId = dp.profileId || null;
+      if (typeof dp.colorIdx === "number") p.fallbackColorIdx = dp.colorIdx;
+    });
+    State.ensureFallbackColors(st.standard.players);
+    State.save(st);
+    game = st;
+    // sem contagem de turnos não interessa quem começa
+    if (!st.standard.trackTurns) { nav("game-standard"); return; }
+    openWhoStartsModal(
+      st.standard.players.map((p) => ({ id: p.id, name: p.name })),
+      (winnerId) => {
+        State.stdSetStartingPlayer(game, winnerId);
+        nav("game-standard");
+      }
+    );
   }
 
   // ===========================================================
@@ -1553,23 +1640,26 @@
       list.appendChild(card);
     });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
-    s.querySelector("#start-btn").addEventListener("click", () => {
-      const st = State.createBRGame(draft.names);
-      st.br.players.forEach((p, i) => {
-        p.commander = draft.commanders[i];
-        p.profileId = draft.profileIds[i] || null;
-      });
-      State.ensureFallbackColors(st.br.players);
-      State.save(st);
-      game = st;
-      openWhoStartsModal(
-        st.br.players.map((p) => ({ id: p.id, name: p.name })),
-        (winnerId) => {
-          State.brSetStartingPlayer(game, winnerId);
-          nav("game-br");
-        }
-      );
+    s.querySelector("#start-btn").addEventListener("click", () => startBRFromDraft(draft));
+  }
+
+  function startBRFromDraft(d) {
+    rememberSetup("br", d);
+    const st = State.createBRGame(d.names);
+    st.br.players.forEach((p, i) => {
+      p.commander = d.commanders[i];
+      p.profileId = (d.profileIds && d.profileIds[i]) || null;
     });
+    State.ensureFallbackColors(st.br.players);
+    State.save(st);
+    game = st;
+    openWhoStartsModal(
+      st.br.players.map((p) => ({ id: p.id, name: p.name })),
+      (winnerId) => {
+        State.brSetStartingPlayer(game, winnerId);
+        nav("game-br");
+      }
+    );
   }
 
   // ===========================================================
@@ -2037,27 +2127,31 @@
     bindLifeField(s, (v) => { draft.startLife = Math.max(1, v || 40); });
     s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
-    s.querySelector("#start-btn").addEventListener("click", () => {
-      const st = State.createTeamsGame({ numTeams: draft.numTeams, playersPerTeam: draft.playersPerTeam, startLife: draft.startLife, trackTurns: draft.trackTurns !== false });
-      st.teams.teams.forEach((team, t) => {
-        if (draft.teams[t].name.trim()) team.name = draft.teams[t].name.trim();
-        team.players.forEach((p, i) => {
-          const dp = draft.teams[t].players[i];
-          if (dp.name.trim()) p.name = dp.name.trim();
-          p.commander = dp.commander;
-          p.partnerCommander = dp.partnerCommander || null;
-          p.profileId = dp.profileId || null;
-        });
+    s.querySelector("#start-btn").addEventListener("click", () => startTeamsFromDraft(draft));
+  }
+
+  function startTeamsFromDraft(d) {
+    rememberSetup("teams", d);
+    const st = State.createTeamsGame({ numTeams: d.numTeams, playersPerTeam: d.playersPerTeam, startLife: d.startLife, trackTurns: d.trackTurns !== false });
+    st.teams.teams.forEach((team, t) => {
+      if (d.teams[t].name && d.teams[t].name.trim()) team.name = d.teams[t].name.trim();
+      team.players.forEach((p, i) => {
+        const dp = d.teams[t].players[i];
+        if (dp.name && dp.name.trim()) p.name = dp.name.trim();
+        p.commander = dp.commander;
+        p.partnerCommander = dp.partnerCommander || null;
+        p.profileId = dp.profileId || null;
+        if (typeof dp.colorIdx === "number") p.fallbackColorIdx = dp.colorIdx;
       });
-      State.ensureFallbackColors(st.teams.teams.reduce((acc, t) => acc.concat(t.players), []));
-      State.save(st);
-      game = st;
-      if (!st.teams.trackTurns) { nav("game-teams"); return; }
-      const teamChoices = st.teams.teams.map((team) => ({ id: team.id, name: team.name }));
-      openWhoStartsModal(teamChoices, (winnerTeamId) => {
-        State.teamsSetStartingTeam(game, winnerTeamId);
-        nav("game-teams");
-      });
+    });
+    State.ensureFallbackColors(st.teams.teams.reduce((acc, t) => acc.concat(t.players), []));
+    State.save(st);
+    game = st;
+    if (!st.teams.trackTurns) { nav("game-teams"); return; }
+    const teamChoices = st.teams.teams.map((team) => ({ id: team.id, name: team.name }));
+    openWhoStartsModal(teamChoices, (winnerTeamId) => {
+      State.teamsSetStartingTeam(game, winnerTeamId);
+      nav("game-teams");
     });
   }
 

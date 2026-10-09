@@ -805,6 +805,67 @@
     return `<div class="section-head"><span class="section-title">${title}</span><button type="button" class="btn btn-ghost btn-sm" id="shuffle-btn">${I("shuffle")} ${btnLabel}</button></div>`;
   }
 
+  /** Vista "Mesa": miniatura do tabuleiro com cada lugar na posição real
+   *  (fila de cima rodada, fila de baixo por ordem inversa — a mesma
+   *  disposição de renderGameStandard) e o nº de ordem dos turnos. */
+  function mesaInnerHtml(players) {
+    const n = players.length;
+    const top = Math.floor(n / 2);
+    const seat = (p, i, rotated) => {
+      const art = p.commander && p.commander.art;
+      const style = seatThumbStyle(p);
+      return `<button type="button" class="mesa-seat ${rotated ? "rot" : ""} ${art ? "has-art" : ""} ${style ? "" : "plain"}" data-seat="${i}" style="${style}" aria-label="${esc(tr("Lugar {n}", { n: i + 1 }))}">
+        <span class="mesa-num">${i + 1}</span>
+        <span class="mesa-inner">
+          <span class="mesa-name">${esc((p.name || "").trim() || tr("Jogador {n}", { n: i + 1 }))}</span>
+          ${p.commander ? `<span class="mesa-cmd">${esc(p.commander.name)}</span>` : ""}
+        </span>
+      </button>`;
+    };
+    const topRow = players.slice(0, top).map((p, k) => seat(p, k, true)).join("");
+    const bottomRow = players.slice(top).map((p, k) => seat(p, top + k, false)).reverse().join("");
+    return `
+      <div class="mesa-row" style="grid-template-columns: repeat(${Math.max(1, top)}, minmax(0, 1fr))">${topRow}</div>
+      <div class="mesa-row" style="grid-template-columns: repeat(${n - top}, minmax(0, 1fr))">${bottomRow}</div>`;
+  }
+  /** Arrastar um lugar para cima de outro troca-os; um toque leva ao cartão
+   *  desse lugar. `onSwap(a, b)` troca e volta a pintar. */
+  function bindMesa(mesa, onSwap, onTap) {
+    let drag = null;
+    mesa.addEventListener("pointerdown", (e) => {
+      const seatEl = e.target.closest(".mesa-seat");
+      if (!seatEl) return;
+      drag = { el: seatEl, from: parseInt(seatEl.dataset.seat, 10), x: e.clientX, y: e.clientY, moved: false, over: null };
+      seatEl.setPointerCapture(e.pointerId);
+    });
+    mesa.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+      drag.moved = true;
+      drag.el.classList.add("dragging");
+      drag.el.style.translate = `${dx}px ${dy}px`;
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const target = under && under.closest(".mesa-seat");
+      if (drag.over && drag.over !== target) drag.over.classList.remove("drop-target");
+      drag.over = target && target !== drag.el ? target : null;
+      if (drag.over) drag.over.classList.add("drop-target");
+    });
+    const end = (e, cancelled) => {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      d.el.classList.remove("dragging");
+      d.el.style.translate = "";
+      if (d.over) d.over.classList.remove("drop-target");
+      if (cancelled) return;
+      if (!d.moved) { onTap(d.from); return; }
+      if (d.over) onSwap(d.from, parseInt(d.over.dataset.seat, 10));
+    };
+    mesa.addEventListener("pointerup", (e) => end(e, false));
+    mesa.addEventListener("pointercancel", (e) => end(e, true));
+  }
+
   /** Perfis usados mais recentemente (último jogo, ou data de criação),
    *  sem os que já estão sentados noutros lugares. */
   function recentProfiles(excludeIds, n) {
@@ -890,6 +951,10 @@
             trackTurnsFieldHtml(draft.trackTurns !== false)
           )}
           ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
+          <div class="mesa-card">
+            <div class="mesa" id="mesa"></div>
+            <div class="mesa-hint">${I("reorder")} ${tr("Arrasta um lugar para trocar · os números são a ordem dos turnos")}</div>
+          </div>
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
@@ -934,6 +999,7 @@
       });
       card.querySelector(".name-input").addEventListener("input", (e) => {
         draft.players[i].name = e.target.value;
+        s.querySelector("#mesa").innerHTML = mesaInnerHtml(draft.players);
       });
       card.querySelector(".profile-btn").addEventListener("click", () => {
         openProfilePicker({
@@ -972,7 +1038,17 @@
       while (list.children.length > draft.players.length) list.removeChild(list.lastChild);
       // atualiza TODOS (os avisos de perfil repetido dependem dos outros lugares)
       draft.players.forEach((p, i) => updatePlayerCard(list.children[i], i));
+      s.querySelector("#mesa").innerHTML = mesaInnerHtml(draft.players);
     }
+    bindMesa(s.querySelector("#mesa"), (a, b) => {
+      [draft.players[a], draft.players[b]] = [draft.players[b], draft.players[a]];
+      renderPlayersList();
+    }, (i) => {
+      const card = s.querySelector("#players-list").children[i];
+      if (!card) return;
+      card.scrollIntoView({ behavior: "smooth", block: "center" });
+      retrigger(card, "seat-flash");
+    });
     renderPlayersList();
 
     if (preset.minPlayers !== preset.maxPlayers) {

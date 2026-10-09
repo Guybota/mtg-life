@@ -1383,6 +1383,43 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Vista "Mesa" no setup ---------- */
+.mesa-card{ margin-bottom:12px; }
+.mesa{
+  background: var(--surface-3); border-radius:22px; padding:6px;
+  display:flex; flex-direction:column; gap:6px;
+  touch-action:none; /* o arrastar não faz scroll */
+}
+.mesa-row{ display:grid; gap:6px; }
+.mesa-seat{
+  position:relative; height:76px; border:none; border-radius:14px;
+  background: var(--surface-2); background-size:cover; background-position:center 30%;
+  color:#2e2a35; font-family: var(--font);
+  display:flex; align-items:center; justify-content:center; padding:0 6px;
+  overflow:hidden; cursor:grab; user-select:none;
+  transition: box-shadow .15s ease, transform .15s var(--ease-spring);
+}
+.mesa-seat.plain{ background: var(--surface); color: var(--text); }
+.mesa-seat.has-art::before{ content:""; position:absolute; inset:0; background: rgba(30,26,36,.45); }
+.mesa-seat.has-art{ color:#fff; }
+.mesa-inner{ position:relative; display:flex; flex-direction:column; align-items:center; gap:1px; min-width:0; max-width:100%; }
+.mesa-seat.rot .mesa-inner{ transform: rotate(180deg); }
+.mesa-name{ font-size:.82rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.mesa-cmd{ font-size:.64rem; opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.mesa-num{
+  position:absolute; top:6px; left:6px; z-index:1;
+  width:20px; height:20px; border-radius:50%;
+  background: var(--text); color: var(--on-primary);
+  font-size:.62rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+.mesa-seat.dragging{ z-index:5; pointer-events:none; cursor:grabbing; box-shadow: var(--shadow-lg); transform: scale(1.04); transition:none; }
+.mesa-seat.drop-target{ box-shadow: 0 0 0 3px var(--surface-3), 0 0 0 5px var(--text); }
+.mesa-hint{ display:flex; align-items:center; justify-content:center; gap:6px; font-size:.72rem; color: var(--text-dim); margin-top:8px; text-align:center; }
+.mesa-hint .ic{ width:14px; height:14px; }
+.player-setup-card.seat-flash{ animation: seatFlash .9s ease; }
+@keyframes seatFlash{ 0%, 100%{ box-shadow:none; } 30%{ box-shadow: 0 0 0 3px var(--chart-accent); } }
+
 /* ---------- Cabeçalho "Lugares" + Sortear ---------- */
 .section-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin: 4px 2px 10px; }
 .section-head .section-title{ margin:0; }

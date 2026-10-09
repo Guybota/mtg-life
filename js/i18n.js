@@ -293,6 +293,8 @@
     "Outra": "Other",
     "Último jogo": "Last game",
     "Lugares": "Seats",
+    "Lugar {n}": "Seat {n}",
+    "Arrasta um lugar para trocar · os números são a ordem dos turnos": "Drag a seat to swap · numbers are the turn order",
     "Sortear lugares": "Shuffle seats",
     "Sortear equipas": "Shuffle teams",
     "Lugares sorteados": "Seats shuffled",

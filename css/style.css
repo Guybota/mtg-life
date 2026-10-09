@@ -1707,6 +1707,29 @@ input.switch:checked::after{ transform: translateX(18px); }
 .backup-card .btn{ white-space:nowrap; padding-left:12px; padding-right:12px; }
 .backup-note{ font-size:.78rem; color: var(--text-dim); text-align:center; margin: 0 0 14px; }
 
+/* ---------- Fundir perfis ---------- */
+.merge-sheet{ max-height: 88vh; overflow-y:auto; }
+.merge-summary{ margin:0 0 12px; font-size:.92rem; line-height:1.4; }
+.merge-hint{ margin:0 0 10px; font-size:.82rem; color: var(--text-dim); line-height:1.4; }
+.merge-list{ gap:8px; margin-bottom:12px; }
+.merge-row{
+  position:relative; display:flex; flex-direction:column; gap:8px;
+  background: var(--surface-2); border-radius:14px; padding:12px;
+}
+.merge-row.linked{ padding:10px 12px; }
+.merge-from{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.merge-name{ font-weight:600; font-size:.92rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.merge-games{ font-size:.78rem; color: var(--text-dim); flex-shrink:0; }
+.merge-to{ display:flex; align-items:center; gap:8px; color: var(--text-dim); }
+.merge-to svg{ width:16px; height:16px; flex-shrink:0; }
+.merge-to select{ flex:1; min-width:0; }
+.merge-suggested{
+  align-self:flex-start; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
+  background: var(--mint); color: var(--mint-ink); border-radius:999px; padding:2px 8px;
+}
+.merge-actions{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:12px; }
+.merge-actions .btn:only-child{ grid-column: 1 / -1; }
+
 /* ---------- Aviso de versão nova ---------- */
 .update-banner{
   position:fixed; left:16px; right:16px; top: calc(12px + var(--safe-top)); z-index:1001;

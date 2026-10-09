@@ -556,7 +556,8 @@
     return true;
   }
 
-  /** Lê um ficheiro de cópia (ou de exportação antiga) e junta-o aos dados. */
+  /** Lê um ficheiro de cópia/exportação (deste ou de outro aparelho) e
+   *  abre a revisão da fusão. */
   function restoreBackupFile(file, done) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -567,18 +568,150 @@
         alert(tr("Não foi possível ler este ficheiro. Confirma que é um ficheiro exportado por esta app."));
         return;
       }
-      const { added, skipped } = Profiles.importList(list);
-      if (parsed.lastSetup && !loadLastSetup()) {
-        try { localStorage.setItem(LAST_SETUP_KEY, JSON.stringify(parsed.lastSetup)); } catch (e) {}
-      }
-      if (added) setBackupInfo({ at: parsed.exportedAt || Date.now(), games: Profiles.gameCount() });
-      if (!added && !skipped) alert(tr("Não foram encontrados perfis válidos neste ficheiro."));
-      else if (!added) alert(tr("Estes perfis já estavam todos guardados."));
-      else if (skipped) alert(tr("{n} perfis restaurados ({m} já existiam).", { n: added, m: skipped }));
-      else alert(added === 1 ? tr("1 perfil importado com sucesso.") : tr("{n} perfis importados com sucesso.", { n: added }));
-      done && done();
+      openMergeReview(list, { lastSetup: parsed.lastSetup, exportedAt: parsed.exportedAt }, done);
     };
     reader.readAsText(file);
+  }
+
+  // ===========================================================
+  // FUNDIR PERFIS — juntar os perfis e jogos de outro aparelho
+  // ===========================================================
+  const deckLabel = (p) => (p.playerName ? p.playerName + " · " : "") + p.name;
+
+  /** Revisão antes de fundir: mostra o que já está ligado, sugere pares
+   *  (mesmo jogador e commander) e deixa escolher o destino de cada perfil
+   *  recebido. Nada é duplicado: jogos que já existam são ignorados. */
+  function openMergeReview(list, extra, done) {
+    const rows = Profiles.mergePreview(list);
+    if (!rows.length) { alert(tr("Não foram encontrados perfis válidos neste ficheiro.")); return; }
+    const locals = Profiles.all();
+    const auto = rows.filter((r) => r.auto);
+    const pick = rows.filter((r) => !r.auto);
+    if (!pick.length && auto.every((r) => !r.newGames)) {
+      alert(tr("Já está tudo fundido: não há jogos nem perfis novos."));
+      return;
+    }
+    const newGamesFor = (r, localId) => {
+      const hist = Array.isArray(r.incoming.history) ? r.incoming.history : [];
+      if (!localId) return hist.length;
+      const lp = locals.find((p) => p.id === localId);
+      const have = new Set(((lp && lp.history) || []).map((g) => g.id));
+      return hist.filter((g) => g && !have.has(g.id)).length;
+    };
+    const options = (sel) => `<option value="">${tr("Perfil novo")}</option>` +
+      locals.map((p) => `<option value="${esc(p.id)}"${p.id === sel ? " selected" : ""}>${esc(deckLabel(p))}</option>`).join("");
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet merge-sheet">
+          <h2>${tr("Fundir perfis")}</h2>
+          <p class="merge-summary" id="mg-summary"></p>
+          ${pick.length ? `
+            <div class="section-title">${tr("Confirmar")}</div>
+            <p class="merge-hint">${tr("Escolhe com que perfil deste telemóvel junta cada um. Os sugeridos parecem o mesmo deck (mesmo jogador e commander).")}</p>
+            <div class="col merge-list">${pick.map((r, i) => `
+              <div class="merge-row" data-i="${i}">
+                <div class="merge-from">
+                  <span class="merge-name">${esc(deckLabel(r.incoming))}</span>
+                  <span class="merge-games" data-games></span>
+                </div>
+                <div class="merge-to">
+                  ${I("arrow-right")}
+                  <select class="merge-select" aria-label="${esc(tr("Juntar com"))}">${options(r.match && r.match.id)}</select>
+                </div>
+                ${r.match ? `<span class="merge-suggested">${tr("Sugerido")}</span>` : ""}
+              </div>`).join("")}</div>` : ""}
+          ${auto.length ? `
+            <div class="section-title">${tr("Já ligados")}</div>
+            <div class="col merge-list">${auto.map((r) => `
+              <div class="merge-row linked">
+                <div class="merge-from">
+                  <span class="merge-name">${esc(deckLabel(r.match))}</span>
+                  <span class="merge-games">${r.newGames ? tr("+{n} jogo(s) novo(s)", { n: r.newGames }) : tr("sem jogos novos")}</span>
+                </div>
+              </div>`).join("")}</div>` : ""}
+          <div class="row" style="margin-top:16px">
+            <button class="btn btn-ghost grow" id="mg-cancel">${tr("Cancelar")}</button>
+            <button class="btn btn-primary grow" id="mg-go">${I("merge")} ${tr("Fundir")}</button>
+          </div>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    const selects = Array.from(backdrop.querySelectorAll(".merge-row[data-i]"));
+    function paint() {
+      let games = auto.reduce((a, r) => a + r.newGames, 0);
+      let newProfiles = 0;
+      const used = new Map();
+      selects.forEach((row) => {
+        const r = pick[+row.dataset.i];
+        const to = row.querySelector("select").value;
+        const n = newGamesFor(r, to);
+        games += n;
+        if (!to) newProfiles++;
+        else used.set(to, (used.get(to) || 0) + 1);
+        row.querySelector("[data-games]").textContent = n ? tr("+{n} jogo(s) novo(s)", { n }) : tr("sem jogos novos");
+      });
+      const dup = rows.reduce((a, r) => a + (Array.isArray(r.incoming.history) ? r.incoming.history.length : 0), 0) - games;
+      backdrop.querySelector("#mg-summary").textContent =
+        tr("Vão entrar {g} jogo(s) e {p} perfil(is) novo(s).", { g: games, p: newProfiles }) +
+        (dup > 0 ? " " + tr("{n} jogo(s) já existiam e não vão ser repetidos.", { n: dup }) : "");
+    }
+    selects.forEach((row) => row.querySelector("select").addEventListener("change", paint));
+    paint();
+    const close = () => backdrop.remove();
+    backdrop.querySelector("#mg-cancel").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+    backdrop.querySelector("#mg-go").addEventListener("click", () => {
+      const targets = {};
+      auto.forEach((r) => { targets[r.incoming.id] = r.match.id; });
+      selects.forEach((row) => { targets[pick[+row.dataset.i].incoming.id] = row.querySelector("select").value || null; });
+      const before = Profiles.snapshot();
+      const res = Profiles.applyMerge(list, targets);
+      if (extra && extra.lastSetup && !loadLastSetup()) {
+        try { localStorage.setItem(LAST_SETUP_KEY, JSON.stringify(extra.lastSetup)); } catch (e) {}
+      }
+      close();
+      done && done();
+      undoToast(tr("Fundido: {g} jogo(s) e {p} perfil(is) novo(s)", { g: res.games, p: res.profiles }), () => {
+        Profiles.replaceAll(before);
+        done && done();
+        toast(tr("Fusão desfeita"));
+      }, 8000);
+    });
+  }
+
+  /** Menu "Juntar com outro telemóvel": enviar os meus / receber os do outro. */
+  function openMergeMenu(done) {
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet">
+          <h2>${tr("Juntar com outro telemóvel")}</h2>
+          <p class="merge-hint">${tr("Para os dois ficarem com os mesmos perfis e jogos, cada um envia os seus e recebe os do outro. Os jogos que já existam não se repetem.")}</p>
+          <div class="section-title">${tr("Enviar os meus")}</div>
+          <div class="merge-actions">
+            <button class="btn btn-ghost" id="mm-send-file">${I("upload")} ${tr("Enviar ficheiro")}</button>
+          </div>
+          <div class="section-title">${tr("Receber do outro")}</div>
+          <div class="merge-actions">
+            <button class="btn btn-ghost" id="mm-recv-file">${I("download")} ${tr("Abrir ficheiro")}</button>
+          </div>
+          <input type="file" id="mm-file" accept="application/json,.json" style="display:none">
+          <button class="btn btn-ghost btn-block" id="mm-close" style="margin-top:16px">${tr("Fechar")}</button>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.querySelector("#mm-close").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+    backdrop.querySelector("#mm-send-file").addEventListener("click", () => saveBackup());
+    const input = backdrop.querySelector("#mm-file");
+    backdrop.querySelector("#mm-recv-file").addEventListener("click", () => input.click());
+    input.addEventListener("change", () => {
+      const f = input.files && input.files[0];
+      input.value = "";
+      if (f) restoreBackupFile(f, done);
+    });
   }
 
   function backupReminderHtml() {
@@ -3112,6 +3245,7 @@
             <button class="btn btn-ghost grow" id="import-profiles-btn">${I("upload")} ${tr("Importar")}</button>
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
+          <button class="btn btn-ghost btn-block" id="merge-btn" style="margin-bottom:6px">${I("merge")} ${tr("Juntar com outro telemóvel")}</button>
           <div class="backup-note">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
           ${profiles.length ? `
@@ -3139,6 +3273,7 @@
     `);
     appEl.appendChild(s);
     s.querySelector("#export-profiles-btn").addEventListener("click", () => saveBackup().then((ok) => ok && render()));
+    s.querySelector("#merge-btn").addEventListener("click", () => openMergeMenu(render));
     const importInput = s.querySelector("#import-profiles-input");
     s.querySelector("#import-profiles-btn").addEventListener("click", () => importInput.click());
     importInput.addEventListener("change", () => {

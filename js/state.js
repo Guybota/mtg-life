@@ -101,7 +101,7 @@
   // ---------------------------------------------------------
   // MODO "STANDARD" (Commander padrão / Duelo 1v1 / Livre)
   // ---------------------------------------------------------
-  function createStandardGame({ playerCount, startLife, commanderDamageEnabled, presetName, trackTurns }) {
+  function createStandardGame({ playerCount, startLife, commanderDamageEnabled, presetName, trackTurns, poisonEnabled }) {
     const players = [];
     for (let i = 0; i < playerCount; i++) {
       players.push({
@@ -129,6 +129,7 @@
       standard: {
         startLife,
         commanderDamageEnabled: !!commanderDamageEnabled,
+        poisonEnabled: !!poisonEnabled, // contadores de veneno (10 elimina)
         // false = jogo "livre de relógio": sem turnos, rondas nem cronómetros
         trackTurns: trackTurns !== false,
         players,
@@ -152,16 +153,21 @@
     return state;
   }
 
+  /** Recalcula a eliminação automática de um jogador: 0 ou menos vidas,
+   *  21+ de dano de um commander, ou 10+ contadores de veneno. Enquanto
+   *  "protegido" (Platinum Angel/Worship em jogo) fica suspensa — só muda
+   *  por ação explícita. */
+  function stdRecomputeEliminated(p) {
+    if (p.protected) return;
+    const anyLethalCmd = Object.values(p.cmdDamage || {}).some((v) => v >= 21);
+    p.eliminated = p.life <= 0 || anyLethalCmd || (p.poison || 0) >= 10;
+  }
+
   function stdAdjustLife(state, playerId, delta) {
     const p = state.standard.players.find((x) => x.id === playerId);
     if (!p) return state;
     p.life += delta;
-    // enquanto "protegido" (carta tipo Platinum Angel/Worship em jogo), a
-    // eliminação automática fica suspensa — só muda por ação explícita.
-    if (!p.protected) {
-      if (p.life <= 0) p.eliminated = true;
-      else if (p.eliminated && p.life > 0) p.eliminated = false;
-    }
+    stdRecomputeEliminated(p);
     logLifeChange(state.standard, stdCurrentPlayer(state), p, delta);
     save(state);
     return state;
@@ -178,11 +184,17 @@
     p.cmdDamage[key] = next;
     // dano de commander também reduz a vida normal, como nas regras oficiais
     p.life -= delta;
-    if (!p.protected) {
-      const anyLethal = Object.values(p.cmdDamage).some((v) => v >= 21);
-      if (anyLethal || p.life <= 0) p.eliminated = true;
-      else if (p.life > 0 && !anyLethal) p.eliminated = false;
-    }
+    stdRecomputeEliminated(p);
+    save(state);
+    return state;
+  }
+
+  /** Contadores de veneno (10 = eliminado). */
+  function stdAdjustPoison(state, playerId, delta) {
+    const p = state.standard.players.find((x) => x.id === playerId);
+    if (!p) return state;
+    p.poison = Math.max(0, (p.poison || 0) + delta);
+    stdRecomputeEliminated(p);
     save(state);
     return state;
   }
@@ -1142,6 +1154,7 @@
     stdAdjustLife,
     stdAdjustCmdDamage,
     stdAdjustCmdTax,
+    stdAdjustPoison,
     stdToggleEliminated,
     stdSetCommander,
     stdSetPartnerCommander,

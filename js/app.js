@@ -224,7 +224,7 @@
   // nos botões redondos/pequenos, onde uma onda quase não se veria. Um só
   // listener global, por isso apanha também elementos criados mais tarde.
   const RIPPLE_SEL = ".btn:not(.btn-icon), .mode-card, .loot-card, .search-result-item, .profile-card, .panel-pass-turn-btn, .switch-field, .cd-list-item[data-pid], .modal-sheet label.row";
-  const POP_SEL = ".btn-icon, .mini-btn, .cmd-badge, .tax-badge, .tax-badge-sm, .commander-thumb, .fullscreen-toggle-btn, .eliminated-badge, .protected-badge";
+  const POP_SEL = ".btn-icon, .mini-btn, .cmd-badge, .poison-badge, .tax-badge, .tax-badge-sm, .commander-thumb, .fullscreen-toggle-btn, .eliminated-badge, .protected-badge";
   document.addEventListener("pointerdown", (e) => {
     if (e.button > 0) return;
     const pop = e.target.closest(POP_SEL);
@@ -1003,9 +1003,10 @@
             </div>
           </div>
           ${moreOptionsHtml(
-            [preset.cmdDmgToggle ? "Commander damage" : "", tr("Tempo e turnos")].filter(Boolean).join(" · "),
+            [preset.cmdDmgToggle ? "Commander damage" : "", tr("Tempo e turnos"), tr("Veneno")].filter(Boolean).join(" · "),
             (preset.cmdDmgToggle ? switchFieldHtml("cfg-cmddmg", "Commander damage", tr("Contador de dano de commander por oponente (21 elimina)."), draft.cmdDmgEnabled) : "") +
-            trackTurnsFieldHtml(draft.trackTurns !== false)
+            trackTurnsFieldHtml(draft.trackTurns !== false) +
+            switchFieldHtml("cfg-poison", tr("Contadores de veneno"), tr("Mostra um contador de veneno em cada jogador (10 elimina)."), !!draft.poisonEnabled)
           )}
           ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
           <div class="mesa-card">
@@ -1124,6 +1125,7 @@
       s.querySelector("#cfg-cmddmg").addEventListener("change", (e) => { draft.cmdDmgEnabled = e.target.checked; });
     }
     s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
+    s.querySelector("#cfg-poison").addEventListener("change", (e) => { draft.poisonEnabled = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
     s.querySelector("#shuffle-btn").addEventListener("click", () => {
       shuffleInPlace(draft.players);
@@ -1144,6 +1146,7 @@
       commanderDamageEnabled: preset.cmdDmgToggle ? d.cmdDmgEnabled : preset.cmdDmgDefault,
       presetName: preset.key,
       trackTurns: d.trackTurns !== false,
+      poisonEnabled: !!d.poisonEnabled,
     });
     st.standard.players.forEach((p, i) => {
       const dp = d.players[i];
@@ -1229,7 +1232,7 @@
     s.querySelector("#reset-btn").addEventListener("click", () => {
       if (!confirm(timed ? tr("Reiniciar vidas, commander damage e os relógios de turno/jogo de todos os jogadores?") : tr("Reiniciar vidas e commander damage de todos os jogadores?"))) return;
       const now = Date.now();
-      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
+      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.poison = 0; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
       game.standard.roundNumber = 1;
       game.standard.roundStartIndex = game.standard.currentTurnIndex;
       game.standard.turnSeq = 1;
@@ -1316,7 +1319,10 @@
           ${isActive ? `<div class="turn-badge">${tr("A jogar")}</div>` : ""}
         <div class="player-header">
             <div class="player-name">${esc(p.name)}</div>
-            <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
+            <div class="header-badges">
+              ${game.standard.poisonEnabled ? `<div class="poison-badge ${(p.poison || 0) >= 10 ? "lethal" : ""}" data-action="poison" title="${tr("Veneno")}">${I("flask")}<span>${p.poison || 0}</span></div>` : ""}
+              <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
+            </div>
           </div>
           <div class="life-zone">
             <div class="life-tap minus"><span class="tap-circle">${I("minus")}</span></div>
@@ -1367,6 +1373,8 @@
       ev.stopPropagation();
       openEditPlayerModal({ mode: "standard", playerId: p.id });
     });
+    const poisonBadge = panel.querySelector('[data-action="poison"]');
+    if (poisonBadge) poisonBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openPoisonModal(p.id); });
     panel.querySelector('[data-action="tax"]').addEventListener("click", (ev) => {
       ev.stopPropagation();
       openCommanderTaxModal("standard", p.id);
@@ -1392,6 +1400,36 @@
     const main = "+" + (p.cmdTax || 0) * 2;
     if (!p.partnerCommander) return main;
     return main + "/+" + (p.partnerCmdTax || 0) * 2;
+  }
+
+  /** Contador de veneno de um jogador (modo standard). */
+  function openPoisonModal(playerId) {
+    const p = game.standard.players.find((x) => x.id === playerId);
+    if (!p) return;
+    closeAnyModal();
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet">
+          <h2>${tr("Veneno — {name}", { name: esc(p.name) })}</h2>
+          <div class="footer-note">${tr("Com 10 ou mais contadores de veneno o jogador é eliminado.")}</div>
+          <div class="cd-stepper">
+            <button class="btn btn-icon cd-round-btn" data-d="-1" aria-label="${tr("Menos um")}">${I("minus")}</button>
+            <div class="cd-value" id="poison-val">${p.poison || 0}</div>
+            <button class="btn btn-icon cd-round-btn" data-d="1" aria-label="${tr("Mais um")}">${I("plus")}</button>
+          </div>
+          <button class="btn btn-ghost btn-block" id="poison-close">${tr("Fechar")}</button>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    backdrop.querySelectorAll("[data-d]").forEach((b) => b.addEventListener("click", () => {
+      State.stdAdjustPoison(game, playerId, parseInt(b.dataset.d, 10));
+      backdrop.querySelector("#poison-val").textContent = p.poison || 0;
+      backdrop.querySelector("#poison-val").classList.toggle("lethal", (p.poison || 0) >= 10);
+      updateStandardPanel(playerId);
+    }));
+    backdrop.querySelector("#poison-close").addEventListener("click", () => backdrop.remove());
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
   function openCommanderTaxModal(mode, playerId) {
@@ -1571,6 +1609,8 @@
     panel.classList.toggle("eliminated", p.eliminated);
     setLifeAnimated(panel.querySelector(".life-total"), p.life);
     syncEliminationBadges(panel, p);
+    const pb = panel.querySelector(".poison-badge");
+    if (pb) { pb.querySelector("span").textContent = p.poison || 0; pb.classList.toggle("lethal", (p.poison || 0) >= 10); }
     panel.querySelectorAll(".cmd-badge").forEach((b) => {
       const oppId = b.dataset.oppId;
       const source = b.dataset.source || "main";

@@ -3,6 +3,7 @@
    =========================================================== */
 (function (global) {
   const STORAGE_KEY = "mtg_lc_game_v2";
+  const tr = global.MTG.i18n.t;
 
   function uid() {
     return "p_" + Math.random().toString(36).slice(2, 10);
@@ -105,7 +106,7 @@
     for (let i = 0; i < playerCount; i++) {
       players.push({
         id: uid(),
-        name: `Jogador ${i + 1}`,
+        name: tr("Jogador {n}", { n: i + 1 }),
         commander: null,
         partnerCommander: null, // commander parceiro opcional (regra Partner)
         life: startLife,
@@ -398,7 +399,7 @@
       for (let i = players.length; i < count; i++) {
         players.push({
           id: uid(),
-          name: `Jogador ${i + 1}`,
+          name: tr("Jogador {n}", { n: i + 1 }),
           commander: null,
           partnerCommander: null,
           life: state.standard.startLife,
@@ -474,21 +475,21 @@
   const BR_CLOSE_ORDER = ["A", "F", "B", "E", "C", "D"];
 
   const BR_EVENTS = {
-    1: { title: "Blood Moon", desc: "Cada jogador perde 3 vidas.", effect: "loseAll", amount: 3 },
-    2: { title: "Supply Drop", desc: "Cada jogador cria 1 Treasure.", effect: "log" },
-    3: { title: "Frenzy", desc: "Todas as criaturas ganham +2/+0 até ao teu próximo turno.", effect: "log" },
-    4: { title: "Blackout", desc: "Ninguém pode comprar mais de 1 carta neste turno.", effect: "log" },
-    5: { title: "Healing Zone", desc: "Cada jogador ganha 5 vidas.", effect: "gainAll", amount: 5 },
-    6: { title: "Air Drop", desc: "O jogador com menos vidas compra 5 cartas.", effect: "lowestLifeDraw" },
+    1: { title: "Blood Moon", desc: tr("Cada jogador perde 3 vidas."), effect: "loseAll", amount: 3 },
+    2: { title: "Supply Drop", desc: tr("Cada jogador cria 1 Treasure."), effect: "log" },
+    3: { title: "Frenzy", desc: tr("Todas as criaturas ganham +2/+0 até ao teu próximo turno."), effect: "log" },
+    4: { title: "Blackout", desc: tr("Ninguém pode comprar mais de 1 carta neste turno."), effect: "log" },
+    5: { title: "Healing Zone", desc: tr("Cada jogador ganha 5 vidas."), effect: "gainAll", amount: 5 },
+    6: { title: "Air Drop", desc: tr("O jogador com menos vidas compra 5 cartas."), effect: "lowestLifeDraw" },
   };
 
   const BR_LOOT = {
-    treasure3: { icon: "coins", title: "Cria 3 Treasure", type: "log" },
-    draw3: { icon: "layers", title: "Compra 3 cartas", type: "log" },
-    life10: { icon: "heart", title: "Ganha 10 vidas", type: "life", amount: 10 },
-    token66: { icon: "box", title: "Ficha 6/6", type: "log" },
-    regrowth: { icon: "undo", title: "Recupera carta do cemitério", type: "log" },
-    freeSpell: { icon: "star", title: "Carta grátis este turno", type: "log" },
+    treasure3: { icon: "coins", title: tr("Cria 3 Treasure"), type: "log" },
+    draw3: { icon: "layers", title: tr("Compra 3 cartas"), type: "log" },
+    life10: { icon: "heart", title: tr("Ganha 10 vidas"), type: "life", amount: 10 },
+    token66: { icon: "box", title: tr("Ficha 6/6"), type: "log" },
+    regrowth: { icon: "undo", title: tr("Recupera carta do cemitério"), type: "log" },
+    freeSpell: { icon: "star", title: tr("Carta grátis este turno"), type: "log" },
   };
 
   /** Baralha as zonas (Fisher-Yates) para que a zona inicial de cada jogador seja aleatória. */
@@ -507,7 +508,7 @@
     const zones = shuffledZones();
     const players = names.map((name, i) => ({
       id: uid(),
-      name: name && name.trim() ? name.trim() : `Jogador ${i + 1}`,
+      name: name && name.trim() ? name.trim() : tr("Jogador {n}", { n: i + 1 }),
       commander: null,
       life: 30,
       zone: zones[i % zones.length],
@@ -540,7 +541,7 @@
         endedAt: null,
         profilesApplied: false,
         lifeLog: [],
-        log: [{ t: Date.now(), text: "Battle Royale iniciado. Boa sorte, tributos." }],
+        log: [{ t: Date.now(), text: tr("Battle Royale iniciado. Boa sorte, tributos.") }],
       },
     };
     save(state);
@@ -702,13 +703,13 @@
     const alive = brAlivePlayers(state);
     if (state.br.phase === "normal" && alive.length === 3) {
       state.br.phase = "final_circle";
-      brLog(state, "FINAL CIRCLE — restam 3 jogadores! Não se pode ganhar vidas. Todos podem atacar todos. Criaturas com haste.");
+      brLog(state, tr("FINAL CIRCLE — restam 3 jogadores! Não se pode ganhar vidas. Todos podem atacar todos. Criaturas com haste."));
     } else if (
       (state.br.phase === "final_circle" || state.br.phase === "normal") &&
       alive.length === 2
     ) {
       state.br.phase = "final_duel_pending";
-      brLog(state, "Restam 2 jogadores — prepara o FINAL DUEL!");
+      brLog(state, tr("Restam 2 jogadores — prepara o FINAL DUEL!"));
     } else if (alive.length <= 1 && state.br.phase !== "ended") {
       const now = Date.now();
       const cur = brCurrentPlayer(state);
@@ -717,7 +718,7 @@
       state.br.phase = "ended";
       state.br.endedAt = now;
       state.br.championId = alive[0] ? alive[0].id : null;
-      brLog(state, alive[0] ? `${alive[0].name} é o CAMPEÃO DO BATTLE ROYALE!` : "Jogo terminado.");
+      brLog(state, alive[0] ? tr("{name} é o CAMPEÃO DO BATTLE ROYALE!", { name: alive[0].name }) : tr("Jogo terminado."));
       brApplyProfileResults(state);
     }
   }
@@ -728,7 +729,7 @@
     if (!p || p.eliminated) return state;
     p.eliminated = true;
     p.life = 0;
-    brLog(state, `${p.name} foi eliminado! (tudo o que controlava sai do jogo)`);
+    brLog(state, tr("{name} foi eliminado! (tudo o que controlava sai do jogo)", { name: p.name }));
     state.pendingLoot = (killerIds || []).filter(Boolean);
     brCheckPhaseTransition(state);
     save(state);
@@ -744,7 +745,7 @@
     if (reward.type === "life" && !(state.br.phase === "final_circle" || state.br.phase === "final_duel_pending")) {
       p.life += reward.amount;
     }
-    brLog(state, `${p.name} escolheu recompensa: ${reward.title}`);
+    brLog(state, tr("{name} escolheu recompensa: {reward}", { name: p.name, reward: reward.title }));
     save(state);
     return state;
   }
@@ -791,7 +792,7 @@
     // dano da zona fechada no início do turno de quem lá está
     const current = brCurrentPlayer(state);
     if (current && state.br.closedZones.includes(current.zone)) {
-      brLog(state, `${current.name} está numa zona fechada e perde 5 vidas!`);
+      brLog(state, tr("{name} está numa zona fechada e perde 5 vidas!", { name: current.name }));
       brAdjustLife(state, current.id, -5);
     }
 
@@ -803,7 +804,7 @@
     const next = state.br.closeOrder.find((z) => !state.br.closedZones.includes(z));
     if (!next) return state;
     state.br.closedZones.push(next);
-    brLog(state, `THE ZONE IS CLOSING — a zona ${next} está agora FECHADA!`);
+    brLog(state, tr("THE ZONE IS CLOSING — a zona {zone} está agora FECHADA!", { zone: next }));
     return state;
   }
 
@@ -812,7 +813,7 @@
     state.br.lastRoll = roll;
     state.br.roundEventRolled = true;
     const ev = BR_EVENTS[roll];
-    brLog(state, `Rolou ${roll} — ${ev.title}: ${ev.desc}`);
+    brLog(state, tr("Rolou {roll} — {title}: {desc}", { roll, title: ev.title, desc: ev.desc }));
     if (ev.effect === "loseAll") {
       brAlivePlayers(state).forEach((p) => brAdjustLife(state, p.id, -ev.amount));
     } else if (ev.effect === "gainAll") {
@@ -828,7 +829,7 @@
     brAlivePlayers(state).forEach((p) => {
       p.life += 10;
     });
-    brLog(state, "FINAL DUEL! Ambos ganham 10 vidas, desviram permanentes, compram 3 cartas e criam 3 Treasure.");
+    brLog(state, tr("FINAL DUEL! Ambos ganham 10 vidas, desviram permanentes, compram 3 cartas e criam 3 Treasure."));
     save(state);
     return state;
   }
@@ -860,7 +861,7 @@
         seat++;
         teamPlayers.push({
           id: uid(),
-          name: `Jogador ${seat}`,
+          name: tr("Jogador {n}", { n: seat }),
           commander: null,
           partnerCommander: null,
           cmdTax: 0,
@@ -870,7 +871,7 @@
       }
       teams.push({
         id: uid(),
-        name: `Equipa ${t + 1}`,
+        name: tr("Equipa {n}", { n: t + 1 }),
         life: startLife,
         eliminated: false,
         turnTimeMs: 0,

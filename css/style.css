@@ -29,6 +29,21 @@
   --shadow-sm: 0 1px 2px rgba(46,42,53,.06), 0 1px 3px rgba(46,42,53,.04);
   --shadow: 0 4px 16px rgba(46,42,53,.08);
   --shadow-lg: 0 18px 50px rgba(46,42,53,.18);
+  /* tokens que mudam entre claro/escuro */
+  --on-primary: #ffffff;           /* texto sobre --primary */
+  --primary-active: #45404d;
+  --primary-hover: #3b3643;
+  --accent-active: #cfc5f0;
+  --gold-active: #f3e2a6;
+  --ring: #ffffff;                 /* contorno de avatares/badges */
+  --chip-bg: rgba(255,255,255,.62); /* chips translúcidos por cima dos painéis */
+  --chip-bg-strong: rgba(255,255,255,.85);
+  --chip-ink: var(--text);
+  --icon-tile: rgba(255,255,255,.65);
+  --backdrop: rgba(46,42,53,.32);
+  --overlay: rgba(246,243,238,.82);
+  --stripe: #fbe6e8;
+  --pastel-veil: transparent;      /* véu por cima das cores pastel dos painéis */
   --ease-out: cubic-bezier(.22,1,.36,1);
   --ease-spring: cubic-bezier(.34,1.4,.64,1);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -37,6 +52,46 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 16px;
+}
+
+/* ---------- Modo escuro: segue a preferência do sistema ---------- */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg: #17151b;
+    --surface: #211f26;
+    --surface-2: #2a2730;
+    --surface-3: #37333e;
+    --line: #2f2b35;
+    --text: #f1edf5;
+    --text-dim: #a59eae;
+    /* pastéis "escurecidos" como fundo, e o pastel claro como tinta */
+    --lavender: #383156;  --lavender-ink: #cdc1ff;
+    --rose: #4a2a33;      --rose-ink: #ffb6c2;
+    --mint: #213f2f;      --mint-ink: #a3e5be;
+    --sky: #22364b;       --sky-ink: #b3d4f7;
+    --butter: #463c1c;    --butter-ink: #f3db8d;
+    --peach: #48301f;     --peach-ink: #f8c4a1;
+    --plus-ink: #93e2b3;
+    --minus-ink: #ff9cab;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+    --shadow: 0 4px 16px rgba(0,0,0,.35);
+    --shadow-lg: 0 18px 50px rgba(0,0,0,.55);
+    --on-primary: #17151b;
+    --primary-active: #d6d0dc;
+    --primary-hover: #ffffff;
+    --accent-active: #433b63;
+    --gold-active: #524722;
+    --ring: #2a2730;
+    --chip-bg: rgba(23,21,27,.5);
+    --chip-bg-strong: rgba(23,21,27,.75);
+    --chip-ink: #f1edf5;
+    --icon-tile: rgba(0,0,0,.22);
+    --backdrop: rgba(0,0,0,.55);
+    --overlay: rgba(23,21,27,.86);
+    --stripe: #3a222a;
+    /* as cores pastel dos painéis ficam mais profundas, com texto claro */
+    --pastel-veil: rgba(23,21,27,.52);
+  }
 }
 
 *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -143,13 +198,13 @@ button{
   transition: transform .15s var(--ease-spring), background .15s ease, border-color .15s ease;
 }
 .btn:active{ transform: scale(.96); background: var(--surface-2); }
-.btn-primary{ background: var(--primary); border-color: var(--primary); color:#fff; }
-.btn-primary:active{ background:#45404d; }
+.btn-primary{ background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.btn-primary:active{ background: var(--primary-active); }
 .btn-accent{ background: var(--lavender); border-color: transparent; color: var(--lavender-ink); }
-.btn-accent:active{ background:#cfc5f0; }
+.btn-accent:active{ background: var(--accent-active); }
 .btn-ghost{ background: var(--surface); }
 .btn-gold{ background: var(--butter); border-color: transparent; color: var(--butter-ink); }
-.btn-gold:active{ background:#f3e2a6; }
+.btn-gold:active{ background: var(--gold-active); }
 .btn-sm{ padding:8px 12px; font-size:.84rem; border-radius:10px; }
 .btn-block{ width:100%; }
 .btn-icon{
@@ -164,7 +219,7 @@ button{
 @media (hover:hover){
   .btn:hover{ border-color: var(--surface-3); }
   .btn-icon:hover{ background: var(--surface-2); }
-  .btn-primary:hover{ background:#3b3643; }
+  .btn-primary:hover{ background: var(--primary-hover); }
 }
 
 .row{ display:flex; gap:10px; }
@@ -222,7 +277,7 @@ input.switch::after{
   content:"";
   position:absolute; top:3px; left:3px;
   width:22px; height:22px; border-radius:50%;
-  background:#fff;
+  background: var(--ring);
   box-shadow: 0 1px 3px rgba(0,0,0,.18);
   transition: transform .22s var(--ease-spring);
 }
@@ -283,7 +338,7 @@ input.switch:checked::after{ transform: translateX(18px); }
 .mode-card .icon{
   width:42px; height:42px;
   border-radius: 14px;
-  background: rgba(255,255,255,.65);
+  background: var(--icon-tile);
   color: var(--card-ink);
   display:flex; align-items:center; justify-content:center;
   margin-bottom:6px;
@@ -396,7 +451,7 @@ input.switch:checked::after{ transform: translateX(18px); }
    =========================================================== */
 .modal-backdrop{
   position:fixed; inset:0;
-  background: rgba(46,42,53,.32);
+  background: var(--backdrop);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   display:flex; align-items:flex-end; justify-content:center;
@@ -501,6 +556,11 @@ input.switch:checked::after{ transform: translateX(18px); }
   background-position:center 30%;
   transition: filter .3s ease, opacity .3s ease;
 }
+.player-panel:not(.has-art) .bg::after{
+  content:"";
+  position:absolute; inset:0;
+  background: var(--pastel-veil);
+}
 .player-panel.has-art .bg::after{
   content:"";
   position:absolute; inset:0;
@@ -516,7 +576,7 @@ input.switch:checked::after{ transform: translateX(18px); }
   background-size:cover;
   background-position:center 30%;
 }
-.player-panel .bg.bg-split .bg-half:not(:last-child){ border-right:2px solid rgba(255,255,255,.5); }
+.player-panel .bg.bg-split .bg-half:not(:last-child){ border-right:2px solid var(--chip-bg); }
 /* Contorno de "é a tua vez": num pseudo-elemento por cima de tudo (um
    box-shadow no próprio painel ficaria por baixo do fundo .bg) */
 .player-panel.active-turn{ z-index: 1; }
@@ -532,13 +592,13 @@ input.switch:checked::after{ transform: translateX(18px); }
 .turn-badge{
   position:absolute; top:10px; left:10px; z-index:5;
   background: var(--text);
-  color:#fff;
+  color: var(--on-primary);
   font-size:.64rem; font-weight:700; letter-spacing:.4px; text-transform:uppercase;
   padding: 4px 9px;
   border-radius: 999px;
   animation: fadeIn .3s ease both;
 }
-.player-panel.has-art .turn-badge{ background:#fff; color: var(--text); }
+.player-panel.has-art .turn-badge{ background:#fff; color:#2e2a35; }
 .player-panel.rot180 .turn-badge{ top:auto; bottom:10px; }
 /* nos painéis rodados o badge fica no fundo do painel (por cima do botão
    de passar turno / roster da equipa): reserva-lhe espaço */
@@ -548,7 +608,7 @@ input.switch:checked::after{ transform: translateX(18px); }
 .turn-badge-sm{
   display:inline-flex; align-items:center;
   background: var(--text);
-  color:#fff; font-size:.6rem; font-weight:700; letter-spacing:.3px; text-transform:uppercase;
+  color: var(--on-primary); font-size:.6rem; font-weight:700; letter-spacing:.3px; text-transform:uppercase;
   padding: 2px 7px; border-radius: 999px; margin-left:4px;
   vertical-align:middle;
 }
@@ -574,10 +634,10 @@ input.switch:checked::after{ transform: translateX(18px); }
 /* "chips" claros por cima do painel (tax, editar, +N, +/−) — sempre
    brancos translúcidos com texto escuro, legíveis sobre pastel e sobre arte */
 .tax-badge, .tax-badge-sm, .mini-btn, .life-delta-fixed, .life-tap .tap-circle{
-  background: rgba(255,255,255,.62);
+  background: var(--chip-bg);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
-  color: var(--text);
+  color: var(--chip-ink);
 }
 .tax-badge{
   font-size:.82rem; padding:6px 12px; border-radius:999px; font-weight:700;
@@ -658,7 +718,7 @@ input.switch:checked::after{ transform: translateX(18px); }
   border-radius:50%;
   background-size:cover; background-position:center;
   background-color: var(--surface-3);
-  border:2px solid #fff;
+  border:2px solid var(--ring);
   position:relative;
   display:flex; align-items:center; justify-content:center;
   color: var(--text-dim);
@@ -670,12 +730,12 @@ input.switch:checked::after{ transform: translateX(18px); }
 .cmd-badge .dmg{
   position:absolute; bottom:-5px; right:-6px;
   background: var(--text);
-  color:#fff;
+  color: var(--on-primary);
   border-radius:999px;
   min-width:17px; height:17px;
   font-size:.62rem; font-weight:700;
   display:flex; align-items:center; justify-content:center;
-  border:1.5px solid #fff;
+  border:1.5px solid var(--ring);
   padding:0 3px;
 }
 .cmd-badge.partner{ border-color: var(--lavender); }
@@ -695,14 +755,14 @@ input.switch:checked::after{ transform: translateX(18px); }
   display:flex;
   align-items:center;
   gap:6px;
-  background: rgba(255,255,255,.55);
+  background: var(--chip-bg);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
-  color: var(--text);
+  color: var(--chip-ink);
   border-radius:12px;
   padding: 4px 6px;
 }
-.team-roster-row.up{ background: rgba(255,255,255,.85); }
+.team-roster-row.up{ background: var(--chip-bg-strong); }
 .team-roster-thumb{
   width:22px; height:22px; border-radius:50%; flex-shrink:0;
   background-size:cover; background-position:center;
@@ -719,7 +779,7 @@ input.switch:checked::after{ transform: translateX(18px); }
   font-size:.7rem; padding:5px 10px; border-radius:999px; font-weight:700;
   white-space:nowrap; cursor:pointer;
   min-height:26px; display:flex; align-items:center;
-  background: rgba(255,255,255,.7);
+  background: var(--chip-bg-strong);
 }
 .team-roster-row .mini-btn{ width:24px; height:24px; position:static; }
 .team-roster-row .mini-btn .ic{ width:12px; height:12px; }
@@ -783,7 +843,7 @@ input.switch:checked::after{ transform: translateX(18px); }
   padding: 9px 16px;
   border-radius: 999px;
   background: var(--text);
-  color:#fff;
+  color: var(--on-primary);
   font-weight:700;
   font-size:.8rem;
   border:none;
@@ -795,7 +855,7 @@ input.switch:checked::after{ transform: translateX(18px); }
   transition: transform .15s var(--ease-spring);
   animation: fadeIn .3s ease both;
 }
-.player-panel.has-art .panel-pass-turn-btn{ background:#fff; color: var(--text); }
+.player-panel.has-art .panel-pass-turn-btn{ background:#fff; color:#2e2a35; }
 .panel-pass-turn-btn .ic{ width:1em; height:1em; }
 .panel-pass-turn-btn:active{ transform: scale(.94); }
 .panel-pass-turn-btn:disabled{ opacity:.4; pointer-events:none; }
@@ -947,12 +1007,12 @@ input.switch:checked::after{ transform: translateX(18px); }
 }
 .zone-cell .zn{ font-weight:700; font-size:.85rem; color: var(--text-dim); }
 .zone-cell.closed{
-  background: repeating-linear-gradient(45deg, var(--rose), var(--rose) 6px, #fbe6e8 6px, #fbe6e8 12px);
+  background: repeating-linear-gradient(45deg, var(--rose), var(--rose) 6px, var(--stripe) 6px, var(--stripe) 12px);
   border-color: transparent;
 }
 .zone-cell.closed .zn{ color: var(--rose-ink); }
 .zone-avatars{ display:flex; flex-wrap:wrap; gap:3px; justify-content:center; }
-.zone-avatar{ width:18px; height:18px; border-radius:50%; background-size:cover; background-position:center; border:1.5px solid #fff; box-shadow: var(--shadow-sm); }
+.zone-avatar{ width:18px; height:18px; border-radius:50%; background-size:cover; background-position:center; border:1.5px solid var(--ring); box-shadow: var(--shadow-sm); }
 
 .br-players{
   flex:1; min-height:0; overflow-y:auto; padding: 4px 12px 12px; display:flex; flex-direction:column; gap:8px;
@@ -1054,7 +1114,7 @@ input.switch:checked::after{ transform: translateX(18px); }
   width:88px; height:88px; border-radius:50%;
   background-size:cover; background-position:center;
   background-color: var(--surface-2);
-  border:4px solid #fff;
+  border:4px solid var(--ring);
   box-shadow: var(--shadow);
 }
 .trophy{
@@ -1098,7 +1158,7 @@ input.switch:checked::after{ transform: translateX(18px); }
 .stat-name .ic-win{ color: var(--butter-ink); }
 .stat-tag{ font-size:.66rem; font-weight:600; color: var(--rose-ink); background: var(--rose); padding:1px 7px; border-radius:999px; }
 .stat-bar-track{ height:6px; border-radius:3px; background: var(--surface-2); overflow:hidden; margin-bottom:5px; }
-.stat-row.winner .stat-bar-track{ background: rgba(255,255,255,.6); }
+.stat-row.winner .stat-bar-track{ background: var(--chip-bg); }
 .stat-bar-fill{
   height:100%; border-radius:3px;
   background: var(--lavender-ink);
@@ -1114,7 +1174,7 @@ input.switch:checked::after{ transform: translateX(18px); }
    =========================================================== */
 .victory-overlay{
   position:fixed; inset:0; z-index:200;
-  background: rgba(246,243,238,.82);
+  background: var(--overlay);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   display:flex; align-items:center; justify-content:center;
@@ -1201,7 +1261,7 @@ input.switch:checked::after{ transform: translateX(18px); }
   position:fixed; left:50%; bottom: calc(24px + var(--safe-bottom));
   transform: translateX(-50%) translateY(10px);
   background: var(--text);
-  color:#fff;
+  color: var(--on-primary);
   padding: 10px 18px;
   border-radius: 999px;
   font-size:.84rem; font-weight:500;

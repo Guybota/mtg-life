@@ -1,11 +1,12 @@
 /* Service worker — cache do "app shell" para funcionar offline depois
    da primeira visita. As chamadas à Scryfall API (rede) não são
    interceptadas: seguem sempre para a rede normalmente. */
-const CACHE = "mtg-life-counter-v4";
+const CACHE = "mtg-life-counter-v5";
 const SHELL = [
   "./",
   "./index.html",
   "./css/style.css",
+  "./js/i18n.js",
   "./js/icons.js",
   "./js/scryfall.js",
   "./js/profiles.js",

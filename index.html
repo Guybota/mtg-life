@@ -8,7 +8,9 @@
 
 <!-- PWA -->
 <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#f6f3ee">
+<meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#18161c" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
 
 <!-- iOS: instalar como app (Add to Home Screen) -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -28,6 +30,7 @@
 <div id="toast"></div>
 <audio id="turn-sound" src="./assets/te_toca.mp3" preload="auto"></audio>
 
+<script src="./js/i18n.js"></script>
 <script src="./js/icons.js"></script>
 <script src="./js/scryfall.js"></script>
 <script src="./js/profiles.js"></script>

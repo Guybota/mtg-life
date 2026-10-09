@@ -292,6 +292,11 @@
     // setup refinado
     "Outra": "Other",
     "Último jogo": "Last game",
+    "Lugares": "Seats",
+    "Sortear lugares": "Shuffle seats",
+    "Sortear equipas": "Shuffle teams",
+    "Lugares sorteados": "Seats shuffled",
+    "Equipas sorteadas": "Teams shuffled",
     "Perfis recentes": "Recent profiles",
     "Usar o perfil {name}": "Use the profile {name}",
     "Cor sem commander": "Colour without commander",

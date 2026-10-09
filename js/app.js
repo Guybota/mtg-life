@@ -793,6 +793,18 @@
   // ===========================================================
   // EXTRAS DE CADA LUGAR NO SETUP: perfis recentes, cor, perfil repetido
   // ===========================================================
+  /** Baralha uma lista no sítio (Fisher–Yates) e devolve-a. */
+  function shuffleInPlace(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  function seatsHeadHtml(title, btnLabel) {
+    return `<div class="section-head"><span class="section-title">${title}</span><button type="button" class="btn btn-ghost btn-sm" id="shuffle-btn">${I("shuffle")} ${btnLabel}</button></div>`;
+  }
+
   /** Perfis usados mais recentemente (último jogo, ou data de criação),
    *  sem os que já estão sentados noutros lugares. */
   function recentProfiles(excludeIds, n) {
@@ -877,6 +889,7 @@
             (preset.cmdDmgToggle ? switchFieldHtml("cfg-cmddmg", "Commander damage", tr("Contador de dano de commander por oponente (21 elimina)."), draft.cmdDmgEnabled) : "") +
             trackTurnsFieldHtml(draft.trackTurns !== false)
           )}
+          ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
@@ -979,6 +992,11 @@
     }
     s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
+    s.querySelector("#shuffle-btn").addEventListener("click", () => {
+      shuffleInPlace(draft.players);
+      renderPlayersList();
+      toast(tr("Lugares sorteados"));
+    });
     s.querySelector("#start-btn").addEventListener("click", () => startStandardFromDraft(draft));
   }
 
@@ -1643,6 +1661,7 @@
         </div>
         <div class="scroll">
           <div class="footer-note" style="margin-bottom:12px">${tr("6 jogadores · 30 vidas cada · zona inicial sorteada aleatoriamente · sem commander damage. Consulta as regras completas no ecrã de jogo (ícone de informação).")}</div>
+          ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
@@ -1699,6 +1718,15 @@
       list.appendChild(card);
     });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
+    s.querySelector("#shuffle-btn").addEventListener("click", () => {
+      const order = shuffleInPlace(draft.names.map((_, i) => i));
+      const pick = (arr) => order.map((k) => (arr ? arr[k] : null));
+      draft.names = pick(draft.names);
+      draft.commanders = pick(draft.commanders);
+      draft.profileIds = pick(draft.profileIds);
+      render();
+      toast(tr("Lugares sorteados"));
+    });
     s.querySelector("#start-btn").addEventListener("click", () => startBRFromDraft(draft));
   }
 
@@ -2056,6 +2084,7 @@
           </div>
           ${moreOptionsHtml(tr("Tempo e turnos"), trackTurnsFieldHtml(draft.trackTurns !== false))}
           <div class="footer-note" style="margin-bottom:12px">${tr("Vida partilhada por equipa (estilo Two-Headed Giant): a equipa toda soma/perde vida em conjunto. Os turnos alternam entre equipas.")}</div>
+          ${seatsHeadHtml(tr("Equipas"), tr("Sortear equipas"))}
           <div id="teams-list"></div>
         </div>
         <div class="board-toolbar">
@@ -2189,6 +2218,14 @@
     bindLifeField(s, (v) => { draft.startLife = Math.max(1, v || 40); });
     s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
+    s.querySelector("#shuffle-btn").addEventListener("click", () => {
+      // baralha todos os jogadores e volta a distribuí-los pelas equipas,
+      // mantendo o nº de jogadores por equipa (os nomes das equipas ficam)
+      const all = shuffleInPlace(draft.teams.reduce((acc, t) => acc.concat(t.players), []));
+      draft.teams.forEach((t) => { t.players = all.splice(0, t.players.length); });
+      renderTeamsList();
+      toast(tr("Equipas sorteadas"));
+    });
     s.querySelector("#start-btn").addEventListener("click", () => startTeamsFromDraft(draft));
   }
 

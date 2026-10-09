@@ -571,18 +571,75 @@
           draft = makeTeamsDraft(2, 2, 40);
           nav("setup-teams");
         } else {
-          const preset = PRESETS[mode];
-          draft = {
-            preset: preset.key,
-            playerCount: preset.defaultPlayers,
-            startLife: preset.defaultLife,
-            cmdDmgEnabled: preset.cmdDmgDefault,
-            players: Array.from({ length: preset.defaultPlayers }, (_, i) => ({ name: "", commander: null, partnerCommander: null, profileId: null })),
-          };
-          nav("setup-standard");
+          draft = makeStandardDraft(mode);
+          openQuickStartSheet(mode);
         }
       });
     });
+  }
+
+  function makeStandardDraft(mode) {
+    const preset = PRESETS[mode];
+    return {
+      preset: preset.key,
+      playerCount: preset.defaultPlayers,
+      startLife: preset.defaultLife,
+      cmdDmgEnabled: preset.cmdDmgDefault,
+      players: Array.from({ length: preset.defaultPlayers }, () => ({ name: "", commander: null, partnerCommander: null, profileId: null })),
+    };
+  }
+
+  /** "Começar já": folha rápida ao escolher Commander/Duelo/Livre — só nº de
+   *  jogadores e vida; nomes/commanders ajustam-se depois no lápis de cada
+   *  painel. "Configurar jogadores primeiro" abre o setup completo. */
+  function openQuickStartSheet(mode) {
+    const preset = PRESETS[mode];
+    const fixed = preset.minPlayers === preset.maxPlayers;
+    const icon = { commander: "crown", duel: "swords", free: "sliders" }[mode];
+    const backdrop = el(`
+      <div class="modal-backdrop">
+        <div class="modal-sheet quick-sheet">
+          <div class="quick-head">
+            <span class="quick-icon ${mode}">${I(icon)}</span>
+            <div><h2>${esc(preset.label)}</h2><div class="footer-note">${tr("Começa já — o resto ajusta-se no tabuleiro")}</div></div>
+          </div>
+          ${fixed ? "" : `
+          <div class="field">
+            <label>${tr("Jogadores")}</label>
+            <div class="quick-stepper">
+              <button type="button" class="btn btn-icon" id="qs-minus" aria-label="${tr("Menos um jogador")}">${I("minus")}</button>
+              <span class="quick-count" id="qs-count">${draft.playerCount}</span>
+              <button type="button" class="btn btn-icon" id="qs-plus" aria-label="${tr("Mais um jogador")}">${I("plus")}</button>
+            </div>
+          </div>`}
+          <div class="field">
+            <label>${tr("Vida inicial")}</label>
+            ${lifeFieldHtml(draft.startLife)}
+          </div>
+          <div class="quick-note">${I("pencil")}<span>${tr("Nomes, commanders e perfis: toca no lápis de cada jogador durante o jogo.")}</span></div>
+          <button class="btn btn-primary btn-block quick-go" id="qs-go">${I("play")} ${tr("Começar já")}</button>
+          <button class="btn btn-ghost btn-block" id="qs-setup">${tr("Configurar jogadores primeiro")}</button>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(backdrop);
+    const setCount = (n) => {
+      n = Math.max(preset.minPlayers, Math.min(preset.maxPlayers, n));
+      draft.playerCount = n;
+      draft.players = Array.from({ length: n }, (_, i) => draft.players[i] || { name: "", commander: null, partnerCommander: null, profileId: null });
+      backdrop.querySelector("#qs-count").textContent = n;
+    };
+    if (!fixed) {
+      backdrop.querySelector("#qs-minus").addEventListener("click", () => setCount(draft.playerCount - 1));
+      backdrop.querySelector("#qs-plus").addEventListener("click", () => setCount(draft.playerCount + 1));
+    }
+    bindLifeField(backdrop, (v) => { draft.startLife = Math.max(1, v || preset.defaultLife); });
+    backdrop.querySelector("#qs-go").addEventListener("click", () => {
+      backdrop.remove();
+      startStandardFromDraft(draft, { quick: true });
+    });
+    backdrop.querySelector("#qs-setup").addEventListener("click", () => { backdrop.remove(); nav("setup-standard"); });
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
   // ===========================================================
@@ -1078,7 +1135,7 @@
 
   /** Cria e arranca um jogo Commander/Duelo/Livre a partir de um rascunho de
    *  setup (usado pelo botão "Começar jogo" e pelo "Repetir último jogo"). */
-  function startStandardFromDraft(d) {
+  function startStandardFromDraft(d, opts) {
     const preset = PRESETS[d.preset];
     rememberSetup("standard", d);
     const st = State.createStandardGame({
@@ -1099,8 +1156,9 @@
     State.ensureFallbackColors(st.standard.players);
     State.save(st);
     game = st;
-    // sem contagem de turnos não interessa quem começa
-    if (!st.standard.trackTurns) { nav("game-standard"); return; }
+    // sem contagem de turnos não interessa quem começa; no "Começar já"
+    // começa o 1.º lugar (pode-se passar o turno logo a seguir)
+    if (!st.standard.trackTurns || (opts && opts.quick)) { nav("game-standard"); return; }
     openWhoStartsModal(
       st.standard.players.map((p) => ({ id: p.id, name: p.name })),
       (winnerId) => {

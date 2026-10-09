@@ -8,17 +8,17 @@
     return "p_" + Math.random().toString(36).slice(2, 10);
   }
 
-  // Cores de fundo sorteadas para jogadores sem commander escolhido (sem
-  // arte de fundo). Cada entrada é [corClara, corEscura] para um gradiente.
+  // Cores de fundo (pastel) sorteadas para jogadores sem commander escolhido
+  // (sem arte de fundo). Cada entrada é [corClara, corEscura] para um gradiente.
   const FALLBACK_PALETTE = [
-    ["#c0392b", "#6b1810"], // vermelho
-    ["#1f6fb2", "#0d2f4f"], // azul
-    ["#2e9e5b", "#123f24"], // verde
-    ["#8e2ee0", "#3a1263"], // roxo
-    ["#d4af37", "#5c4813"], // dourado
-    ["#e0632e", "#5c2510"], // laranja
-    ["#2ec4b6", "#0f4c47"], // turquesa
-    ["#e0389a", "#5c1743"], // rosa
+    ["#f7cdcd", "#f0b7ba"], // rosa-coral
+    ["#cfe0f5", "#b6cfee"], // azul
+    ["#cdebd8", "#b3dfc4"], // menta
+    ["#ddd3f5", "#c9bcef"], // lavanda
+    ["#f8e8b5", "#f1db95"], // manteiga
+    ["#fad8c1", "#f5c3a3"], // pêssego
+    ["#c9ece8", "#ade0da"], // água
+    ["#f6d0e3", "#efb9d4"], // rosa
   ];
 
   /** Garante que todos os jogadores sem arte de commander têm uma cor de
@@ -51,7 +51,7 @@
   }
 
   /** Regista uma alteração de vida no histórico ao vivo do jogo (mostrado no
-   *  botão "📜 Histórico" do tabuleiro) — guarda CADA alteração individual
+   *  botão "Histórico" do tabuleiro) — guarda CADA alteração individual
    *  (não só a diferença total acumulada), já com o contexto de que
    *  turno/ronda era e de quem era a vez nesse momento. turnEntity/
    *  targetEntity podem ser um jogador OU uma equipa (só precisam de
@@ -100,7 +100,7 @@
   // ---------------------------------------------------------
   // MODO "STANDARD" (Commander padrão / Duelo 1v1 / Livre)
   // ---------------------------------------------------------
-  function createStandardGame({ playerCount, startLife, commanderDamageEnabled, presetName }) {
+  function createStandardGame({ playerCount, startLife, commanderDamageEnabled, presetName, trackTurns }) {
     const players = [];
     for (let i = 0; i < playerCount; i++) {
       players.push({
@@ -128,6 +128,8 @@
       standard: {
         startLife,
         commanderDamageEnabled: !!commanderDamageEnabled,
+        // false = jogo "livre de relógio": sem turnos, rondas nem cronómetros
+        trackTurns: trackTurns !== false,
         players,
         turnOrder: players.map((p) => p.id),
         currentTurnIndex: 0,
@@ -341,6 +343,7 @@
     const gameTimeMs = (std.endedAt || Date.now()) - std.gameStartedAt;
     return {
       gameTimeMs,
+      timed: std.trackTurns !== false,
       winnerId: std.winnerId,
       players: std.players.map((p) => ({
         id: p.id,
@@ -359,8 +362,9 @@
     const std = state.standard;
     if (std.ended) return stdComputeStats(state);
     const now = Date.now();
+    const timed = std.trackTurns !== false;
     const cur = stdCurrentPlayer(state);
-    if (cur && !std.paused) {
+    if (timed && cur && !std.paused) {
       cur.turnTimeMs += now - std.turnStartedAt;
       cur.turnsTaken += 1;
     }
@@ -378,6 +382,7 @@
             turnTimeMs: p.turnTimeMs,
             turnsTaken: p.turnsTaken,
             mode: state.presetName || "standard",
+            timed,
           });
         }
       });
@@ -469,21 +474,21 @@
   const BR_CLOSE_ORDER = ["A", "F", "B", "E", "C", "D"];
 
   const BR_EVENTS = {
-    1: { title: "🩸 Blood Moon", desc: "Cada jogador perde 3 vidas.", effect: "loseAll", amount: 3 },
-    2: { title: "📦 Supply Drop", desc: "Cada jogador cria 1 Treasure.", effect: "log" },
-    3: { title: "⚡ Frenzy", desc: "Todas as criaturas ganham +2/+0 até ao teu próximo turno.", effect: "log" },
-    4: { title: "🌑 Blackout", desc: "Ninguém pode comprar mais de 1 carta neste turno.", effect: "log" },
-    5: { title: "💚 Healing Zone", desc: "Cada jogador ganha 5 vidas.", effect: "gainAll", amount: 5 },
-    6: { title: "✈️ AIR DROP", desc: "O jogador com menos vidas compra 5 cartas.", effect: "lowestLifeDraw" },
+    1: { title: "Blood Moon", desc: "Cada jogador perde 3 vidas.", effect: "loseAll", amount: 3 },
+    2: { title: "Supply Drop", desc: "Cada jogador cria 1 Treasure.", effect: "log" },
+    3: { title: "Frenzy", desc: "Todas as criaturas ganham +2/+0 até ao teu próximo turno.", effect: "log" },
+    4: { title: "Blackout", desc: "Ninguém pode comprar mais de 1 carta neste turno.", effect: "log" },
+    5: { title: "Healing Zone", desc: "Cada jogador ganha 5 vidas.", effect: "gainAll", amount: 5 },
+    6: { title: "Air Drop", desc: "O jogador com menos vidas compra 5 cartas.", effect: "lowestLifeDraw" },
   };
 
   const BR_LOOT = {
-    treasure3: { icon: "💰", title: "Cria 3 Treasure", type: "log" },
-    draw3: { icon: "🎴", title: "Compra 3 cartas", type: "log" },
-    life10: { icon: "❤️", title: "Ganha 10 vidas", type: "life", amount: 10 },
-    token66: { icon: "🐗", title: "Ficha 6/6", type: "log" },
-    regrowth: { icon: "⚰️", title: "Recupera carta do cemitério", type: "log" },
-    freeSpell: { icon: "✨", title: "Carta grátis este turno", type: "log" },
+    treasure3: { icon: "coins", title: "Cria 3 Treasure", type: "log" },
+    draw3: { icon: "layers", title: "Compra 3 cartas", type: "log" },
+    life10: { icon: "heart", title: "Ganha 10 vidas", type: "life", amount: 10 },
+    token66: { icon: "box", title: "Ficha 6/6", type: "log" },
+    regrowth: { icon: "undo", title: "Recupera carta do cemitério", type: "log" },
+    freeSpell: { icon: "star", title: "Carta grátis este turno", type: "log" },
   };
 
   /** Baralha as zonas (Fisher-Yates) para que a zona inicial de cada jogador seja aleatória. */
@@ -535,7 +540,7 @@
         endedAt: null,
         profilesApplied: false,
         lifeLog: [],
-        log: [{ t: Date.now(), text: "🎮 Battle Royale iniciado. Boa sorte, tributos." }],
+        log: [{ t: Date.now(), text: "Battle Royale iniciado. Boa sorte, tributos." }],
       },
     };
     save(state);
@@ -697,13 +702,13 @@
     const alive = brAlivePlayers(state);
     if (state.br.phase === "normal" && alive.length === 3) {
       state.br.phase = "final_circle";
-      brLog(state, "☠️ FINAL CIRCLE — restam 3 jogadores! Não se pode ganhar vidas. Todos podem atacar todos. Criaturas com haste.");
+      brLog(state, "FINAL CIRCLE — restam 3 jogadores! Não se pode ganhar vidas. Todos podem atacar todos. Criaturas com haste.");
     } else if (
       (state.br.phase === "final_circle" || state.br.phase === "normal") &&
       alive.length === 2
     ) {
       state.br.phase = "final_duel_pending";
-      brLog(state, "⚔️ Restam 2 jogadores — prepara o FINAL DUEL!");
+      brLog(state, "Restam 2 jogadores — prepara o FINAL DUEL!");
     } else if (alive.length <= 1 && state.br.phase !== "ended") {
       const now = Date.now();
       const cur = brCurrentPlayer(state);
@@ -712,7 +717,7 @@
       state.br.phase = "ended";
       state.br.endedAt = now;
       state.br.championId = alive[0] ? alive[0].id : null;
-      brLog(state, alive[0] ? `👑 ${alive[0].name} é o CAMPEÃO DO BATTLE ROYALE!` : "Jogo terminado.");
+      brLog(state, alive[0] ? `${alive[0].name} é o CAMPEÃO DO BATTLE ROYALE!` : "Jogo terminado.");
       brApplyProfileResults(state);
     }
   }
@@ -723,7 +728,7 @@
     if (!p || p.eliminated) return state;
     p.eliminated = true;
     p.life = 0;
-    brLog(state, `💀 ${p.name} foi eliminado! (tudo o que controlava sai do jogo)`);
+    brLog(state, `${p.name} foi eliminado! (tudo o que controlava sai do jogo)`);
     state.pendingLoot = (killerIds || []).filter(Boolean);
     brCheckPhaseTransition(state);
     save(state);
@@ -739,7 +744,7 @@
     if (reward.type === "life" && !(state.br.phase === "final_circle" || state.br.phase === "final_duel_pending")) {
       p.life += reward.amount;
     }
-    brLog(state, `🎁 ${p.name} escolheu recompensa: ${reward.title}`);
+    brLog(state, `${p.name} escolheu recompensa: ${reward.title}`);
     save(state);
     return state;
   }
@@ -786,7 +791,7 @@
     // dano da zona fechada no início do turno de quem lá está
     const current = brCurrentPlayer(state);
     if (current && state.br.closedZones.includes(current.zone)) {
-      brLog(state, `☢️ ${current.name} está numa zona fechada e perde 5 vidas!`);
+      brLog(state, `${current.name} está numa zona fechada e perde 5 vidas!`);
       brAdjustLife(state, current.id, -5);
     }
 
@@ -798,7 +803,7 @@
     const next = state.br.closeOrder.find((z) => !state.br.closedZones.includes(z));
     if (!next) return state;
     state.br.closedZones.push(next);
-    brLog(state, `☢️ THE ZONE IS CLOSING — a zona ${next} está agora FECHADA!`);
+    brLog(state, `THE ZONE IS CLOSING — a zona ${next} está agora FECHADA!`);
     return state;
   }
 
@@ -807,7 +812,7 @@
     state.br.lastRoll = roll;
     state.br.roundEventRolled = true;
     const ev = BR_EVENTS[roll];
-    brLog(state, `🎲 Rolou ${roll} — ${ev.title}: ${ev.desc}`);
+    brLog(state, `Rolou ${roll} — ${ev.title}: ${ev.desc}`);
     if (ev.effect === "loseAll") {
       brAlivePlayers(state).forEach((p) => brAdjustLife(state, p.id, -ev.amount));
     } else if (ev.effect === "gainAll") {
@@ -823,7 +828,7 @@
     brAlivePlayers(state).forEach((p) => {
       p.life += 10;
     });
-    brLog(state, "⚔️ FINAL DUEL! Ambos ganham 10 vidas, desviram permanentes, compram 3 cartas e criam 3 Treasure.");
+    brLog(state, "FINAL DUEL! Ambos ganham 10 vidas, desviram permanentes, compram 3 cartas e criam 3 Treasure.");
     save(state);
     return state;
   }
@@ -846,7 +851,7 @@
     return (teams || []).reduce((acc, t) => acc.concat(t.players), []);
   }
 
-  function createTeamsGame({ numTeams, playersPerTeam, startLife }) {
+  function createTeamsGame({ numTeams, playersPerTeam, startLife, trackTurns }) {
     const teams = [];
     let seat = 0;
     for (let t = 0; t < numTeams; t++) {
@@ -886,6 +891,7 @@
         numTeams,
         playersPerTeam,
         startLife,
+        trackTurns: trackTurns !== false,
         teams,
         turnOrder,
         currentTurnIndex: 0,
@@ -1085,7 +1091,7 @@
       avgTurnMs: team.turnsTaken ? team.turnTimeMs / team.turnsTaken : 0,
       eliminated: team.eliminated,
     }));
-    return { gameTimeMs, winnerId: t.winnerTeamId, players: rows };
+    return { gameTimeMs, timed: t.trackTurns !== false, winnerId: t.winnerTeamId, players: rows };
   }
 
   /** Termina o jogo: fecha o relógio do turno atual, guarda stats nos perfis
@@ -1094,8 +1100,9 @@
     const t = state.teams;
     if (t.ended) return teamsComputeStats(state);
     const now = Date.now();
+    const timed = t.trackTurns !== false;
     const cur = teamsCurrentTeam(state);
-    if (cur && !t.paused) {
+    if (timed && cur && !t.paused) {
       cur.turnTimeMs += now - t.turnStartedAt;
       cur.turnsTaken += 1;
     }
@@ -1114,6 +1121,7 @@
               turnTimeMs: team.turnTimeMs,
               turnsTaken: team.turnsTaken,
               mode: "teams",
+              timed,
             });
           }
         });

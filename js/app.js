@@ -2,7 +2,8 @@
    app.js — controlador principal / UI
    =========================================================== */
 (function () {
-  const { Scryfall, State, Profiles } = window.MTG;
+  const { Scryfall, State, Profiles, Icons } = window.MTG;
+  const I = (name, cls) => Icons.svg(name, cls);
   const appEl = document.getElementById("app");
   const toastEl = document.getElementById("toast");
   const turnAudioEl = document.getElementById("turn-sound");
@@ -217,6 +218,49 @@
     elm.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
+  /** Chips de estado do tabuleiro (vez/ronda/relógios) — só existem em
+   *  jogos com contagem de tempo e turnos. */
+  function turnChipsHtml(turnName, roundNumber, paused) {
+    return `
+      <div class="br-chip turn">${I("user")} Vez: ${esc(turnName)}</div>
+      <div class="br-chip">${I("repeat")} Ronda ${roundNumber || 1}</div>
+      <div class="br-chip">${I("clock")}<span id="chip-turn-time">Turno 00:00</span></div>
+      <div class="br-chip">${I("hourglass")}<span id="chip-total-time">Total 00:00</span></div>
+      ${paused ? `<div class="br-chip paused">${I("pause")} Pausado</div>` : ""}`;
+  }
+
+  /** Relógio ao vivo (turno/total) dos chips acima. modeState: game.standard /
+   *  game.br / game.teams. */
+  function startLiveClock(scope, modeState) {
+    function tick() {
+      const chipTurn = scope.querySelector("#chip-turn-time");
+      const chipTotal = scope.querySelector("#chip-total-time");
+      if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
+      const now = modeState.paused ? modeState.pausedAt : Date.now();
+      chipTurn.textContent = "Turno " + formatDuration(now - modeState.turnStartedAt);
+      chipTotal.textContent = "Total " + formatDuration(now - modeState.gameStartedAt);
+    }
+    tick();
+    liveTimer = setInterval(tick, 1000);
+  }
+
+  /** Interruptor "Contar tempo e turnos" dos ecrãs de setup. */
+  function trackTurnsFieldHtml(checked) {
+    return `
+      <label class="switch-field">
+        <span class="switch-text">
+          <span class="switch-title">Contar tempo e turnos</span>
+          <span class="switch-sub">Desliga para jogar só com a vida — sem relógios, rondas nem passar turno.</span>
+        </span>
+        <input type="checkbox" id="cfg-track" class="switch" ${checked ? "checked" : ""}>
+      </label>`;
+  }
+
+  /** Conteúdo do botão de perfil de um jogador (ícone + nome do perfil). */
+  function profileBtnHtml(profile) {
+    return I("user") + " " + (profile ? esc(profile.name) : "Sem perfil");
+  }
+
   function commanderThumbStyle(commander) {
     if (commander && commander.art) return `background-image:url('${commander.art}')`;
     return "";
@@ -234,6 +278,12 @@
       return `background:linear-gradient(160deg, ${c1}, ${c2})`;
     }
     return "background:linear-gradient(160deg,#2a2f38,#12141a)";
+  }
+
+  /** true se o fundo do painel usa arte de commander (texto claro por cima);
+   *  sem arte o painel fica com cor pastel e texto escuro. */
+  function hasArt(players) {
+    return players.some((p) => p && ((p.commander && p.commander.art) || (p.partnerCommander && p.partnerCommander.art)));
   }
 
   /** HTML do fundo do painel de um jogador: uma imagem única, ou — quando
@@ -299,36 +349,36 @@
         <div class="logo">MTG <span>LIFE</span> COUNTER
           <small>Commander • Battle Royale • Livre</small>
         </div>
-        ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">▶️ Continuar jogo em curso</button>` : ""}
+        ${saved ? `<button class="btn btn-gold btn-block" id="resume-btn" style="max-width:520px">${I("play")} Continuar jogo em curso</button>` : ""}
         <div class="mode-grid">
           <div class="mode-card commander" data-mode="commander">
-            <div class="icon">👑</div>
+            <div class="icon">${I("crown")}</div>
             <div class="title">Commander Padrão</div>
             <div class="desc">2–8 jogadores · 40 vidas · Commander damage</div>
           </div>
           <div class="mode-card duel" data-mode="duel">
-            <div class="icon">⚔️</div>
+            <div class="icon">${I("swords")}</div>
             <div class="title">Duelo 1v1</div>
             <div class="desc">2 jogadores · 40 vidas · Commander damage</div>
           </div>
           <div class="mode-card free" data-mode="free">
-            <div class="icon">🎛️</div>
+            <div class="icon">${I("sliders")}</div>
             <div class="title">Livre</div>
             <div class="desc">Escolhe nº de jogadores e vida inicial</div>
           </div>
           <div class="mode-card br" data-mode="br">
-            <div class="icon">🩸</div>
+            <div class="icon">${I("droplet")}</div>
             <div class="title">Battle Royale</div>
             <div class="desc">6 jogadores · zonas · loot · último vivo</div>
           </div>
           <div class="mode-card teams" data-mode="teams">
-            <div class="icon">🛡️</div>
+            <div class="icon">${I("users")}</div>
             <div class="title">Equipas</div>
             <div class="desc">Escolhe nº de equipas e jogadores por equipa · vida partilhada</div>
           </div>
         </div>
         <div class="footer-note">As imagens dos commanders são obtidas automaticamente da Scryfall API (é necessária ligação à internet só para a pesquisa).</div>
-        <button class="btn btn-ghost" id="profiles-btn">👤 Perfis guardados</button>
+        <button class="btn btn-ghost" id="profiles-btn">${I("user")} Perfis guardados</button>
       </div>
     `);
     appEl.appendChild(s);
@@ -378,13 +428,13 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet">
-          <h2>${esc(title || "🔍 Escolher Commander")}</h2>
+          <h2>${esc(title || "Escolher commander")}</h2>
           <input type="text" id="cp-input" placeholder="Nome do commander (ex: Atraxa, Krenko...)" autocomplete="off" autocorrect="off" spellcheck="false">
           <div class="search-status hidden" id="cp-status"></div>
           <div class="search-results" id="cp-results"></div>
           <div class="row" style="margin-top:10px">
-            <button class="btn btn-ghost grow" id="cp-manual">✏️ Imagem manual</button>
-            <button class="btn btn-ghost grow" id="cp-none">🚫 Sem imagem</button>
+            <button class="btn btn-ghost grow" id="cp-manual">${I("image")} Imagem manual</button>
+            <button class="btn btn-ghost grow" id="cp-none">${I("ban")} Sem imagem</button>
           </div>
           <div id="cp-manual-form" class="col hidden" style="margin-top:10px">
             <input type="text" id="cp-manual-name" placeholder="Nome do commander">
@@ -422,7 +472,7 @@
                 <div class="name">${esc(card.name)}</div>
                 <div class="type">${esc(card.typeLine)}</div>
               </div>
-              ${card.printsUri ? `<button class="btn btn-icon versions-btn" title="Escolher arte/versão alternativa">🎨</button>` : ""}
+              ${card.printsUri ? `<button class="btn btn-icon versions-btn" title="Escolher arte/versão alternativa">${I("palette")}</button>` : ""}
             </div>
           `);
           item.addEventListener("click", () => {
@@ -439,7 +489,7 @@
           results.appendChild(item);
         });
       } catch (err) {
-        setStatus("⚠️ Sem ligação à Scryfall. Tenta a imagem manual abaixo.");
+        setStatus("Sem ligação à Scryfall. Tenta a imagem manual abaixo.");
       }
     }, 350);
 
@@ -468,7 +518,7 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet">
-          <h2>🎨 Escolher arte — ${esc(baseCard.name)}</h2>
+          <h2>Escolher arte — ${esc(baseCard.name)}</h2>
           <div class="search-status" id="vp-status">A carregar edições…</div>
           <div class="search-results" id="vp-results"></div>
           <button class="btn btn-ghost" id="vp-cancel" style="margin-top:10px">Cancelar</button>
@@ -507,7 +557,7 @@
           results.appendChild(item);
         });
       } catch (err) {
-        status.textContent = "⚠️ Não foi possível carregar as edições/artes. Tenta novamente.";
+        status.textContent = "Não foi possível carregar as edições/artes. Tenta novamente.";
       }
     })();
 
@@ -524,12 +574,12 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet">
-          <h2>👤 Perfil do jogador</h2>
+          <h2>Perfil do jogador</h2>
           <div class="footer-note" style="margin-bottom:10px">Os perfis guardam as estatísticas deste commander entre jogos (vitórias, tempo médio por turno/jogo, etc).</div>
           <div class="col" id="pp-list" style="max-height:38vh;overflow-y:auto"></div>
           <div class="row" style="margin-top:10px">
-            <button class="btn btn-ghost grow" id="pp-new">➕ Criar novo perfil</button>
-            ${currentProfileId ? `<button class="btn btn-ghost grow" id="pp-clear">🚫 Remover perfil</button>` : ""}
+            <button class="btn btn-ghost grow" id="pp-new">${I("plus")} Criar novo perfil</button>
+            ${currentProfileId ? `<button class="btn btn-ghost grow" id="pp-clear">${I("x")} Remover perfil</button>` : ""}
           </div>
           <div id="pp-new-form" class="col hidden" style="margin-top:10px">
             <input type="text" id="pp-new-name" placeholder="Nome do perfil" value="${commander ? esc(commander.name) : ""}">
@@ -547,11 +597,11 @@
     profiles.forEach((p) => {
       const d = Profiles.derived(p);
       const item = el(`
-        <div class="search-result-item ${p.id === currentProfileId ? "lethal" : ""}" style="${p.id === currentProfileId ? "border:1px solid var(--gold)" : ""}">
-          ${p.commander && p.commander.art ? `<img src="${esc(p.commander.art)}">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center">🃏</div>`}
+        <div class="search-result-item ${p.id === currentProfileId ? "lethal" : ""}" style="${p.id === currentProfileId ? "border:1px solid var(--text)" : ""}">
+          ${p.commander && p.commander.art ? `<img src="${esc(p.commander.art)}">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center">${I("card")}</div>`}
           <div>
             <div class="name">${esc(p.name)}</div>
-            <div class="type">🎮 ${d.games} jogos · 🏆 ${d.wins} vitórias${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
+            <div class="type">${d.games} jogos · ${d.wins} vitórias${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
           </div>
         </div>
       `);
@@ -582,7 +632,7 @@
     const s = el(`
       <div class="screen">
         <div class="topbar">
-          <button class="btn btn-icon" id="back-btn">←</button>
+          <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
           <h1>${esc(preset.label)}</h1>
           <div style="width:40px"></div>
         </div>
@@ -592,9 +642,9 @@
             <div class="field">
               <label>Jogadores</label>
               <div class="stepper-field">
-                <button class="btn btn-icon" type="button" id="players-minus">−</button>
+                <button class="btn btn-icon" type="button" id="players-minus">${I("minus")}</button>
                 <input type="number" id="cfg-players" min="${preset.minPlayers}" max="${preset.maxPlayers}" value="${draft.playerCount}">
-                <button class="btn btn-icon" type="button" id="players-plus">+</button>
+                <button class="btn btn-icon" type="button" id="players-plus">${I("plus")}</button>
               </div>
             </div>` : ""}
             <div class="field">
@@ -609,10 +659,11 @@
               </label>
             </div>` : ""}
           </div>
+          ${trackTurnsFieldHtml(draft.trackTurns !== false)}
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-primary btn-block" id="start-btn">🚀 Começar Jogo</button>
+          <button class="btn btn-primary btn-block" id="start-btn">Começar jogo</button>
         </div>
       </div>
     `);
@@ -630,7 +681,7 @@
         <div class="player-setup-card">
           <div class="commander-thumbs">
             <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">
-              ${p.commander ? "" : "🃏"}
+              ${p.commander ? "" : I("card")}
             </div>
             <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">
               ${p.partnerCommander ? "" : "+"}
@@ -639,7 +690,7 @@
           <div class="player-setup-fields">
             <input type="text" data-i="${i}" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
             <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
-            <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profile ? "👤 " + esc(profile.name) : "👤 Sem perfil"}</button>
+            <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profileBtnHtml(profile)}</button>
           </div>
         </div>
       `);
@@ -647,7 +698,7 @@
         openCommanderPicker((card2) => { draft.players[i].commander = card2; renderPlayersList(); });
       });
       card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
-        openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, "🔍 Escolher Commander Parceiro");
+        openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, "Escolher commander parceiro");
       });
       card.querySelector(".name-input").addEventListener("input", (e) => {
         draft.players[i].name = e.target.value;
@@ -673,12 +724,12 @@
       const profile = p.profileId ? Profiles.get(p.profileId) : null;
       const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
       mainThumb.style.cssText = commanderThumbStyle(p.commander);
-      mainThumb.textContent = p.commander ? "" : "🃏";
+      mainThumb.innerHTML = p.commander ? "" : I("card");
       const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
       partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
       partnerThumb.textContent = p.partnerCommander ? "" : "+";
       card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : "Sem commander escolhido") + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
-      card.querySelector(".profile-btn").textContent = profile ? "👤 " + profile.name : "👤 Sem perfil";
+      card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
       const nameInput = card.querySelector(".name-input");
       if (document.activeElement !== nameInput) nameInput.value = p.name;
     }
@@ -715,6 +766,7 @@
     if (preset.cmdDmgToggle) {
       s.querySelector("#cfg-cmddmg").addEventListener("change", (e) => { draft.cmdDmgEnabled = e.target.checked; });
     }
+    s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
     s.querySelector("#start-btn").addEventListener("click", () => {
       const st = State.createStandardGame({
@@ -722,6 +774,7 @@
         startLife: draft.startLife,
         commanderDamageEnabled: preset.cmdDmgToggle ? draft.cmdDmgEnabled : preset.cmdDmgDefault,
         presetName: preset.key,
+        trackTurns: draft.trackTurns !== false,
       });
       st.standard.players.forEach((p, i) => {
         if (draft.players[i].name.trim()) p.name = draft.players[i].name.trim();
@@ -732,6 +785,8 @@
       State.ensureFallbackColors(st.standard.players);
       State.save(st);
       game = st;
+      // sem contagem de turnos não interessa quem começa
+      if (!st.standard.trackTurns) { nav("game-standard"); return; }
       openWhoStartsModal(
         st.standard.players.map((p) => ({ id: p.id, name: p.name })),
         (winnerId) => {
@@ -755,36 +810,31 @@
     const { top, bottom } = layoutRows(players.length);
     const topPlayers = players.slice(0, top);
     const bottomPlayers = players.slice(top);
-    const currentPlayer = State.stdCurrentPlayer(game);
+    const timed = game.standard.trackTurns !== false;
+    const currentPlayer = timed ? State.stdCurrentPlayer(game) : null;
     const paused = !!game.standard.paused;
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">🗗</button>` : ""}
+        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">${I("minimize")}</button>` : ""}
         <div class="topbar">
-          <button class="btn btn-icon" id="menu-btn">☰</button>
+          <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
           <h1>${esc(PRESETS[game.presetName] ? PRESETS[game.presetName].label : "Jogo")}</h1>
           <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">↺</button>
-            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${boardFullscreen ? "🗗" : "⛶"}</button>
+            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">${I("rotate")}</button>
+            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
           </div>
         </div>
-        <div class="br-status-row">
-          <div class="br-chip turn">👤 Vez: ${currentPlayer ? esc(currentPlayer.name) : "-"}</div>
-          <div class="br-chip">🔁 Ronda: ${game.standard.roundNumber || 1}</div>
-          <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
-          <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
-          ${paused ? `<div class="br-chip paused">⏸️ PAUSADO</div>` : ""}
-        </div>
+        ${timed ? `<div class="br-status-row">${turnChipsHtml(currentPlayer ? currentPlayer.name : "-", game.standard.roundNumber, paused)}</div>` : ""}
         <div class="board">
           <div class="board-row" id="row-top"></div>
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${paused ? "▶️" : "⏸️"}</button>
-          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">📜</button>
-          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">🔀</button>
-          <button class="btn btn-ghost grow" id="end-game-btn">🏁 Terminar</button>
+          ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${I(paused ? "play" : "pause")}</button>` : ""}
+          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">${I("history")}</button>
+          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">${I("reorder")}</button>
+          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} Terminar</button>
         </div>
       </div>
     `);
@@ -800,22 +850,13 @@
     topPlayers.forEach((p) => rowTop.appendChild(buildStandardPanel(p, true, currentPlayer)));
     bottomPlayers.slice().reverse().forEach((p) => rowBottom.appendChild(buildStandardPanel(p, false, currentPlayer)));
 
-    function tickClock() {
-      const chipTurn = s.querySelector("#chip-turn-time");
-      const chipTotal = s.querySelector("#chip-total-time");
-      if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
-      const now = game.standard.paused ? game.standard.pausedAt : Date.now();
-      chipTurn.textContent = "⏱ Turno: " + formatDuration(now - game.standard.turnStartedAt);
-      chipTotal.textContent = "⏳ Total: " + formatDuration(now - game.standard.gameStartedAt);
-    }
-    tickClock();
-    liveTimer = setInterval(tickClock, 1000);
+    if (timed) startLiveClock(s, game.standard);
 
     s.querySelector("#menu-btn").addEventListener("click", () => {
       if (confirm("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde.")) nav("menu");
     });
     s.querySelector("#reset-btn").addEventListener("click", () => {
-      if (!confirm("Reiniciar vidas, commander damage e os relógios de turno/jogo de todos os jogadores?")) return;
+      if (!confirm(timed ? "Reiniciar vidas, commander damage e os relógios de turno/jogo de todos os jogadores?" : "Reiniciar vidas e commander damage de todos os jogadores?")) return;
       const now = Date.now();
       game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
       game.standard.roundNumber = 1;
@@ -829,7 +870,8 @@
       State.save(game);
       render();
     });
-    s.querySelector("#pause-btn").addEventListener("click", () => {
+    const pauseBtn = s.querySelector("#pause-btn");
+    if (pauseBtn) pauseBtn.addEventListener("click", () => {
       State.stdTogglePause(game);
       render();
     });
@@ -850,23 +892,23 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>🏁 Terminar jogo</h2>
+          <h2>Terminar jogo</h2>
           <div class="footer-note" style="margin-bottom:10px">Quem venceu esta partida? (fica registado nos perfis ligados)</div>
           <div class="col" id="winner-list">
             ${players.map((p) => `
-              <label class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:10px;">
+              <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
                 <input type="radio" name="winner" value="${p.id}" style="width:auto">
                 <span class="grow">${esc(p.name)}${p.eliminated ? " (eliminado)" : ""}</span>
               </label>
             `).join("")}
-            <label class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:10px;">
+            <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
               <input type="radio" name="winner" value="" style="width:auto" checked>
               <span class="grow">Sem vencedor / não contar</span>
             </label>
           </div>
           <div class="row" style="margin-top:14px">
             <button class="btn btn-ghost grow" id="eg-cancel">Cancelar</button>
-            <button class="btn btn-primary grow" id="eg-confirm">📊 Ver Estatísticas</button>
+            <button class="btn btn-primary grow" id="eg-confirm">Confirmar</button>
           </div>
         </div>
       </div>
@@ -878,7 +920,7 @@
       const winnerId = sel && sel.value ? sel.value : null;
       const stats = State.stdEndGame(game, winnerId);
       backdrop.remove();
-      nav("stats-standard", { stats });
+      nav("stats-standard", { stats, celebrate: true });
     });
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
@@ -896,23 +938,23 @@
       });
     }
     const panel = el(`
-      <div class="player-panel ${rotated ? "rot180" : ""} ${p.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-player-id="${p.id}">
+      <div class="player-panel ${rotated ? "rot180" : ""} ${hasArt([p]) ? "has-art" : ""} ${p.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-player-id="${p.id}">
         ${panelBgHtml(p)}
-        <div class="mini-actions"><button class="mini-btn" data-action="edit">✏️</button></div>
+        <div class="mini-actions"><button class="mini-btn" data-action="edit">${I("pencil")}</button></div>
         <div class="content">
-          ${isActive ? `<div class="turn-badge">▶ VEZ</div>` : ""}
+          ${isActive ? `<div class="turn-badge">A jogar</div>` : ""}
         <div class="player-header">
             <div class="player-name">${esc(p.name)}</div>
             <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
           </div>
           <div class="life-zone">
-            <div class="life-tap minus"><span class="tap-circle">−</span></div>
-            <div class="life-tap plus"><span class="tap-circle">+</span></div>
+            <div class="life-tap minus"><span class="tap-circle">${I("minus")}</span></div>
+            <div class="life-tap plus"><span class="tap-circle">${I("plus")}</span></div>
             <div class="life-delta-fixed"></div>
             <div class="life-total">${p.life}</div>
           </div>
           ${cmdEnabled ? `<div class="commander-badges">${cmdBadgeList.join("")}</div>` : ""}
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>⏭️ Passar turno</button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>${I("skip")} Passar turno</button>` : ""}
         </div>
       </div>
     `);
@@ -988,7 +1030,7 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>💠 Commander Tax — ${esc(p.name)}</h2>
+          <h2>Commander tax — ${esc(p.name)}</h2>
           <div class="footer-note" style="margin-bottom:10px">Cada vez que conjuras o commander da zona de comando, o custo sobe {2}. Toca em "+" de cada vez que o conjurares.</div>
           <div class="cd-list" id="tax-list"></div>
           <button class="btn btn-ghost btn-block" id="tax-close" style="margin-top:14px">Fechar</button>
@@ -1002,9 +1044,9 @@
       const row = el(`
         <div class="cd-list-item">
           <div class="nm">${esc(label)}</div>
-          <button class="btn btn-icon" data-d="-1">−</button>
+          <button class="btn btn-icon" data-d="-1">${I("minus")}</button>
           <div class="val">+${n * 2}</div>
-          <button class="btn btn-icon" data-d="1">+</button>
+          <button class="btn btn-icon" data-d="1">${I("plus")}</button>
         </div>
       `);
       row.querySelectorAll("button").forEach((btn) => {
@@ -1040,10 +1082,10 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>🎲 Quem começa?</h2>
+          <h2>Quem começa?</h2>
           <div class="footer-note" style="margin-bottom:10px">Escolhe manualmente ou roda os dados — ganha quem tirar o valor mais alto (empates voltam a rolar).</div>
           <div class="cd-list" id="who-manual-list"></div>
-          <button class="btn btn-accent btn-block" id="who-roll-btn" style="margin-top:14px">🎲 Rolar dados por todos</button>
+          <button class="btn btn-accent btn-block" id="who-roll-btn" style="margin-top:14px">${I("dice")} Rolar dados por todos</button>
           <div id="who-roll-results" style="margin-top:12px"></div>
           <button class="btn btn-ghost btn-block" id="who-cancel" style="margin-top:14px">Cancelar</button>
         </div>
@@ -1056,7 +1098,7 @@
       const row = el(`
         <div class="cd-list-item" style="cursor:pointer" data-pid="${p.id}">
           <div class="nm">${esc(p.name)}</div>
-          <div class="val">▶</div>
+          <div class="val">${I("chevron-right")}</div>
         </div>
       `);
       row.addEventListener("click", () => {
@@ -1097,7 +1139,7 @@
           const row = el(`
             <div class="cd-list-item" style="${inPool ? "" : "opacity:.4"}">
               <div class="nm">${esc(p.name)}</div>
-              <div class="val ${r === null ? "" : "dice-roll"}">${r === null ? "…" : "🎲 " + r}</div>
+              <div class="val ${r === null ? "" : "dice-roll"}">${r === null ? "…" : r}</div>
             </div>
           `);
           list.appendChild(row);
@@ -1124,11 +1166,11 @@
     // sorteada do painel dele; o badge "partner" fica neutro sem arte.
     const bgStyle = source === "partner" ? (cmd && cmd.art ? `background-image:url('${esc(cmd.art)}')` : "") : playerBgStyle(o);
     return `<div class="cmd-badge ${source === "partner" ? "partner" : ""} ${dmg >= 21 ? "lethal" : ""}" data-opp-id="${o.id}" data-source="${source}" style="${bgStyle}">
-      ${cmd ? "" : "🃏"}<div class="dmg">${dmg}</div>
+      ${cmd ? "" : I("card")}<div class="dmg">${dmg}</div>
     </div>`;
   }
 
-  /** Mostra/esconde e liga os cliques dos badges "ELIMINADO" / "🛡️ PROTEGIDO"
+  /** Mostra/esconde e liga os cliques dos badges "ELIMINADO" / "PROTEGIDO"
    *  no painel de um jogador (mesma lógica usada na criação e na atualização
    *  parcial do painel). */
   function syncEliminationBadges(panel, p) {
@@ -1143,7 +1185,7 @@
     }
     let protBadge = panel.querySelector(".protected-badge");
     if (p.protected && !p.eliminated && !protBadge) {
-      protBadge = el(`<div class="protected-badge" title="Toca se a carta de proteção saiu do campo">🛡️ PROTEGIDO</div>`);
+      protBadge = el(`<div class="protected-badge" title="Toca se a carta de proteção saiu do campo">PROTEGIDO</div>`);
       protBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openEliminationGuardModal(p.id, false); });
       content.appendChild(protBadge);
     } else if ((!p.protected || p.eliminated) && protBadge) {
@@ -1175,7 +1217,7 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>${isEliminated ? "☠️ Jogador eliminado" : "🛡️ Jogador protegido"}</h2>
+          <h2>${isEliminated ? "Jogador eliminado" : "Jogador protegido"}</h2>
           <div class="footer-note" style="margin-bottom:14px">
             ${isEliminated
               ? `${esc(p.name)} está eliminado (0 ou menos vidas, ou 21+ de commander damage). Se tens em jogo uma carta que evita a eliminação (ex: Platinum Angel, Worship...), podes mantê-lo no jogo.`
@@ -1183,8 +1225,8 @@
           </div>
           <div class="col">
             ${isEliminated
-              ? `<button class="btn btn-gold btn-block" id="eg-keep">🛡️ Manter no jogo</button>`
-              : `<button class="btn btn-primary btn-block" id="eg-reeliminate">☠️ A carta saiu — eliminar agora</button>`}
+              ? `<button class="btn btn-gold btn-block" id="eg-keep">${I("shield")} Manter no jogo</button>`
+              : `<button class="btn btn-primary btn-block" id="eg-reeliminate">A carta saiu — eliminar agora</button>`}
             <button class="btn btn-ghost btn-block" id="eg-cancel">Cancelar</button>
           </div>
         </div>
@@ -1227,11 +1269,11 @@
       const dmg = p.cmdDamage[key] || 0;
       const row = el(`
         <div class="cd-list-item">
-          ${art ? `<img src="${esc(art)}">` : `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">🃏</div>`}
+          ${art ? `<img src="${esc(art)}">` : `<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;">${I("card")}</div>`}
           <div class="nm">${esc(label)}${source === "partner" ? ` <span class="turn-badge-sm partner-tag">PARCEIRO</span>` : ""}</div>
-          <button class="btn btn-icon" data-d="-1">−</button>
+          <button class="btn btn-icon" data-d="-1">${I("minus")}</button>
           <div class="val">${dmg}</div>
-          <button class="btn btn-icon" data-d="1">+</button>
+          <button class="btn btn-icon" data-d="1">${I("plus")}</button>
         </div>
       `);
       row.querySelectorAll("button").forEach((btn) => {
@@ -1275,15 +1317,15 @@
             <label>Nome</label>
             <input type="text" id="ep-name" value="${esc(p.name)}">
             <div class="row" style="align-items:center;margin-top:6px">
-              <div class="commander-thumb" id="ep-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
+              <div class="commander-thumb" id="ep-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
               <button class="btn btn-ghost grow" id="ep-commander">Alterar Commander</button>
             </div>
             ${(mode === "standard" || mode === "teams") ? `
             <div class="row" style="align-items:center;margin-top:6px">
-              <div class="commander-thumb" id="ep-thumb-partner" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "🃏"}</div>
-              <button class="btn btn-ghost grow" id="ep-partner">${p.partnerCommander ? "Alterar Parceiro" : "➕ Adicionar Commander Parceiro"}</button>
+              <div class="commander-thumb" id="ep-thumb-partner" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : I("card")}</div>
+              <button class="btn btn-ghost grow" id="ep-partner">${p.partnerCommander ? "Alterar Parceiro" : "Adicionar commander parceiro"}</button>
             </div>` : ""}
-            <button class="btn btn-ghost btn-sm" id="ep-profile" style="margin-top:6px">${pendingProfileId ? "👤 " + esc((Profiles.get(pendingProfileId) || {}).name || "Perfil") : "👤 Sem perfil"}</button>
+            <button class="btn btn-ghost btn-sm" id="ep-profile" style="margin-top:6px">${profileBtnHtml(pendingProfileId ? (Profiles.get(pendingProfileId) || { name: "Perfil" }) : null)}</button>
             ${mode === "standard" ? `<button class="btn ${p.eliminated ? "btn-primary" : "btn-ghost"}" id="ep-elim" style="margin-top:6px">${p.eliminated ? "Reviver jogador" : "Marcar como eliminado"}</button>` : ""}
           </div>
           <div class="row" style="margin-top:14px">
@@ -1299,7 +1341,7 @@
         pendingCommander = c;
         const thumb = backdrop.querySelector("#ep-thumb");
         thumb.style.cssText = commanderThumbStyle(c);
-        thumb.textContent = c ? "" : "🃏";
+        thumb.innerHTML = c ? "" : I("card");
       });
     });
     const partnerBtn = backdrop.querySelector("#ep-partner");
@@ -1309,9 +1351,9 @@
           pendingPartnerCommander = c;
           const thumb = backdrop.querySelector("#ep-thumb-partner");
           thumb.style.cssText = commanderThumbStyle(c);
-          thumb.textContent = c ? "" : "🃏";
-          partnerBtn.textContent = c ? "Alterar Parceiro" : "➕ Adicionar Commander Parceiro";
-        }, "🔍 Escolher Commander Parceiro");
+          thumb.innerHTML = c ? "" : I("card");
+          partnerBtn.textContent = c ? "Alterar Parceiro" : "Adicionar commander parceiro";
+        }, "Escolher commander parceiro");
       });
     }
     backdrop.querySelector("#ep-profile").addEventListener("click", () => {
@@ -1322,7 +1364,7 @@
         onSelect: (id) => {
           pendingProfileId = id;
           const prof = id ? Profiles.get(id) : null;
-          backdrop.querySelector("#ep-profile").textContent = prof ? "👤 " + prof.name : "👤 Sem perfil";
+          backdrop.querySelector("#ep-profile").innerHTML = profileBtnHtml(prof);
           if (prof && prof.commander) {
             pendingCommander = prof.commander;
             const thumb = backdrop.querySelector("#ep-thumb");
@@ -1376,16 +1418,16 @@
     const s = el(`
       <div class="screen">
         <div class="topbar">
-          <button class="btn btn-icon" id="back-btn">←</button>
-          <h1>🩸 Battle Royale — Setup</h1>
+          <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
+          <h1>Battle Royale</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
-          <div class="footer-note" style="margin-bottom:12px">6 jogadores · 30 vidas cada · zona inicial sorteada aleatoriamente · sem commander damage. Consulta as regras completas no ecrã de jogo (ícone ℹ️).</div>
+          <div class="footer-note" style="margin-bottom:12px">6 jogadores · 30 vidas cada · zona inicial sorteada aleatoriamente · sem commander damage. Consulta as regras completas no ecrã de jogo (ícone de informação).</div>
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-accent btn-block" id="start-btn">🩸 Começar Battle Royale</button>
+          <button class="btn btn-accent btn-block" id="start-btn">Começar Battle Royale</button>
         </div>
       </div>
     `);
@@ -1396,11 +1438,11 @@
       const profile = draft.profileIds[i] ? Profiles.get(draft.profileIds[i]) : null;
       const card = el(`
         <div class="player-setup-card">
-          <div class="commander-thumb" data-i="${i}" style="${commanderThumbStyle(draft.commanders[i])}">${draft.commanders[i] ? "" : "🃏"}</div>
+          <div class="commander-thumb" data-i="${i}" style="${commanderThumbStyle(draft.commanders[i])}">${draft.commanders[i] ? "" : I("card")}</div>
           <div class="player-setup-fields">
             <input type="text" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(name)}">
             <div class="commander-name">${draft.commanders[i] ? esc(draft.commanders[i].name) : "Sem commander escolhido"}</div>
-            <button class="btn btn-ghost btn-sm profile-btn">${profile ? "👤 " + esc(profile.name) : "👤 Sem perfil"}</button>
+            <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
           </div>
         </div>
       `);
@@ -1408,7 +1450,7 @@
         openCommanderPicker((c) => {
           draft.commanders[i] = c;
           card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(c);
-          card.querySelector(".commander-thumb").textContent = c ? "" : "🃏";
+          card.querySelector(".commander-thumb").innerHTML = c ? "" : I("card");
           card.querySelector(".commander-name").textContent = c ? c.name : "Sem commander escolhido";
         });
       });
@@ -1421,7 +1463,7 @@
           onSelect: (id) => {
             draft.profileIds[i] = id;
             const p = id ? Profiles.get(id) : null;
-            card.querySelector(".profile-btn").textContent = p ? "👤 " + p.name : "👤 Sem perfil";
+            card.querySelector(".profile-btn").innerHTML = profileBtnHtml(p);
             if (p && p.commander) {
               draft.commanders[i] = p.commander;
               card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(p.commander);
@@ -1471,31 +1513,31 @@
     const s = el(`
       <div class="screen">
         <div class="topbar br-topbar">
-          <button class="btn btn-icon" id="menu-btn">☰</button>
-          <h1>🩸 Battle Royale</h1>
+          <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
+          <h1>Battle Royale</h1>
           <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="history-btn" title="Histórico de vida">📜</button>
-            <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">🔀</button>
-            <button class="btn btn-icon" id="info-btn">ℹ️</button>
+            <button class="btn btn-icon" id="history-btn" title="Histórico de vida">${I("history")}</button>
+            <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">${I("reorder")}</button>
+            <button class="btn btn-icon" id="info-btn" title="Regras">${I("info")}</button>
           </div>
         </div>
         <div class="br-status-row">
-          <div class="br-chip turn">🔁 Ronda ${br.roundNumber}</div>
-          <div class="br-chip">👤 Vez de: ${current ? esc(current.name) : "-"}</div>
-          <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
-          <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
+          <div class="br-chip turn">${I("repeat")} Ronda ${br.roundNumber}</div>
+          <div class="br-chip">${I("user")} Vez de: ${current ? esc(current.name) : "-"}</div>
+          <div class="br-chip">${I("clock")}<span id="chip-turn-time">Turno 00:00</span></div>
+          <div class="br-chip">${I("hourglass")}<span id="chip-total-time">Total 00:00</span></div>
           <div class="br-chip ${br.phase !== "normal" ? "phase-final" : ""}">${phaseLabel(br.phase)}</div>
-          <div class="br-chip">☢️ Zonas fechadas: ${br.closedZones.length}/5</div>
-          ${paused ? `<div class="br-chip paused">⏸️ PAUSADO</div>` : ""}
+          <div class="br-chip">Zonas fechadas: ${br.closedZones.length}/5</div>
+          ${paused ? `<div class="br-chip paused">${I("pause")} Pausado</div>` : ""}
         </div>
         <div class="zone-map" id="zone-map"></div>
-        ${br.phase === "final_circle" ? `<div class="banner">☠️ FINAL CIRCLE — não podes ganhar vidas · todos atacam todos · criaturas com haste · +2 Treasure no início de cada turno</div>` : ""}
-        ${br.phase === "final_duel_pending" ? `<div class="banner gold">⚔️ Restam 2 jogadores! <button class="btn btn-gold btn-sm" id="start-duel-btn" style="margin-left:8px">Iniciar Duelo Final</button></div>` : ""}
-        ${br.phase === "final_duel" ? `<div class="banner gold">⚔️ FINAL DUEL em curso — até à morte!</div>` : ""}
+        ${br.phase === "final_circle" ? `<div class="banner">FINAL CIRCLE — não podes ganhar vidas · todos atacam todos · criaturas com haste · +2 Treasure no início de cada turno</div>` : ""}
+        ${br.phase === "final_duel_pending" ? `<div class="banner gold">Restam 2 jogadores! <button class="btn btn-gold btn-sm" id="start-duel-btn" style="margin-left:8px">Iniciar Duelo Final</button></div>` : ""}
+        ${br.phase === "final_duel" ? `<div class="banner gold">FINAL DUEL em curso — até à morte!</div>` : ""}
         <div class="row" style="padding:0 12px 8px;gap:8px;flex-shrink:0">
-          <button class="btn btn-accent grow" id="roll-event-btn" ${br.roundEventRolled ? "disabled" : ""}>🎲 Rolar evento da ronda</button>
-          <button class="btn btn-primary grow" id="next-turn-btn" ${paused ? "disabled" : ""}>➡️ Próximo turno</button>
-          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${paused ? "▶️" : "⏸️"}</button>
+          <button class="btn btn-accent grow" id="roll-event-btn" ${br.roundEventRolled ? "disabled" : ""}>${I("dice")} Rolar evento</button>
+          <button class="btn btn-primary grow" id="next-turn-btn" ${paused ? "disabled" : ""}>Próximo turno ${I("arrow-right")}</button>
+          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${I(paused ? "play" : "pause")}</button>
         </div>
         <div class="event-log" id="event-log"></div>
         <div class="br-players" id="br-players"></div>
@@ -1527,16 +1569,7 @@
     const playersList = s.querySelector("#br-players");
     br.players.forEach((p) => playersList.appendChild(buildBRRow(p, current)));
 
-    function tickClock() {
-      const chipTurn = s.querySelector("#chip-turn-time");
-      const chipTotal = s.querySelector("#chip-total-time");
-      if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
-      const now = game.br.paused ? game.br.pausedAt : Date.now();
-      chipTurn.textContent = "⏱ Turno: " + formatDuration(now - game.br.turnStartedAt);
-      chipTotal.textContent = "⏳ Total: " + formatDuration(now - game.br.gameStartedAt);
-    }
-    tickClock();
-    liveTimer = setInterval(tickClock, 1000);
+    startLiveClock(s, game.br);
 
     s.querySelector("#menu-btn").addEventListener("click", () => {
       if (confirm("Voltar ao menu? O jogo fica guardado.")) nav("menu");
@@ -1564,7 +1597,7 @@
   }
 
   function phaseLabel(phase) {
-    return { normal: "🟢 Normal", final_circle: "☠️ Final Circle", final_duel_pending: "⚔️ Preparar Duelo", final_duel: "⚔️ Final Duel", ended: "👑 Terminado" }[phase] || phase;
+    return { normal: "Fase normal", final_circle: "Final Circle", final_duel_pending: "Preparar duelo", final_duel: "Final Duel", ended: "Terminado" }[phase] || phase;
   }
 
   function buildBRRow(p, current) {
@@ -1573,22 +1606,22 @@
       <div class="br-player-row ${isActive ? "active" : ""} ${p.eliminated ? "eliminated" : ""}">
         <div class="br-avatar" style="${playerBgStyle(p)}"></div>
         <div class="br-info">
-          <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">▶ VEZ</span>` : ""}</div>
-          <div class="meta">${p.eliminated ? `💀 Eliminado` : `🎁 ${p.lootUsed.length}/6`}</div>
+          <div class="nm">${esc(p.name)} ${isActive ? `<span class="turn-badge-sm">A jogar</span>` : ""}</div>
+          <div class="meta">${p.eliminated ? `Eliminado` : `${I("gift")} ${p.lootUsed.length}/6`}</div>
         </div>
         ${!p.eliminated ? `
         <select class="br-zone-select" data-act="zone" title="Zona atual">
           ${State.ZONES.map((z) => `<option value="${z}" ${z === p.zone ? "selected" : ""}>${z}</option>`).join("")}
         </select>
         <div class="br-life-stepper">
-          <button class="btn btn-icon" data-act="minus">−</button>
+          <button class="btn btn-icon" data-act="minus">${I("minus")}</button>
           <div class="br-life">${p.life}</div>
-          <button class="btn btn-icon" data-act="plus">+</button>
+          <button class="btn btn-icon" data-act="plus">${I("plus")}</button>
         </div>
         ` : ""}
         <div class="br-actions-mini">
-          <button class="btn btn-icon" data-act="edit">✏️</button>
-          ${!p.eliminated ? `<button class="btn btn-icon" data-act="kill">💀</button>` : ""}
+          <button class="btn btn-icon" data-act="edit">${I("pencil")}</button>
+          ${!p.eliminated ? `<button class="btn btn-icon" data-act="kill" title="Eliminar">${I("skull")}</button>` : ""}
         </div>
       </div>
     `);
@@ -1624,7 +1657,7 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <div class="dice-face">🎲 ${roll}</div>
+          <div class="dice-face">${I("dice")}<span>${roll}</span></div>
           <div class="event-card">
             <div class="ev-title">${esc(event.title)}</div>
             <div class="ev-desc">${esc(event.desc)}</div>
@@ -1645,11 +1678,11 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>💀 ${esc(eliminated.name)} foi eliminado!</h2>
+          <h2>${esc(eliminated.name)} foi eliminado!</h2>
           <div class="footer-note" style="margin-bottom:10px">Quem participou no abate? (se dois jogadores atacaram o mesmo alvo, escolhe ambos — os dois recebem recompensa)</div>
           <div class="col" id="killer-list">
             ${alive.map((a) => `
-              <label class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:8px 10px;">
+              <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:8px 10px;">
                 <input type="checkbox" value="${a.id}" style="width:auto">
                 <span class="grow">${esc(a.name)}</span>
               </label>
@@ -1684,7 +1717,7 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>🎁 Recompensa para ${esc(p.name)}</h2>
+          <h2>Recompensa para ${esc(p.name)}</h2>
           <div class="loot-grid" id="loot-grid"></div>
           <button class="btn btn-ghost btn-block" id="loot-skip" style="margin-top:12px">Não escolher recompensa</button>
         </div>
@@ -1697,7 +1730,7 @@
       const blockedByFinal = inFinal && reward.type === "life";
       const card = el(`
         <button class="loot-card ${used || blockedByFinal ? "used" : ""}" ${used || blockedByFinal ? "disabled" : ""}>
-          <div class="ic">${reward.icon}</div>
+          <div class="ic">${I(reward.icon)}</div>
           <div class="tt">${esc(reward.title)}</div>
         </button>
       `);
@@ -1718,17 +1751,17 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet" style="max-height:88vh">
-          <h2>🩸 Regras — Battle Royale</h2>
+          <h2>Regras — Battle Royale</h2>
           <div class="scroll" style="padding:0">
             <div class="footer-note col gap-sm" style="font-size:.78rem;line-height:1.5">
-              <div><strong>❤️ Vida:</strong> todos começam com 30. Sem commander damage. A 0 estás eliminado — tudo o que controlas sai do jogo.</div>
-              <div><strong>⚔️ Combate:</strong> podes atacar qualquer jogador na tua zona ou zona adjacente. Se 2 jogadores atacarem o mesmo alvo e ele morrer, ambos escolhem recompensa.</div>
-              <div><strong>💰 Loot:</strong> ao eliminar alguém, escolhe 1 recompensa (só uma vez por recompensa por jogo): 3 Treasure, compra 3 cartas, ganha 10 vidas, ficha 6/6, recupera carta do cemitério, ou 1 carta grátis este turno.</div>
-              <div><strong>🗺️ Mapa:</strong> zonas A–F em linha. Move-te para uma zona adjacente no início do teu turno, ou fica.</div>
-              <div><strong>☄️ Círculo:</strong> a cada 3ª ronda da mesa (todos jogam 3 vezes), fecha a zona mais distante do centro (ordem: A, F, B, E, C, D). Quem estiver lá perde 5 vidas no início do seu turno. A zona inicial de cada jogador é sorteada aleatoriamente.</div>
-              <div><strong>🎲 Evento aleatório:</strong> 1 dado por ronda — Blood Moon (-3 todos), Supply Drop (+1 treasure todos), Frenzy (+2/+0), Blackout (máx 1 compra), Healing Zone (+5 todos), Air Drop (jogador com menos vida compra 5).</div>
-              <div><strong>👑 Final Circle</strong> (restam 3): sem ganhar vidas, todos atacam todos, +2 Treasure no início do turno, criaturas com haste.</div>
-              <div><strong>⚔️ Final Duel</strong> (restam 2): +10 vidas, desviram tudo, compram 3, criam 3 Treasure — até à morte. O campeão escolhe o próximo evento aleatório.</div>
+              <div><strong>Vida:</strong> todos começam com 30. Sem commander damage. A 0 estás eliminado — tudo o que controlas sai do jogo.</div>
+              <div><strong>Combate:</strong> podes atacar qualquer jogador na tua zona ou zona adjacente. Se 2 jogadores atacarem o mesmo alvo e ele morrer, ambos escolhem recompensa.</div>
+              <div><strong>Loot:</strong> ao eliminar alguém, escolhe 1 recompensa (só uma vez por recompensa por jogo): 3 Treasure, compra 3 cartas, ganha 10 vidas, ficha 6/6, recupera carta do cemitério, ou 1 carta grátis este turno.</div>
+              <div><strong>Mapa:</strong> zonas A–F em linha. Move-te para uma zona adjacente no início do teu turno, ou fica.</div>
+              <div><strong>Círculo:</strong> a cada 3ª ronda da mesa (todos jogam 3 vezes), fecha a zona mais distante do centro (ordem: A, F, B, E, C, D). Quem estiver lá perde 5 vidas no início do seu turno. A zona inicial de cada jogador é sorteada aleatoriamente.</div>
+              <div><strong>Evento aleatório:</strong> 1 dado por ronda — Blood Moon (-3 todos), Supply Drop (+1 treasure todos), Frenzy (+2/+0), Blackout (máx 1 compra), Healing Zone (+5 todos), Air Drop (jogador com menos vida compra 5).</div>
+              <div><strong>Final Circle</strong> (restam 3): sem ganhar vidas, todos atacam todos, +2 Treasure no início do turno, criaturas com haste.</div>
+              <div><strong>Final Duel</strong> (restam 2): +10 vidas, desviram tudo, compram 3, criam 3 Treasure — até à morte. O campeão escolhe o próximo evento aleatório.</div>
             </div>
           </div>
           <button class="btn btn-primary btn-block" id="rules-close" style="margin-top:12px">Entendido</button>
@@ -1743,21 +1776,25 @@
     const champ = game.br.players.find((p) => p.id === game.br.championId);
     const stats = State.brComputeStats(game);
     const s = el(`
-      <div class="screen" style="align-items:center;text-align:center;">
-        ${champ ? `<div class="bg" style="position:absolute;inset:0;${playerBgStyle(champ)};background-size:cover;filter:brightness(.3)"></div>` : ""}
-        <div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 20px 6px;flex-shrink:0">
-          <div class="trophy">👑</div>
+      <div class="screen champion-screen">
+        <div class="champion-head">
+          <div class="champion-avatar" style="${champ ? playerBgStyle(champ) : ""}"></div>
+          <div class="trophy">${I("trophy")}</div>
           <div class="cname">${champ ? esc(champ.name) : "?"}</div>
-          <div class="footer-note">é o CAMPEÃO DO BATTLE ROYALE!</div>
+          <div class="footer-note">Campeão do Battle Royale</div>
         </div>
-        <div class="scroll" style="position:relative;z-index:2;width:100%">${buildStatsBlock(stats)}</div>
-        <div class="board-toolbar" style="position:relative;z-index:2;width:100%">
-          <button class="btn btn-accent grow" id="new-br-btn">🩸 Novo Battle Royale</button>
+        <div class="scroll" style="width:100%">${buildStatsBlock(stats)}</div>
+        <div class="board-toolbar" style="width:100%">
+          <button class="btn btn-accent grow" id="new-br-btn">Novo Battle Royale</button>
           <button class="btn btn-ghost" id="menu-btn2">Menu</button>
         </div>
       </div>
     `);
     appEl.appendChild(s);
+    if (champ && celebratedGameAt !== game.createdAt) {
+      celebratedGameAt = game.createdAt;
+      celebrateVictory({ name: champ.name, commander: champ.commander, bgStyle: playerBgStyle(champ), subtitle: "Campeão do Battle Royale" });
+    }
     s.querySelector("#new-br-btn").addEventListener("click", () => {
       State.clear();
       draft = { names: ["", "", "", "", "", ""], commanders: [null, null, null, null, null, null], profileIds: [null, null, null, null, null, null] };
@@ -1783,8 +1820,8 @@
     const s = el(`
       <div class="screen">
         <div class="topbar">
-          <button class="btn btn-icon" id="back-btn">←</button>
-          <h1>🛡️ Equipas — Setup</h1>
+          <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
+          <h1>Equipas</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
@@ -1792,17 +1829,17 @@
             <div class="field">
               <label>Equipas</label>
               <div class="stepper-field">
-                <button class="btn btn-icon" type="button" id="teams-minus">−</button>
+                <button class="btn btn-icon" type="button" id="teams-minus">${I("minus")}</button>
                 <input type="number" id="cfg-teams" min="2" max="4" value="${draft.numTeams}">
-                <button class="btn btn-icon" type="button" id="teams-plus">+</button>
+                <button class="btn btn-icon" type="button" id="teams-plus">${I("plus")}</button>
               </div>
             </div>
             <div class="field">
               <label>Jogadores/equipa</label>
               <div class="stepper-field">
-                <button class="btn btn-icon" type="button" id="ppt-minus">−</button>
+                <button class="btn btn-icon" type="button" id="ppt-minus">${I("minus")}</button>
                 <input type="number" id="cfg-ppt" min="1" max="4" value="${draft.playersPerTeam}">
-                <button class="btn btn-icon" type="button" id="ppt-plus">+</button>
+                <button class="btn btn-icon" type="button" id="ppt-plus">${I("plus")}</button>
               </div>
             </div>
             <div class="field">
@@ -1810,11 +1847,12 @@
               <input type="number" id="cfg-life" min="1" value="${draft.startLife}">
             </div>
           </div>
+          ${trackTurnsFieldHtml(draft.trackTurns !== false)}
           <div class="footer-note" style="margin-bottom:12px">Vida partilhada por equipa (estilo Two-Headed Giant): a equipa toda soma/perde vida em conjunto. Os turnos alternam entre equipas.</div>
           <div id="teams-list"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-primary btn-block" id="start-btn">🚀 Começar Jogo</button>
+          <button class="btn btn-primary btn-block" id="start-btn">Começar jogo</button>
         </div>
       </div>
     `);
@@ -1829,13 +1867,13 @@
       const card = el(`
         <div class="player-setup-card">
           <div class="commander-thumbs">
-            <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
+            <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
             <div class="commander-thumb thumb-sm" data-role="partner" title="Commander parceiro" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "+"}</div>
           </div>
           <div class="player-setup-fields">
             <input type="text" class="name-input" placeholder="Jogador ${i + 1}" value="${esc(p.name)}">
             <div class="commander-name">${p.commander ? esc(p.commander.name) : "Sem commander escolhido"}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
-            <button class="btn btn-ghost btn-sm profile-btn">${profile ? "👤 " + esc(profile.name) : "👤 Sem perfil"}</button>
+            <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
           </div>
         </div>
       `);
@@ -1843,7 +1881,7 @@
         openCommanderPicker((c) => { draft.teams[t].players[i].commander = c; renderTeamsList(); });
       });
       card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
-        openCommanderPicker((c) => { draft.teams[t].players[i].partnerCommander = c; renderTeamsList(); }, "🔍 Escolher Commander Parceiro");
+        openCommanderPicker((c) => { draft.teams[t].players[i].partnerCommander = c; renderTeamsList(); }, "Escolher commander parceiro");
       });
       card.querySelector(".name-input").addEventListener("input", (e) => { draft.teams[t].players[i].name = e.target.value; });
       card.querySelector(".profile-btn").addEventListener("click", () => {
@@ -1867,12 +1905,12 @@
       const profile = p.profileId ? Profiles.get(p.profileId) : null;
       const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
       mainThumb.style.cssText = commanderThumbStyle(p.commander);
-      mainThumb.textContent = p.commander ? "" : "🃏";
+      mainThumb.innerHTML = p.commander ? "" : I("card");
       const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
       partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
       partnerThumb.textContent = p.partnerCommander ? "" : "+";
       card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : "Sem commander escolhido") + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
-      card.querySelector(".profile-btn").textContent = profile ? "👤 " + profile.name : "👤 Sem perfil";
+      card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
       const nameInput = card.querySelector(".name-input");
       if (document.activeElement !== nameInput) nameInput.value = p.name;
     }
@@ -1947,9 +1985,10 @@
     s.querySelector("#cfg-life").addEventListener("change", (e) => {
       draft.startLife = Math.max(1, parseInt(e.target.value, 10) || 40);
     });
+    s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
     s.querySelector("#start-btn").addEventListener("click", () => {
-      const st = State.createTeamsGame({ numTeams: draft.numTeams, playersPerTeam: draft.playersPerTeam, startLife: draft.startLife });
+      const st = State.createTeamsGame({ numTeams: draft.numTeams, playersPerTeam: draft.playersPerTeam, startLife: draft.startLife, trackTurns: draft.trackTurns !== false });
       st.teams.teams.forEach((team, t) => {
         if (draft.teams[t].name.trim()) team.name = draft.teams[t].name.trim();
         team.players.forEach((p, i) => {
@@ -1963,6 +2002,7 @@
       State.ensureFallbackColors(st.teams.teams.reduce((acc, t) => acc.concat(t.players), []));
       State.save(st);
       game = st;
+      if (!st.teams.trackTurns) { nav("game-teams"); return; }
       const teamChoices = st.teams.teams.map((team) => ({ id: team.id, name: team.name }));
       openWhoStartsModal(teamChoices, (winnerTeamId) => {
         State.teamsSetStartingTeam(game, winnerTeamId);
@@ -1977,10 +2017,10 @@
   function teamRosterRowHtml(p, isActive) {
     return `
       <div class="team-roster-row ${isActive ? "up" : ""}" data-player-id="${p.id}">
-        <div class="team-roster-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
+        <div class="team-roster-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
         <div class="team-roster-name">${esc(p.name)}</div>
         <div class="tax-badge-sm" data-action="tax" data-player-id="${p.id}" title="Commander tax">${taxBadgeText(p)}</div>
-        <button class="mini-btn" data-action="edit" data-player-id="${p.id}">✏️</button>
+        <button class="mini-btn" data-action="edit" data-player-id="${p.id}">${I("pencil")}</button>
       </div>
     `;
   }
@@ -2004,20 +2044,20 @@
   function buildTeamPanel(team, rotated, currentTeam) {
     const isActive = currentTeam && currentTeam.id === team.id;
     const panel = el(`
-      <div class="player-panel team-panel ${rotated ? "rot180" : ""} ${team.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-team-id="${team.id}">
+      <div class="player-panel team-panel ${rotated ? "rot180" : ""} ${hasArt(team.players) ? "has-art" : ""} ${team.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-team-id="${team.id}">
         ${teamBgHtml(team)}
         <div class="content">
-          ${isActive ? `<div class="turn-badge">▶ VEZ</div>` : ""}
+          ${isActive ? `<div class="turn-badge">A jogar</div>` : ""}
           <div class="player-header">
             <div class="player-name">${esc(team.name)}</div>
           </div>
           <div class="life-zone">
-            <div class="life-tap minus"><span class="tap-circle">−</span></div>
-            <div class="life-tap plus"><span class="tap-circle">+</span></div>
+            <div class="life-tap minus"><span class="tap-circle">${I("minus")}</span></div>
+            <div class="life-tap plus"><span class="tap-circle">${I("plus")}</span></div>
             <div class="life-delta-fixed"></div>
             <div class="life-total">${team.life}</div>
           </div>
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>⏭️ Passar turno</button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>${I("skip")} Passar turno</button>` : ""}
           <div class="team-roster">${team.players.map((p) => teamRosterRowHtml(p, isActive)).join("")}</div>
         </div>
       </div>
@@ -2089,23 +2129,23 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>🏁 Terminar jogo</h2>
+          <h2>Terminar jogo</h2>
           <div class="footer-note" style="margin-bottom:10px">Que equipa venceu esta partida? (fica registado nos perfis ligados de todos os jogadores dessa equipa)</div>
           <div class="col" id="winner-list">
             ${teams.map((t) => `
-              <label class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:10px;">
+              <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
                 <input type="radio" name="winner" value="${t.id}" style="width:auto">
                 <span class="grow">${esc(t.name)}${t.eliminated ? " (eliminada)" : ""}</span>
               </label>
             `).join("")}
-            <label class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:10px;">
+            <label class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:10px;">
               <input type="radio" name="winner" value="" style="width:auto" checked>
               <span class="grow">Sem vencedor / não contar</span>
             </label>
           </div>
           <div class="row" style="margin-top:14px">
             <button class="btn btn-ghost grow" id="eg-cancel">Cancelar</button>
-            <button class="btn btn-primary grow" id="eg-confirm">📊 Ver Estatísticas</button>
+            <button class="btn btn-primary grow" id="eg-confirm">Confirmar</button>
           </div>
         </div>
       </div>
@@ -2117,14 +2157,15 @@
       const winnerTeamId = sel && sel.value ? sel.value : null;
       const stats = State.teamsEndGame(game, winnerTeamId);
       backdrop.remove();
-      nav("stats-standard", { stats });
+      nav("stats-standard", { stats, celebrate: true });
     });
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
   }
 
   function renderGameTeams() {
     const teams = game.teams.teams;
-    const currentTeam = State.teamsCurrentTeam(game);
+    const timed = game.teams.trackTurns !== false;
+    const currentTeam = timed ? State.teamsCurrentTeam(game) : null;
     const paused = !!game.teams.paused;
     const { top, bottom } = layoutRows(teams.length);
     const topTeams = teams.slice(0, top);
@@ -2132,31 +2173,25 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">🗗</button>` : ""}
+        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="Sair de ecrã inteiro">${I("minimize")}</button>` : ""}
         <div class="topbar">
-          <button class="btn btn-icon" id="menu-btn">☰</button>
-          <h1>🛡️ Equipas</h1>
+          <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
+          <h1>Equipas</h1>
           <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">↺</button>
-            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${boardFullscreen ? "🗗" : "⛶"}</button>
+            <button class="btn btn-icon" id="reset-btn" title="Reiniciar">${I("rotate")}</button>
+            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? "Sair de ecrã inteiro" : "Ecrã inteiro"}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
           </div>
         </div>
-        <div class="br-status-row">
-          <div class="br-chip turn">👤 Vez: ${currentTeam ? esc(currentTeam.name) : "-"}</div>
-          <div class="br-chip">🔁 Ronda: ${game.teams.roundNumber || 1}</div>
-          <div class="br-chip" id="chip-turn-time">⏱ Turno: 00:00</div>
-          <div class="br-chip" id="chip-total-time">⏳ Total: 00:00</div>
-          ${paused ? `<div class="br-chip paused">⏸️ PAUSADO</div>` : ""}
-        </div>
+        ${timed ? `<div class="br-status-row">${turnChipsHtml(currentTeam ? currentTeam.name : "-", game.teams.roundNumber, paused)}</div>` : ""}
         <div class="board">
           <div class="board-row" id="row-top"></div>
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
-          <button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${paused ? "▶️" : "⏸️"}</button>
-          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">📜</button>
-          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">🔀</button>
-          <button class="btn btn-ghost grow" id="end-game-btn">🏁 Terminar</button>
+          ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? "Retomar" : "Pausar"}">${I(paused ? "play" : "pause")}</button>` : ""}
+          <button class="btn btn-icon" id="history-btn" title="Histórico de vida">${I("history")}</button>
+          <button class="btn btn-icon" id="reorder-btn" title="Trocar posições">${I("reorder")}</button>
+          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} Terminar</button>
         </div>
       </div>
     `);
@@ -2168,22 +2203,13 @@
     topTeams.forEach((t) => rowTop.appendChild(buildTeamPanel(t, true, currentTeam)));
     bottomTeams.slice().reverse().forEach((t) => rowBottom.appendChild(buildTeamPanel(t, false, currentTeam)));
 
-    function tickClock() {
-      const chipTurn = s.querySelector("#chip-turn-time");
-      const chipTotal = s.querySelector("#chip-total-time");
-      if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
-      const now = game.teams.paused ? game.teams.pausedAt : Date.now();
-      chipTurn.textContent = "⏱ Turno: " + formatDuration(now - game.teams.turnStartedAt);
-      chipTotal.textContent = "⏳ Total: " + formatDuration(now - game.teams.gameStartedAt);
-    }
-    tickClock();
-    liveTimer = setInterval(tickClock, 1000);
+    if (timed) startLiveClock(s, game.teams);
 
     s.querySelector("#menu-btn").addEventListener("click", () => {
       if (confirm("Voltar ao menu? O jogo atual fica guardado e podes continuar mais tarde.")) nav("menu");
     });
     s.querySelector("#reset-btn").addEventListener("click", () => {
-      if (!confirm("Reiniciar vidas de todas as equipas e os relógios de turno/jogo?")) return;
+      if (!confirm(timed ? "Reiniciar vidas de todas as equipas e os relógios de turno/jogo?" : "Reiniciar vidas de todas as equipas?")) return;
       const now = Date.now();
       game.teams.teams.forEach((team) => {
         team.life = game.teams.startLife;
@@ -2201,7 +2227,8 @@
       State.save(game);
       render();
     });
-    s.querySelector("#pause-btn").addEventListener("click", () => {
+    const pauseBtn = s.querySelector("#pause-btn");
+    if (pauseBtn) pauseBtn.addEventListener("click", () => {
       State.teamsTogglePause(game);
       render();
     });
@@ -2217,9 +2244,117 @@
   }
 
   // ===========================================================
+  // ANIMAÇÃO DE VITÓRIA — confetes pastel + cartão do vencedor
+  // ===========================================================
+  let celebratedGameAt = null; // evita repetir a festa do BR em cada re-render
+
+  /** Dados do vencedor a partir das stats de fim de jogo (Standard/Equipas). */
+  function winnerOfStats(stats) {
+    if (!stats || !stats.winnerId || !game) return null;
+    if (game.mode === "teams") {
+      const team = game.teams.teams.find((t) => t.id === stats.winnerId);
+      if (!team) return null;
+      return { name: team.name, commander: team.players[0] && team.players[0].commander, bgStyle: playerBgStyle(team.players[0]), subtitle: team.players.map((p) => p.name).join(" · ") };
+    }
+    const p = game.standard && game.standard.players.find((x) => x.id === stats.winnerId);
+    if (!p) return null;
+    return { name: p.name, commander: p.commander, bgStyle: playerBgStyle(p), subtitle: p.commander ? p.commander.name : "" };
+  }
+
+  const CONFETTI_COLORS = ["#f4b6bd", "#b9d5f2", "#bfe4cc", "#d2c5f2", "#f5e0a0", "#f8c9a8", "#b8e3de"];
+
+  /** Mostra o vencedor por cima do ecrã de resultado, com confetes a cair.
+   *  Toca em qualquer sítio para fechar (fecha sozinho ao fim de uns segundos). */
+  function celebrateVictory({ name, bgStyle, subtitle }) {
+    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const overlay = el(`
+      <div class="victory-overlay">
+        <canvas class="victory-confetti"></canvas>
+        <div class="victory-card">
+          <div class="victory-avatar" style="${bgStyle || ""}"><span class="victory-crown">${I("crown")}</span></div>
+          <div class="victory-label">Vitória</div>
+          <div class="victory-name">${esc(name)}</div>
+          ${subtitle ? `<div class="victory-sub">${esc(subtitle)}</div>` : ""}
+          <div class="victory-hint">Toca para continuar</div>
+        </div>
+      </div>
+    `);
+    document.body.appendChild(overlay);
+    let raf = null;
+    let closed = false;
+    function close() {
+      if (closed) return;
+      closed = true;
+      overlay.classList.add("closing");
+      setTimeout(() => { cancelAnimationFrame(raf); overlay.remove(); }, 350);
+    }
+    overlay.addEventListener("click", close);
+    setTimeout(close, 6000);
+    if (reduceMotion) return;
+
+    const canvas = overlay.querySelector("canvas");
+    const ctx = canvas.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = window.innerWidth, H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    const pieces = Array.from({ length: 140 }, (_, i) => ({
+      x: W / 2 + (Math.random() - 0.5) * 60,
+      y: H * 0.42,
+      vx: (Math.random() - 0.5) * 13,
+      vy: -Math.random() * 13 - 4,
+      size: 6 + Math.random() * 7,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.3,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      round: Math.random() < 0.35,
+      delay: Math.random() * 18,
+    }));
+    let frame = 0;
+    (function draw() {
+      frame++;
+      ctx.clearRect(0, 0, W, H);
+      let alive = 0;
+      pieces.forEach((c) => {
+        if (frame < c.delay) { alive++; return; }
+        c.vy += 0.28; c.vx *= 0.985; c.vy *= 0.985;
+        c.x += c.vx; c.y += c.vy; c.rot += c.vr;
+        if (c.y > H + 20) return;
+        alive++;
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.rot);
+        ctx.fillStyle = c.color;
+        if (c.round) { ctx.beginPath(); ctx.arc(0, 0, c.size / 2.4, 0, Math.PI * 2); ctx.fill(); }
+        else ctx.fillRect(-c.size / 2, -c.size / 4, c.size, c.size / 2);
+        ctx.restore();
+      });
+      if (alive && !closed) raf = requestAnimationFrame(draw);
+    })();
+  }
+
+  // ===========================================================
   // ESTATÍSTICAS DE FIM DE JOGO (partilhado por Standard e Battle Royale)
   // ===========================================================
   function buildStatsBlock(stats) {
+    const isWinnerId = (id) => Array.isArray(stats.winnerId) ? stats.winnerId.includes(id) : stats.winnerId === id;
+    const avatar = (p) => `<div class="stat-avatar" style="${p.commander && p.commander.art ? `background-image:url('${esc(p.commander.art)}')` : ""}">${p.commander ? "" : I("card")}</div>`;
+    if (stats.timed === false) {
+      // jogo sem contagem de tempo/turnos: só a classificação (vencedor primeiro)
+      const rows = stats.players
+        .slice()
+        .sort((a, b) => (isWinnerId(b.id) - isWinnerId(a.id)) || (a.eliminated - b.eliminated))
+        .map((p) => `
+          <div class="stat-row ${isWinnerId(p.id) ? "winner" : ""}">
+            ${avatar(p)}
+            <div class="stat-info">
+              <div class="stat-name">${isWinnerId(p.id) ? I("crown", "ic-win") + " " : ""}${esc(p.name)}</div>
+              <div class="stat-meta">${isWinnerId(p.id) ? "Vencedor" : p.eliminated ? "Eliminado" : "Em jogo no fim"}</div>
+            </div>
+          </div>`)
+        .join("");
+      return `<div class="stats-list">${rows}</div>`;
+    }
     const maxTime = Math.max(1, ...stats.players.map((p) => p.turnTimeMs));
     const rows = stats.players
       .slice()
@@ -2227,12 +2362,12 @@
       .map((p) => {
         const pct = stats.gameTimeMs ? Math.round((p.turnTimeMs / stats.gameTimeMs) * 100) : 0;
         const barPct = Math.round((p.turnTimeMs / maxTime) * 100);
-        const isWinner = Array.isArray(stats.winnerId) ? stats.winnerId.includes(p.id) : stats.winnerId === p.id;
+        const isWinner = isWinnerId(p.id);
         return `
           <div class="stat-row ${isWinner ? "winner" : ""}">
-            <div class="stat-avatar" style="${p.commander && p.commander.art ? `background-image:url('${esc(p.commander.art)}')` : ""}">${p.commander ? "" : "🃏"}</div>
+            ${avatar(p)}
             <div class="stat-info">
-              <div class="stat-name">${isWinner ? "👑 " : ""}${esc(p.name)}${p.eliminated ? " 💀" : ""}</div>
+              <div class="stat-name">${isWinner ? I("crown", "ic-win") + " " : ""}${esc(p.name)}${p.eliminated ? ` <span class="stat-tag">eliminado</span>` : ""}</div>
               <div class="stat-bar-track"><div class="stat-bar-fill" style="width:${barPct}%"></div></div>
               <div class="stat-meta">${formatDuration(p.turnTimeMs)} em turno · ${p.turnsTaken} turno(s) · média ${formatDuration(p.avgTurnMs)}/turno · ${pct}% do jogo</div>
             </div>
@@ -2240,7 +2375,7 @@
       })
       .join("");
     return `
-      <div class="stats-total">⏱️ Duração total do jogo: <strong>${formatDuration(stats.gameTimeMs)}</strong></div>
+      <div class="stats-total">Duração total do jogo <strong>${formatDuration(stats.gameTimeMs)}</strong></div>
       <div class="stats-list">${rows}</div>
     `;
   }
@@ -2251,7 +2386,7 @@
       <div class="screen">
         <div class="topbar">
           <div style="width:40px"></div>
-          <h1>📊 Estatísticas do Jogo</h1>
+          <h1>Resultado</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">${buildStatsBlock(stats)}</div>
@@ -2261,6 +2396,11 @@
       </div>
     `);
     appEl.appendChild(s);
+    if (screenParams.celebrate) {
+      screenParams.celebrate = false; // só na primeira vez que se abre este ecrã
+      const w = winnerOfStats(stats);
+      if (w) celebrateVictory(w);
+    }
     s.querySelector("#stats-menu-btn").addEventListener("click", () => { State.clear(); nav("menu"); });
   }
 
@@ -2281,7 +2421,7 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>🔀 Trocar posições</h2>
+          <h2>Trocar posições</h2>
           <div class="footer-note" style="margin-bottom:10px">Usa as setas para mudar a posição de cada ${noun} no tabuleiro — não afeta a ordem dos turnos.</div>
           <div class="col" id="reorder-list"></div>
           <div class="row" style="margin-top:14px">
@@ -2304,10 +2444,10 @@
       list.innerHTML = "";
       items.forEach((it, idx) => {
         const row = el(`
-          <div class="row" style="align-items:center;background:var(--bg-elev-2);border-radius:10px;padding:8px 10px;margin-bottom:6px;gap:8px;">
+          <div class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:8px 10px;margin-bottom:6px;gap:8px;">
             <span class="grow" style="font-weight:600;font-size:.85rem;">${esc(it.name)}</span>
-            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>▲</button>
-            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="down" data-idx="${idx}" ${idx === items.length - 1 ? "disabled" : ""}>▼</button>
+            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>${I("chevron-up")}</button>
+            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="down" data-idx="${idx}" ${idx === items.length - 1 ? "disabled" : ""}>${I("chevron-down")}</button>
           </div>
         `);
         list.appendChild(row);
@@ -2339,6 +2479,7 @@
     closeAnyModal();
     const modeState = game.mode === "standard" ? game.standard : game.mode === "br" ? game.br : game.teams;
     const log = (modeState && modeState.lifeLog) || [];
+    const timedLog = !modeState || modeState.trackTurns !== false;
     const groups = [];
     const byTurn = new Map();
     log.forEach((entry) => {
@@ -2354,7 +2495,7 @@
     const backdrop = el(`
       <div class="modal-backdrop center">
         <div class="modal-sheet">
-          <h2>📜 Histórico de vida</h2>
+          <h2>Histórico de vida</h2>
           <div class="scroll" style="padding:0; flex:1; min-height:0;">
             ${groups.length ? `<div id="life-history-list"></div>` : `<div class="footer-note">Ainda não há alterações de vida registadas neste jogo.</div>`}
           </div>
@@ -2389,8 +2530,9 @@
       list.classList.add("lh-timeline");
       groups.forEach((g) => {
         const bursts = mergeBursts(g.entries.slice().sort((a, b) => a.ts - b.ts)).filter((b) => b.delta !== 0);
+        if (!timedLog) bursts.reverse(); // sem turnos: lista simples, mais recente primeiro
         if (!bursts.length) return;
-        list.appendChild(el(`<div class="lh-turn"><span class="lh-turn-round">Ronda ${g.roundNumber}</span> · Turno de ${esc(g.turnName)}</div>`));
+        if (timedLog) list.appendChild(el(`<div class="lh-turn"><span class="lh-turn-round">Ronda ${g.roundNumber}</span> · Turno de ${esc(g.turnName)}</div>`));
         bursts.forEach((entry) => {
           const sign = entry.delta > 0 ? "plus" : "minus";
           const row = el(`
@@ -2416,14 +2558,14 @@
     const s = el(`
       <div class="screen">
         <div class="topbar">
-          <button class="btn btn-icon" id="back-btn">←</button>
-          <h1>👤 Perfis</h1>
+          <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
+          <h1>Perfis</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
           <div class="row" style="gap:8px; margin-bottom:12px;">
-            <button class="btn btn-ghost grow" id="export-profiles-btn">⬇️ Exportar</button>
-            <button class="btn btn-ghost grow" id="import-profiles-btn">⬆️ Importar</button>
+            <button class="btn btn-ghost grow" id="export-profiles-btn">${I("download")} Exportar</button>
+            <button class="btn btn-ghost grow" id="import-profiles-btn">${I("upload")} Importar</button>
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
           ${profiles.length ? "" : `<div class="footer-note">Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.</div>`}
@@ -2473,22 +2615,22 @@
       const d = Profiles.derived(p);
       const card = el(`
         <div class="profile-card">
-          <div class="commander-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : "🃏"}</div>
+          <div class="commander-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
           <div class="profile-info">
             <div class="profile-name">${esc(p.name)}</div>
             <div class="profile-sub">${p.commander ? esc(p.commander.name) : "Sem commander"}</div>
             <div class="profile-stats-grid">
-              <div>🎮 ${d.games} jogo(s)</div>
-              <div>🏆 ${d.wins} vitória(s)${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
-              <div>⏱️ Média/turno: ${formatDuration(d.avgTurnTimeMs)}</div>
-              <div>⏱️ Média/jogo: ${formatDuration(d.avgGameTimeMs)}</div>
-              <div>⏳ Total jogado: ${formatDuration(d.totalGameTimeMs)}</div>
-              <div>🔁 Turnos totais: ${d.turnsTaken}</div>
+              <div>${d.games} jogo(s)</div>
+              <div>${d.wins} vitória(s)${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
+              <div>Média/turno: ${formatDuration(d.avgTurnTimeMs)}</div>
+              <div>Média/jogo: ${formatDuration(d.avgGameTimeMs)}</div>
+              <div>Total jogado: ${formatDuration(d.totalGameTimeMs)}</div>
+              <div>Turnos totais: ${d.turnsTaken}</div>
             </div>
           </div>
           <div class="col gap-sm">
-            <button class="btn btn-icon" data-act="history" data-id="${p.id}" title="Ver histórico">📜</button>
-            <button class="btn btn-icon" data-act="delete" data-id="${p.id}" title="Apagar perfil">🗑️</button>
+            <button class="btn btn-icon" data-act="history" data-id="${p.id}" title="Ver histórico">${I("history")}</button>
+            <button class="btn btn-icon" data-act="delete" data-id="${p.id}" title="Apagar perfil">${I("trash")}</button>
           </div>
         </div>
       `);
@@ -2517,7 +2659,7 @@
       if (!profile) { backdrop.remove(); return; }
       const history = Profiles.historyOf(profileId);
       sheet.innerHTML = `
-        <h2>📜 Histórico — ${esc(profile.name)}</h2>
+        <h2>Histórico — ${esc(profile.name)}</h2>
         <div class="scroll" style="padding:0; flex:1; min-height:0;">
           ${history.length ? `<div class="col" id="history-list"></div>` : `<div class="footer-note">Ainda não há jogos registados para este perfil.</div>`}
         </div>
@@ -2531,11 +2673,11 @@
           const row = el(`
             <div class="cd-list-item" style="align-items:flex-start;">
               <div style="flex:1; min-width:0;">
-                <div class="nm">${g.won ? "🏆 Vitória" : "❌ Derrota"} — ${esc(modeLabel(g.mode))}</div>
+                <div class="nm">${g.won ? "Vitória" : "Derrota"} — ${esc(modeLabel(g.mode))}</div>
                 <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
-                <div class="history-meta">⏳ Jogo: ${formatDuration(g.gameTimeMs)} · ⏱️ Nos teus turnos: ${formatDuration(g.turnTimeMs)} (${g.turnsTaken} turno${g.turnsTaken === 1 ? "" : "s"})</div>
+                ${g.timed === false ? `<div class="history-meta">Jogo sem contagem de tempo/turnos</div>` : `<div class="history-meta">Jogo: ${formatDuration(g.gameTimeMs)} · Nos teus turnos: ${formatDuration(g.turnTimeMs)} (${g.turnsTaken} turno${g.turnsTaken === 1 ? "" : "s"})</div>`}
               </div>
-              <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="Apagar este jogo">🗑️</button>
+              <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="Apagar este jogo">${I("trash")}</button>
             </div>
           `);
           row.querySelector("button[data-gid]").addEventListener("click", () => {

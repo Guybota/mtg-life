@@ -1383,6 +1383,19 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Contador de veneno no painel ---------- */
+.header-badges{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.poison-badge{
+  display:flex; align-items:center; gap:4px;
+  font-size:.82rem; font-weight:700; padding:6px 10px; border-radius:999px; min-height:30px;
+  background: var(--chip-bg); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  color: var(--chip-ink); cursor:pointer;
+}
+.poison-badge .ic{ width:14px; height:14px; color: var(--mint-ink); }
+.poison-badge.lethal{ background: var(--rose); color: var(--rose-ink); }
+.poison-badge.lethal .ic{ color: var(--rose-ink); }
+.cd-value.lethal{ color: var(--minus-ink); }
+
 /* ---------- Folha "Começar já" ---------- */
 .quick-sheet{ gap:16px; }
 .quick-sheet .field{ display:flex; flex-direction:column; gap:8px; }
@@ -1589,3 +1602,6 @@ input.switch:checked::after{ transform: translateX(18px); }
 .more-options summary:focus:not(:focus-visible){ outline:none; }
 /* com o cartão "Último jogo" o menu pode ficar mais alto que o ecrã */
 .menu-screen{ justify-content: safe center; }
+/* nome sempre legível: se não houver espaço, os emblemas (veneno/tax) descem de linha */
+.player-header{ flex-wrap: wrap; row-gap:4px; }
+.player-header .player-name{ flex: 1 1 64px; min-width:64px; }

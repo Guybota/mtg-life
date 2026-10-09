@@ -3364,7 +3364,40 @@
     return `
       <div class="stats-total">${tr("Duração total do jogo")} <strong>${formatDuration(stats.gameTimeMs)}</strong></div>
       <div class="stats-list">${rows}</div>
+      ${lifeChartHtml(stats)}
     `;
+  }
+
+  // Gráfico "Vida ao longo do jogo" (só em jogos com turnos): uma linha por
+  // jogador/equipa com a vida no fim de cada turno.
+  const turnTitle = (tl, i) => {
+    if (i === 0) return tr("Início do jogo");
+    const t = tl.turns[i - 1] || {};
+    return tr("Turno {n}", { n: i }) + (t.round ? " · " + tr("Ronda {n}", { n: t.round }) : "") + (t.name ? " · " + tr("vez de {name}", { name: t.name }) : "");
+  };
+  function lifeChartHtml(stats) {
+    const tl = stats.lifeTimeline;
+    if (!tl || !tl.series || !tl.series.length || tl.turns.length < 1) return "";
+    const n = tl.turns.length;
+    const table = `
+      <details class="ml-table-wrap">
+        <summary>${tr("Ver em tabela")}</summary>
+        <div class="ml-table-scroll">
+          <table class="ml-table">
+            <thead><tr><th>${tr("Turno")}</th>${tl.series.map((s) => `<th>${esc(s.name)}</th>`).join("")}</tr></thead>
+            <tbody>${tl.series[0].values.map((_, i) => `
+              <tr><td>${i === 0 ? tr("Início") : i + (tl.turns[i - 1] && tl.turns[i - 1].name ? " · " + esc(tl.turns[i - 1].name) : "")}</td>${tl.series.map((s) => `<td>${s.values[i]}</td>`).join("")}</tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </details>`;
+    return `
+      <div class="chart-card stats-life-chart">
+        <div class="chart-title">${tr("Vida ao longo do jogo")}</div>
+        <div class="chart-sub">${tr("Vida de cada um no fim de cada turno. Toca num nome para o destacar.")}</div>
+        ${Charts.multiLine(tl.series, { xLabel: (i) => (i === 0 ? tr("Início") : tr("Turno {n}", { n: i })), aria: tr("Vida ao longo do jogo, {n} turno(s)", { n }) })}
+        ${table}
+      </div>`;
   }
 
   function renderStatsStandard() {
@@ -3383,6 +3416,9 @@
       </div>
     `);
     appEl.appendChild(s);
+    if (stats.lifeTimeline && stats.timed !== false && s.querySelector(".chart-multiline")) {
+      Charts.bindMultiLine(s, stats.lifeTimeline.series, { tipTitle: (i) => turnTitle(stats.lifeTimeline, i) });
+    }
     if (screenParams.celebrate) {
       screenParams.celebrate = false; // só na primeira vez que se abre este ecrã
       const w = winnerOfStats(stats);

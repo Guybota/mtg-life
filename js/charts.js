@@ -37,6 +37,7 @@
       l.textContent = label;
       t.appendChild(l);
     }
+    t.classList.remove("multi");
     t.classList.add("show");
     const r = t.getBoundingClientRect();
     const left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x - r.width / 2));
@@ -159,6 +160,128 @@
     });
   }
 
+  // ---------- várias linhas (vida de cada jogador ao longo dos turnos) ----------
+  // Cor = posição do jogador (--series-1..8, ordem fixa, validada para
+  // daltonismo). A identidade nunca é só cor: há sempre legenda (com o
+  // valor final), rótulos no fim das linhas até 4 jogadores, tooltip com
+  // todos os valores e uma tabela.
+  const ML = { W: 340, H: 200, l: 30, r: 46, t: 12, b: 24 };
+  function niceStep(span) {
+    const raw = span / 4;
+    const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, raw))));
+    return [1, 2, 5, 10].map((m) => m * p).find((x) => x >= raw) || raw;
+  }
+  /** Escala comum ao desenho e ao crosshair. O eixo começa perto do valor
+   *  mais baixo (para se verem as diferenças), mas inclui o 0 quando
+   *  alguém se aproxima dele — é a linha que importa num jogo. */
+  function mlScale(series) {
+    const n = series[0].values.length;
+    const all = series.flatMap((s) => s.values);
+    const min = Math.min(...all), max = Math.max(...all);
+    const step = niceStep(Math.max(4, max - min));
+    let lo = Math.floor(min / step) * step;
+    if (lo > 0 && lo <= step) lo = 0;
+    const hi = Math.max(lo + step, Math.ceil(max / step) * step);
+    const iw = ML.W - ML.l - ML.r, ih = ML.H - ML.t - ML.b;
+    const x = (i) => ML.l + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+    const y = (v) => ML.t + (1 - (v - lo) / (hi - lo)) * ih;
+    return { n, lo, hi, step, iw, ih, x, y };
+  }
+  /** series: [{ name, values:[...] }] (mesmo comprimento); opts.xLabel(i), opts.aria. */
+  function multiLine(series, opts) {
+    const { n, lo, hi, step, iw, ih, x, y } = mlScale(series);
+    let grid = "";
+    for (let v = lo; v <= hi + 1e-9; v += step) {
+      grid += `<line class="grid${v === 0 ? " zero" : ""}" x1="${ML.l}" x2="${ML.W - ML.r}" y1="${y(v)}" y2="${y(v)}"/>
+        <text class="tick" x="${ML.l - 6}" y="${y(v) + 3.5}" text-anchor="end">${v}</text>`;
+    }
+    const xt = [0, n - 1].filter((v, i, a) => a.indexOf(v) === i).map((i) =>
+      `<text class="tick" x="${x(i)}" y="${ML.H - 6}" text-anchor="${n === 1 ? "middle" : i === 0 ? "start" : "end"}">${esc(opts.xLabel(i))}</text>`).join("");
+    const lines = series.map((s, k) => {
+      const d = s.values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      return `<g class="ml-series" data-k="${k}" style="--c: var(--series-${(k % 8) + 1})">
+          <path class="ml-line" pathLength="1" d="${d}"/>
+          <circle class="ml-end" cx="${x(n - 1)}" cy="${y(s.values[n - 1])}" r="4"/>
+        </g>`;
+    }).join("");
+    // rótulos no fim das linhas (só até 4 séries), afastados para não se sobreporem
+    let ends = "";
+    if (series.length <= 4) {
+      const lab = series.map((s, k) => ({ k, y: y(s.values[n - 1]) + 4, v: s.values[n - 1] })).sort((a, b) => a.y - b.y);
+      // se dois rótulos ficariam em cima um do outro, não se põe nenhum:
+      // a legenda já mostra o valor final de cada um
+      const clash = lab.some((l, i) => i && l.y - lab[i - 1].y < 12);
+      if (!clash) ends = lab.map((l) => `<text class="ml-end-label" data-k="${l.k}" x="${x(n - 1) + 8}" y="${l.y}">${l.v}</text>`).join("");
+    }
+    const legend = series.map((s, k) => `
+      <button type="button" class="ml-key" data-k="${k}" aria-pressed="false" style="--c: var(--series-${(k % 8) + 1})">
+        <span class="ml-swatch"></span><span class="ml-name">${esc(s.name)}</span><b>${s.values[n - 1]}</b>
+      </button>`).join("");
+    return `
+      <div class="chart-multiline" data-n="${n}">
+        <div class="ml-legend">${legend}</div>
+        <svg viewBox="0 0 ${ML.W} ${ML.H}" role="img" aria-label="${esc(opts.aria || "")}">
+          ${grid}${xt}${lines}${ends}
+          <line class="crosshair" x1="0" x2="0" y1="${ML.t}" y2="${ML.t + ih}" style="display:none"/>
+          <g class="ml-hover"></g>
+          <rect class="hit" x="${ML.l - 10}" y="0" width="${iw + 20}" height="${ML.H}"/>
+        </svg>
+      </div>`;
+  }
+  /** Liga o crosshair (mostra a vida de todos nesse turno) e a legenda
+   *  (tocar num jogador destaca a linha dele). opts.tipTitle(i). */
+  function bindMultiLine(root, series, opts) {
+    root.querySelectorAll(".chart-multiline").forEach((wrap) => {
+      const svg = wrap.querySelector("svg");
+      const { n, iw, x, y } = mlScale(series);
+      const cross = svg.querySelector(".crosshair");
+      const hov = svg.querySelector(".ml-hover");
+      let focus = null;
+      function at(clientX) {
+        const r = svg.getBoundingClientRect();
+        const sx = ((clientX - r.left) / r.width) * ML.W;
+        const i = Math.max(0, Math.min(n - 1, Math.round(((sx - ML.l) / iw) * (n - 1))));
+        cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.style.display = "";
+        hov.innerHTML = series.map((s, k) => (focus == null || focus === k)
+          ? `<circle class="ml-dot" cx="${x(i)}" cy="${y(s.values[i])}" r="4.5" style="--c: var(--series-${(k % 8) + 1})"/>` : "").join("");
+        const t = tip();
+        t.innerHTML = "";
+        const head = document.createElement("span");
+        head.className = "ml-tip-title";
+        head.textContent = opts.tipTitle(i);
+        t.appendChild(head);
+        series.map((s, k) => ({ s, k })).sort((a, b) => b.s.values[i] - a.s.values[i]).forEach(({ s, k }) => {
+          if (focus != null && focus !== k) return;
+          const row = document.createElement("span");
+          row.className = "ml-tip-row";
+          row.innerHTML = `<i style="background: var(--series-${(k % 8) + 1})"></i>${esc(s.name)}<b>${s.values[i]}</b>`;
+          t.appendChild(row);
+        });
+        t.classList.add("show", "multi");
+        const tr = t.getBoundingClientRect();
+        const px = r.left + (x(i) / ML.W) * r.width;
+        t.style.left = Math.min(window.innerWidth - tr.width - 8, Math.max(8, px - tr.width / 2)) + "px";
+        // por cima do gráfico; se não couber no ecrã, por baixo
+        const above = r.top - tr.height - 8;
+        t.style.top = (above >= 8 ? above : r.bottom + 8) + "px";
+        clearTimeout(hideTimer);
+      }
+      function out() { cross.style.display = "none"; hov.innerHTML = ""; hideTip(); }
+      const hit = svg.querySelector(".hit");
+      hit.addEventListener("pointermove", (e) => at(e.clientX));
+      hit.addEventListener("pointerdown", (e) => at(e.clientX));
+      hit.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") out(); else hideTip(2200); });
+      wrap.querySelectorAll(".ml-key").forEach((b) => b.addEventListener("click", () => {
+        const k = +b.dataset.k;
+        focus = focus === k ? null : k;
+        wrap.classList.toggle("has-focus", focus != null);
+        wrap.querySelectorAll("[data-k]").forEach((el) => el.classList.toggle("on", focus != null && +el.dataset.k === focus));
+        wrap.querySelectorAll(".ml-key").forEach((el) => el.setAttribute("aria-pressed", String(+el.dataset.k === focus)));
+        out();
+      }));
+    });
+  }
+
   // ---------- colunas (uma série) ----------
   /** cols: [{ value, tip, tipLabel }]; tickFmt(v) para o eixo y; xLabel(i). */
   function columns(cols, opts) {
@@ -193,5 +316,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Charts = { hbars, stackedBars, lineChart, bindLine, columns, bindTips, hideTip };
+  global.MTG.Charts = { hbars, stackedBars, lineChart, bindLine, multiLine, bindMultiLine, columns, bindTips, hideTip };
 })(window);

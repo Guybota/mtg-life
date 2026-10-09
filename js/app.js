@@ -2,7 +2,7 @@
    app.js — controlador principal / UI
    =========================================================== */
 (function () {
-  const { Scryfall, State, Profiles, Icons } = window.MTG;
+  const { Scryfall, State, Profiles, Icons, Charts } = window.MTG;
   const I = (name, cls) => Icons.svg(name, cls);
   const tr = window.MTG.i18n.t;
   const appEl = document.getElementById("app");
@@ -320,6 +320,7 @@
   let lastRenderedScreen = null;
   function render() {
     if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+    if (Charts) Charts.hideTip();
     appEl.innerHTML = "";
     const sameScreen = screen === lastRenderedScreen;
     lastRenderedScreen = screen;
@@ -332,6 +333,7 @@
     else if (screen === "game-teams") renderGameTeams();
     else if (screen === "stats-standard") renderStatsStandard();
     else if (screen === "profiles") renderProfilesScreen();
+    else if (screen === "profile-detail") renderProfileDetail();
     // Re-renders do mesmo ecrã (ex: passar turno) não repetem a animação
     // de entrada — senão o tabuleiro inteiro "pisca" a cada turno.
     if (sameScreen && appEl.firstElementChild) appEl.firstElementChild.classList.add("no-enter");
@@ -2565,6 +2567,8 @@
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
+          ${profilesOverviewHtml(profiles)}
+          ${profiles.length ? `<div class="section-title">${tr("Perfis")}</div>` : ""}
           <div class="col" id="profiles-list"></div>
         </div>
       </div>
@@ -2610,85 +2614,212 @@
     profiles.forEach((p) => {
       const d = Profiles.derived(p);
       const card = el(`
-        <div class="profile-card">
+        <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
           <div class="commander-thumb" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
           <div class="profile-info">
             <div class="profile-name">${esc(p.name)}</div>
             <div class="profile-sub">${p.commander ? esc(p.commander.name) : tr("Sem commander")}</div>
-            <div class="profile-stats-grid">
-              <div>${tr("{n} jogo(s)", { n: d.games })}</div>
-              <div>${tr("{n} vitória(s)", { n: d.wins })}${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
-              <div>${tr("Média/turno: {time}", { time: formatDuration(d.avgTurnTimeMs) })}</div>
-              <div>${tr("Média/jogo: {time}", { time: formatDuration(d.avgGameTimeMs) })}</div>
-              <div>${tr("Total jogado: {time}", { time: formatDuration(d.totalGameTimeMs) })}</div>
-              <div>${tr("Turnos totais: {n}", { n: d.turnsTaken })}</div>
-            </div>
+            <div class="profile-summary">${d.games ? tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins }) + ` (${Math.round(d.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
+            ${d.games ? `<div class="meter" data-tip="${Math.round(d.winRate * 100)}%" data-tip-label="${esc(tr("{w} de {g} vitórias", { w: d.wins, g: d.games }))}"><div class="meter-fill" style="width:${Math.round(d.winRate * 100)}%"></div></div>` : ""}
           </div>
           <div class="col gap-sm">
-            <button class="btn btn-icon" data-act="history" data-id="${p.id}" title="${tr("Ver histórico")}">${I("history")}</button>
             <button class="btn btn-icon" data-act="delete" data-id="${p.id}" title="${tr("Apagar perfil")}">${I("trash")}</button>
+            <span class="profile-chevron">${I("chevron-right")}</span>
           </div>
         </div>
       `);
-      card.querySelector('button[data-act="delete"]').addEventListener("click", () => {
+      card.querySelector('button[data-act="delete"]').addEventListener("click", (ev) => {
+        ev.stopPropagation();
         if (confirm(tr("Apagar o perfil \"{name}\"? Esta ação não pode ser desfeita.", { name: p.name }))) {
           Profiles.remove(p.id);
           render();
         }
       });
-      card.querySelector('button[data-act="history"]').addEventListener("click", () => {
-        openProfileHistoryModal(p.id);
-      });
+      const open = () => nav("profile-detail", { id: p.id });
+      card.addEventListener("click", open);
+      card.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
       list.appendChild(card);
     });
+    Charts.bindTips(s);
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
   }
 
-  function openProfileHistoryModal(profileId) {
-    closeAnyModal();
-    const backdrop = el(`<div class="modal-backdrop center"><div class="modal-sheet"></div></div>`);
-    const sheet = backdrop.querySelector(".modal-sheet");
-    appEl.appendChild(backdrop);
+  /** Visão geral no topo do ecrã de perfis: números-resumo + comparação da
+   *  taxa de vitórias entre perfis (só perfis com pelo menos 1 jogo). */
+  function profilesOverviewHtml(profiles) {
+    const withGames = profiles.map((p) => ({ p, d: Profiles.derived(p) })).filter((x) => x.d.games > 0);
+    if (!withGames.length) return "";
+    const totalGames = withGames.reduce((a, x) => a + x.d.games, 0);
+    const best = withGames.slice().sort((a, b) => (b.d.winRate - a.d.winRate) || (b.d.games - a.d.games))[0];
+    const rows = withGames
+      .sort((a, b) => (b.d.winRate - a.d.winRate) || (b.d.games - a.d.games))
+      .map(({ p, d }) => ({
+        label: p.name,
+        value: d.winRate,
+        valueLabel: `${Math.round(d.winRate * 100)}% · ${tr("{n} jogo(s)", { n: d.games })}`,
+        tip: `${Math.round(d.winRate * 100)}%`,
+        tipLabel: `${p.name} · ${tr("{w} de {g} vitórias", { w: d.wins, g: d.games })}`,
+      }));
+    return `
+      <div class="kpi-row">
+        ${kpiHtml(tr("Perfis"), profiles.length)}
+        ${kpiHtml(tr("Jogos registados"), totalGames)}
+        ${kpiHtml(tr("Melhor taxa de vitórias"), `${Math.round(best.d.winRate * 100)}%`, best.p.name)}
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">${tr("Taxa de vitórias por perfil")}</div>
+        ${Charts.hbars(rows)}
+      </div>`;
+  }
 
-    function paint() {
-      const profile = Profiles.get(profileId);
-      if (!profile) { backdrop.remove(); return; }
-      const history = Profiles.historyOf(profileId);
-      sheet.innerHTML = `
-        <h2>${tr("Histórico — {name}", { name: esc(profile.name) })}</h2>
-        <div class="scroll" style="padding:0; flex:1; min-height:0;">
-          ${history.length ? `<div class="col" id="history-list"></div>` : `<div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div>`}
+  function kpiHtml(label, value, sub) {
+    return `<div class="kpi"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${esc(value)}</div>${sub ? `<div class="kpi-sub">${esc(sub)}</div>` : ""}</div>`;
+  }
+
+  // ===========================================================
+  // DETALHE DE UM PERFIL — estatísticas, gráficos e histórico
+  // ===========================================================
+  function renderProfileDetail() {
+    const profile = Profiles.get(screenParams.id);
+    if (!profile) { nav("profiles"); return; }
+    const d = Profiles.derived(profile);
+    const history = Profiles.historyOf(profile.id); // mais recente primeiro
+    const chrono = history.slice().reverse();      // mais antigo primeiro
+    const s = el(`
+      <div class="screen">
+        <div class="topbar">
+          <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
+          <h1>${esc(profile.name)}</h1>
+          <div style="width:40px"></div>
         </div>
-        <div class="row" style="margin-top:12px;">
-          <button class="btn btn-ghost grow" id="close-history-btn">${tr("Fechar")}</button>
+        <div class="scroll" id="pd-scroll"></div>
+      </div>
+    `);
+    appEl.appendChild(s);
+    const body = s.querySelector("#pd-scroll");
+
+    const head = `
+      <div class="pd-head">
+        <div class="commander-thumb" style="${commanderThumbStyle(profile.commander)}">${profile.commander ? "" : I("card")}</div>
+        <div class="pd-head-info">
+          <div class="profile-sub">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")}</div>
+          ${profile.playerName ? `<div class="profile-sub">${I("user")} ${esc(profile.playerName)}</div>` : ""}
         </div>
-      `;
-      const list = sheet.querySelector("#history-list");
-      if (list) {
-        history.forEach((g) => {
-          const row = el(`
-            <div class="cd-list-item" style="align-items:flex-start;">
-              <div style="flex:1; min-width:0;">
-                <div class="nm">${g.won ? tr("Vitória") : tr("Derrota")} — ${esc(modeLabel(g.mode))}</div>
-                <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
-                ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>` : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
-              </div>
-              <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="${tr("Apagar este jogo")}">${I("trash")}</button>
-            </div>
-          `);
-          row.querySelector("button[data-gid]").addEventListener("click", () => {
-            if (confirm(tr("Apagar este jogo do histórico? As stats do perfil serão atualizadas."))) {
-              Profiles.removeGame(profileId, g.id);
-              paint();
-            }
-          });
-          list.appendChild(row);
-        });
-      }
-      sheet.querySelector("#close-history-btn").addEventListener("click", () => render());
+      </div>`;
+
+    if (!d.games) {
+      body.innerHTML = head + `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div></div>`;
+      s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));
+      return;
     }
-    paint();
-    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) render(); });
+
+    const pct = Math.round(d.winRate * 100);
+    const kpis = `
+      <div class="kpi-row kpi-row-2">
+        ${kpiHtml(tr("Jogos"), d.games)}
+        <div class="kpi">
+          <div class="kpi-label">${tr("Vitórias")}</div>
+          <div class="kpi-value">${d.wins} <small>${pct}%</small></div>
+          <div class="meter" data-tip="${pct}%" data-tip-label="${esc(tr("{w} de {g} vitórias", { w: d.wins, g: d.games }))}"><div class="meter-fill" style="width:${pct}%"></div></div>
+        </div>
+        ${kpiHtml(tr("Média por jogo"), formatDuration(d.avgGameTimeMs))}
+        ${kpiHtml(tr("Média por turno"), d.turnsTaken ? formatDuration(d.avgTurnTimeMs) : "—")}
+      </div>`;
+
+    // forma recente: últimos 10 resultados (mais antigo → mais recente)
+    const recent = chrono.slice(-10);
+    const form = `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Forma recente")}</div>
+        <div class="chart-sub">${tr("Últimos {n} jogos, do mais antigo para o mais recente", { n: recent.length })}</div>
+        <div class="form-strip">${recent.map((g) => `
+          <span class="form-chip ${g.won ? "win" : "loss"}" data-tip="${g.won ? esc(tr("Vitória")) : esc(tr("Derrota"))}" data-tip-label="${esc(modeLabel(g.mode))} · ${esc(formatDateTime(g.date))}">${g.won ? tr("V") : tr("D")}</span>`).join("")}
+        </div>
+      </div>`;
+
+    // evolução da taxa de vitórias acumulada (precisa de 2+ jogos)
+    let evo = "";
+    let evoPoints = null;
+    if (chrono.length >= 2) {
+      let w = 0;
+      evoPoints = chrono.map((g, i) => {
+        if (g.won) w++;
+        const rate = w / (i + 1);
+        return { y: rate, tip: `${Math.round(rate * 100)}%`, tipLabel: `${tr("Jogo {n}", { n: i + 1 })} · ${g.won ? tr("Vitória") : tr("Derrota")} · ${formatDateTime(g.date)}` };
+      });
+      evo = `
+        <div class="chart-card">
+          <div class="chart-title">${tr("Evolução da taxa de vitórias")}</div>
+          <div class="chart-sub">${tr("Percentagem de vitórias acumulada, jogo a jogo")}</div>
+          ${Charts.lineChart(evoPoints, { xLabel: (i) => tr("Jogo {n}", { n: i + 1 }), aria: tr("Evolução da taxa de vitórias") })}
+        </div>`;
+    }
+
+    // vitórias / derrotas por modo
+    const byMode = new Map();
+    chrono.forEach((g) => {
+      const k = g.mode || "standard";
+      if (!byMode.has(k)) byMode.set(k, { label: modeLabel(k), a: 0, b: 0 });
+      const m = byMode.get(k);
+      if (g.won) m.a++; else m.b++;
+    });
+    const modes = `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Resultados por modo")}</div>
+        ${Charts.stackedBars(Array.from(byMode.values()).sort((x, y) => (y.a + y.b) - (x.a + x.b)), [tr("Vitórias"), tr("Derrotas")])}
+      </div>`;
+
+    // duração dos últimos jogos com tempo contado
+    const timedGames = chrono.filter((g) => g.timed !== false && g.gameTimeMs > 0).slice(-12);
+    let durations = "";
+    if (timedGames.length >= 2) {
+      const first = chrono.indexOf(timedGames[0]) + 1, lastN = chrono.indexOf(timedGames[timedGames.length - 1]) + 1;
+      durations = `
+        <div class="chart-card">
+          <div class="chart-title">${tr("Duração dos jogos")}</div>
+          <div class="chart-sub">${tr("Últimos {n} jogos com tempo contado, em minutos", { n: timedGames.length })}</div>
+          ${Charts.columns(timedGames.map((g) => ({
+            value: g.gameTimeMs / 60000,
+            tip: formatDuration(g.gameTimeMs),
+            tipLabel: `${g.won ? tr("Vitória") : tr("Derrota")} · ${formatDateTime(g.date)}`,
+          })), {
+            tickFmt: (v) => `${Math.round(v)}m`,
+            xLabel: (i) => i === 0 ? tr("Jogo {n}", { n: first }) : tr("Jogo {n}", { n: lastN }),
+            aria: tr("Duração dos jogos"),
+          })}
+        </div>`;
+    }
+
+    body.innerHTML = head + kpis + form + evo + modes + durations + `
+      <div class="section-title">${tr("Histórico de jogos")}</div>
+      <div class="col" id="history-list"></div>`;
+
+    // histórico (também serve de "vista de tabela" dos gráficos)
+    const list = body.querySelector("#history-list");
+    history.forEach((g) => {
+      const row = el(`
+        <div class="cd-list-item" style="align-items:flex-start;">
+          <span class="form-chip sm ${g.won ? "win" : "loss"}">${g.won ? tr("V") : tr("D")}</span>
+          <div style="flex:1; min-width:0;">
+            <div class="nm">${g.won ? tr("Vitória") : tr("Derrota")} — ${esc(modeLabel(g.mode))}</div>
+            <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
+            ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>` : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
+          </div>
+          <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="${tr("Apagar este jogo")}">${I("trash")}</button>
+        </div>
+      `);
+      row.querySelector("button[data-gid]").addEventListener("click", () => {
+        if (confirm(tr("Apagar este jogo do histórico? As stats do perfil serão atualizadas."))) {
+          Profiles.removeGame(profile.id, g.id);
+          render();
+        }
+      });
+      list.appendChild(row);
+    });
+
+    Charts.bindTips(body);
+    if (evoPoints) Charts.bindLine(body, evoPoints);
+    s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));
   }
 
   // ---------------------------------------------------------

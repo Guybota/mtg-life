@@ -244,7 +244,7 @@
   // nos botões redondos/pequenos, onde uma onda quase não se veria. Um só
   // listener global, por isso apanha também elementos criados mais tarde.
   const RIPPLE_SEL = ".btn:not(.btn-icon), .mode-card, .loot-card, .search-result-item, .profile-card, .panel-pass-turn-btn, .switch-field, .cd-list-item[data-pid], .modal-sheet label.row";
-  const POP_SEL = ".btn-icon, .mini-btn, .cmd-badge, .poison-badge, .tax-badge, .tax-badge-sm, .commander-thumb, .fullscreen-toggle-btn, .eliminated-badge, .protected-badge";
+  const POP_SEL = ".btn-icon, .update-btn, .mini-btn, .cmd-badge, .poison-badge, .tax-badge, .tax-badge-sm, .commander-thumb, .fullscreen-toggle-btn, .eliminated-badge, .protected-badge";
   document.addEventListener("pointerdown", (e) => {
     if (e.button > 0) return;
     const pop = e.target.closest(POP_SEL);
@@ -3632,8 +3632,44 @@
   // ---------------------------------------------------------
   document.addEventListener("DOMContentLoaded", () => {
     render();
-    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
-      navigator.serviceWorker.register("./sw.js").catch(() => {});
-    }
+    setupServiceWorker();
+    // Pede ao browser para não apagar os dados desta app quando o
+    // aparelho fica com pouco espaço (no iPhone ajuda sobretudo com a
+    // app instalada no ecrã principal).
+    try {
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persisted().then((ok) => ok || navigator.storage.persist()).catch(() => {});
+      }
+    } catch (e) {}
   });
+
+  // Atualizações: o service worker novo instala-se sozinho; aqui só se
+  // procura uma versão nova sempre que a app volta ao ecrã e se avisa com
+  // um botão "Atualizar". Assim nunca é preciso apagar o ícone do ecrã
+  // principal para atualizar — o que, no iPhone, apaga também os dados.
+  function setupServiceWorker() {
+    if (!("serviceWorker" in navigator) || !(location.protocol === "https:" || location.hostname === "localhost")) return;
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register("./sw.js").then((reg) => {
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+      setInterval(check, 60 * 60 * 1000);
+    }).catch(() => {});
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hadController) showUpdateBanner(); // na 1.ª instalação não há nada a atualizar
+    });
+  }
+
+  function showUpdateBanner() {
+    if (document.querySelector(".update-banner")) return;
+    const b = el(`
+      <div class="update-banner" role="status">
+        <span class="update-msg">${tr("Nova versão disponível")}</span>
+        <button type="button" class="update-btn">${tr("Atualizar")}</button>
+      </div>`);
+    // os dados ficam todos no aparelho, por isso recarregar não perde nada
+    // (nem o jogo em curso, que é guardado a cada alteração)
+    b.querySelector(".update-btn").addEventListener("click", () => location.reload());
+    document.body.appendChild(b);
+  }
 })();

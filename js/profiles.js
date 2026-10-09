@@ -39,7 +39,7 @@
     const profile = {
       id: uid(),
       name: name && name.trim() ? name.trim() : commander ? commander.name : (global.MTG && global.MTG.i18n ? global.MTG.i18n.t("Novo perfil") : "Novo perfil"),
-      playerName: playerName && playerName.trim() ? playerName.trim() : "",
+      playerName: playerName && playerName.trim() ? canonicalPlayer(playerName.trim()) : "",
       commander: commander || null,
       stats: { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 },
       history: [],
@@ -163,7 +163,7 @@
   /** Devolve um JSON com TODOS os perfis (e o respetivo histórico/stats),
    *  pronto a guardar num ficheiro local. */
   function exportAll() {
-    return JSON.stringify({ app: "mtg-life-counter", type: "profiles-export", version: 1, exportedAt: Date.now(), profiles: load() }, null, 2);
+    return JSON.stringify({ app: "mtg-life-counter", type: "profiles-export", version: 1, exportedAt: Date.now(), profiles: load(), playerAliases: playerAliases() }, null, 2);
   }
 
   /** Importa uma lista de perfis (de exportAll ou de uma cópia de
@@ -228,8 +228,9 @@
       let auto = false;
       for (const id of idsOf(inc)) if (byId.has(id)) { match = byId.get(id); auto = true; break; }
       if (!match) {
-        const key = norm(inc.playerName) + "|" + (cmdName(inc) || norm(inc.name));
-        match = local.find((p) => !taken.has(p.id) && norm(p.playerName) + "|" + (cmdName(p) || norm(p.name)) === key) || null;
+        const pk = (p) => norm(canonicalPlayer(p.playerName)) + "|" + (cmdName(p) || norm(p.name));
+        const key = pk(inc);
+        match = local.find((p) => !taken.has(p.id) && pk(p) === key) || null;
       }
       if (match) taken.add(match.id);
       const have = new Set(match ? (match.history || []).map((g) => g.id) : []);
@@ -267,6 +268,7 @@
       const hist = (Array.isArray(clone.history) ? clone.history : []).filter((g) => g && g.id).map(fixOpponents);
       if (!dest) {
         clone.history = hist;
+        if (clone.playerName) clone.playerName = canonicalPlayer(clone.playerName);
         if (!clone.stats) clone.stats = { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 };
         if (!clone.createdAt) clone.createdAt = Date.now();
         list.push(clone);
@@ -299,9 +301,102 @@
     return res;
   }
 
-  /** Cópia de todos os perfis (para "Desfazer" uma fusão). */
-  function snapshot() { return load(); }
-  function replaceAll(listIn) { if (Array.isArray(listIn)) persist(listIn); }
+  // ---------------------------------------------------------
+  // Alcunhas de jogadores e fusão de decks/jogadores neste aparelho
+  // ---------------------------------------------------------
+  // `mtg_lc_player_aliases_v1` guarda { nomeNormalizado: nomeQueFica }.
+  // Depois de fundir "Zé" em "José", um perfil novo criado com "Zé" fica
+  // logo como "José", e as fusões com outros aparelhos também os ligam.
+  const ALIAS_KEY = "mtg_lc_player_aliases_v1";
+
+  function playerAliases() {
+    try { return JSON.parse(localStorage.getItem(ALIAS_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function savePlayerAliases(map) {
+    try { localStorage.setItem(ALIAS_KEY, JSON.stringify(map)); } catch (e) {}
+  }
+  /** Nome "oficial" de um jogador (resolve alcunhas). */
+  function canonicalPlayer(name) {
+    const n = norm(name);
+    if (!n) return name || "";
+    return playerAliases()[n] || name;
+  }
+  /** Junta alcunhas vindas de outro aparelho, sem estragar as locais. */
+  function addPlayerAliases(map) {
+    if (!map || typeof map !== "object") return;
+    const cur = playerAliases();
+    Object.keys(map).forEach((k) => { if (!cur[k] && typeof map[k] === "string" && norm(map[k]) !== k) cur[k] = map[k]; });
+    savePlayerAliases(cur);
+  }
+
+  /** Funde o deck `sourceId` no deck `targetId`: os jogos e stats passam
+   *  para o destino, os adversários guardados noutros jogos passam a
+   *  apontar para ele e o deck de origem deixa de existir. Jogos com o
+   *  mesmo id não são somados duas vezes. Devolve { games } ou null. */
+  function mergeProfiles(sourceId, targetId) {
+    const list = load();
+    const src = list.find((p) => p.id === sourceId);
+    const dst = list.find((p) => p.id === targetId);
+    if (!src || !dst || src === dst) return null;
+    if (!dst.history) dst.history = [];
+    const have = new Set(dst.history.map((g) => g.id));
+    // soma as stats todas (podem incluir jogos antigos sem histórico) e
+    // desconta só os jogos que o destino já tinha
+    ["games", "wins", "totalGameTimeMs", "totalTurnTimeMs", "turnsTaken"].forEach((k) => { dst.stats[k] = (dst.stats[k] || 0) + ((src.stats && src.stats[k]) || 0); });
+    let added = 0;
+    (src.history || []).forEach((g) => {
+      if (have.has(g.id)) {
+        dst.stats.games -= 1;
+        if (g.won) dst.stats.wins -= 1;
+        dst.stats.totalGameTimeMs -= g.gameTimeMs || 0;
+        dst.stats.totalTurnTimeMs -= g.turnTimeMs || 0;
+        dst.stats.turnsTaken -= g.turnsTaken || 0;
+        return;
+      }
+      have.add(g.id);
+      dst.history.push(g);
+      added++;
+    });
+    const al = new Set(dst.aliases || []);
+    idsOf(src).forEach((id) => { if (id !== dst.id) al.add(id); });
+    dst.aliases = Array.from(al);
+    if (!dst.commander && src.commander) dst.commander = src.commander;
+    if (!dst.playerName && src.playerName) dst.playerName = src.playerName;
+    const out = list.filter((p) => p !== src);
+    out.forEach((p) => (p.history || []).forEach((g) => (g.opponents || []).forEach((o) => { if (o && o.profileId === src.id) o.profileId = dst.id; })));
+    persist(out);
+    return { games: added };
+  }
+
+  /** Funde o jogador `fromName` em `toName`: todos os decks de um passam
+   *  a ser do outro, os nomes guardados nos jogos são corrigidos e fica
+   *  registada a alcunha. Devolve o n.º de decks alterados. */
+  function mergePlayers(fromName, toName) {
+    const from = norm(fromName);
+    const to = String(toName || "").trim();
+    if (!from || !to || from === norm(to)) return 0;
+    const list = load();
+    let n = 0;
+    list.forEach((p) => {
+      if (norm(p.playerName) === from) { p.playerName = to; n++; }
+      (p.history || []).forEach((g) => (g.opponents || []).forEach((o) => { if (o && norm(o.name) === from) o.name = to; }));
+    });
+    persist(list);
+    const al = playerAliases();
+    al[from] = to;
+    Object.keys(al).forEach((k) => { if (norm(al[k]) === from) al[k] = to; });
+    delete al[norm(to)]; // o nome que fica nunca é alcunha de outro
+    savePlayerAliases(al);
+    return n;
+  }
+
+  /** Cópia de tudo o que uma fusão pode mudar (para "Desfazer"). */
+  function snapshot() { return { profiles: load(), aliases: playerAliases() }; }
+  function replaceAll(snap) {
+    if (Array.isArray(snap)) { persist(snap); return; }
+    if (snap && Array.isArray(snap.profiles)) persist(snap.profiles);
+    if (snap && snap.aliases) savePlayerAliases(snap.aliases);
+  }
 
   /** N.º de jogos diferentes registados (o mesmo jogo aparece no histórico
    *  de cada perfil que lá esteve; agrupa-se pela hora de registo). */
@@ -312,5 +407,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll };
+  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases };
 })(window);

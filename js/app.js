@@ -222,6 +222,13 @@
 
   const REPEAT_MAX_MS = 20000; // segurança: nenhuma repetição dura mais do que isto
 
+  // Nunca começar uma seleção de texto fora dos campos (o Safari do iPad
+  // ignora às vezes o CSS ao manter o dedo em cima de um botão).
+  document.addEventListener("selectstart", (e) => {
+    const t = e.target && e.target.nodeType === 1 ? e.target : e.target && e.target.parentElement;
+    if (!t || !t.closest("input, textarea, select, [contenteditable='true']")) e.preventDefault();
+  });
+
   /** Tap simples + press-and-hold repetido (para os contadores de vida). */
   function bindPressRepeat(elm, callback) {
     let timer = null, interval = null, fired = false, startedAt = 0;
@@ -264,6 +271,9 @@
     elm.addEventListener("pointercancel", stop);
     elm.addEventListener("lostpointercapture", stop);
     elm.addEventListener("contextmenu", (e) => e.preventDefault());
+    // no iOS só cancelar o touchstart impede a lupa/seleção ao manter o dedo
+    // (os eventos de pointer continuam a chegar normalmente)
+    elm.addEventListener("touchstart", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
   }
 
   // Feedback ao tocar: uma "onda" que nasce no ponto tocado nos botões e

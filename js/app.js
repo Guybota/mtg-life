@@ -269,16 +269,76 @@
     liveTimer = setInterval(tick, 1000);
   }
 
-  /** Interruptor "Contar tempo e turnos" dos ecrãs de setup. */
-  function trackTurnsFieldHtml(checked) {
+  /** Interruptor genérico (título + explicação + switch) dos ecrãs de setup. */
+  function switchFieldHtml(id, title, sub, checked) {
     return `
       <label class="switch-field">
         <span class="switch-text">
-          <span class="switch-title">${tr("Contar tempo e turnos")}</span>
-          <span class="switch-sub">${tr("Desliga para jogar só com a vida — sem relógios, rondas nem passar turno.")}</span>
+          <span class="switch-title">${title}</span>
+          ${sub ? `<span class="switch-sub">${sub}</span>` : ""}
         </span>
-        <input type="checkbox" id="cfg-track" class="switch" ${checked ? "checked" : ""}>
+        <input type="checkbox" id="${id}" class="switch" ${checked ? "checked" : ""}>
       </label>`;
+  }
+
+  /** Interruptor "Contar tempo e turnos" dos ecrãs de setup. */
+  function trackTurnsFieldHtml(checked) {
+    return switchFieldHtml("cfg-track", tr("Contar tempo e turnos"), tr("Desliga para jogar só com a vida — sem relógios, rondas nem passar turno."), checked);
+  }
+
+  /** Fila de botões rápidos (ex: nº de jogadores 2–8). */
+  function chipRowHtml(id, values, selected) {
+    return `<div class="chip-row" id="${id}" role="group" style="grid-template-columns: repeat(${values.length}, minmax(0, 1fr))">${values.map((v) =>
+      `<button type="button" class="chip-btn" data-v="${v}" aria-pressed="${v === selected}">${v}</button>`).join("")}</div>`;
+  }
+  function bindChipRow(scope, id, onPick) {
+    const row = scope.querySelector("#" + id);
+    if (!row) return;
+    row.querySelectorAll(".chip-btn[data-v]").forEach((b) => b.addEventListener("click", () => {
+      row.querySelectorAll(".chip-btn").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      onPick(parseInt(b.dataset.v, 10));
+    }));
+  }
+
+  /** Vida inicial: 20 / 30 / 40 + "Outra" (abre um campo numérico). */
+  const LIFE_PRESETS = [20, 30, 40];
+  function lifeFieldHtml(life) {
+    const custom = !LIFE_PRESETS.includes(life);
+    return `
+      <div class="chip-row" id="life-chips" role="group" style="grid-template-columns: repeat(4, minmax(0, 1fr))">
+        ${LIFE_PRESETS.map((v) => `<button type="button" class="chip-btn" data-v="${v}" aria-pressed="${v === life}">${v}</button>`).join("")}
+        <button type="button" class="chip-btn chip-other" data-other="1" aria-pressed="${custom}">${tr("Outra")}</button>
+      </div>
+      <input type="number" id="cfg-life" min="1" value="${life}" class="${custom ? "" : "hidden"}" style="margin-top:8px" aria-label="${tr("Vida inicial")}">`;
+  }
+  function bindLifeField(scope, onChange) {
+    const row = scope.querySelector("#life-chips");
+    const input = scope.querySelector("#cfg-life");
+    row.querySelectorAll(".chip-btn").forEach((b) => b.addEventListener("click", () => {
+      row.querySelectorAll(".chip-btn").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      if (b.dataset.other) {
+        input.classList.remove("hidden");
+        input.focus();
+        input.select();
+      } else {
+        input.classList.add("hidden");
+        input.value = b.dataset.v;
+        onChange(parseInt(b.dataset.v, 10));
+      }
+    }));
+    input.addEventListener("change", () => onChange(parseInt(input.value, 10)));
+  }
+
+  /** Secção recolhida "Mais opções" (fechada por defeito). */
+  function moreOptionsHtml(summary, inner) {
+    return `
+      <details class="more-options">
+        <summary>
+          <span class="more-text"><span class="more-title">${tr("Mais opções")}</span><span class="more-sub">${summary}</span></span>
+          ${I("chevron-down", "more-chevron")}
+        </summary>
+        <div class="more-body">${inner}</div>
+      </details>`;
   }
 
   /** Conteúdo do botão de perfil de um jogador (ícone + nome do perfil). */
@@ -668,25 +728,18 @@
             ${preset.minPlayers !== preset.maxPlayers ? `
             <div class="field">
               <label>${tr("Jogadores")}</label>
-              <div class="stepper-field">
-                <button class="btn btn-icon" type="button" id="players-minus">${I("minus")}</button>
-                <input type="number" id="cfg-players" min="${preset.minPlayers}" max="${preset.maxPlayers}" value="${draft.playerCount}">
-                <button class="btn btn-icon" type="button" id="players-plus">${I("plus")}</button>
-              </div>
+              ${chipRowHtml("players-chips", Array.from({ length: preset.maxPlayers - preset.minPlayers + 1 }, (_, i) => preset.minPlayers + i), draft.playerCount)}
             </div>` : ""}
             <div class="field">
               <label>${tr("Vida inicial")}</label>
-              <input type="number" id="cfg-life" min="1" value="${draft.startLife}">
+              ${lifeFieldHtml(draft.startLife)}
             </div>
-            ${preset.cmdDmgToggle ? `
-            <div class="field" style="display:flex;align-items:flex-end;gap:8px;">
-              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                <input type="checkbox" id="cfg-cmddmg" ${draft.cmdDmgEnabled ? "checked" : ""} style="width:auto">
-                Commander Damage
-              </label>
-            </div>` : ""}
           </div>
-          ${trackTurnsFieldHtml(draft.trackTurns !== false)}
+          ${moreOptionsHtml(
+            [preset.cmdDmgToggle ? "Commander damage" : "", tr("Tempo e turnos")].filter(Boolean).join(" · "),
+            (preset.cmdDmgToggle ? switchFieldHtml("cfg-cmddmg", "Commander damage", tr("Contador de dano de commander por oponente (21 elimina)."), draft.cmdDmgEnabled) : "") +
+            trackTurnsFieldHtml(draft.trackTurns !== false)
+          )}
           <div class="player-setup-list" id="players-list"></div>
         </div>
         <div class="board-toolbar">
@@ -774,22 +827,15 @@
     if (preset.minPlayers !== preset.maxPlayers) {
       function setPlayerCount(n) {
         n = Math.max(preset.minPlayers, Math.min(preset.maxPlayers, n || preset.defaultPlayers));
-        s.querySelector("#cfg-players").value = n;
         const cur = draft.players.length;
         if (n > cur) for (let i = cur; i < n; i++) draft.players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
         else draft.players.length = n;
         draft.playerCount = n;
         renderPlayersList();
       }
-      s.querySelector("#cfg-players").addEventListener("change", (e) => {
-        setPlayerCount(parseInt(e.target.value, 10));
-      });
-      s.querySelector("#players-minus").addEventListener("click", () => setPlayerCount(draft.playerCount - 1));
-      s.querySelector("#players-plus").addEventListener("click", () => setPlayerCount(draft.playerCount + 1));
+      bindChipRow(s, "players-chips", setPlayerCount);
     }
-    s.querySelector("#cfg-life").addEventListener("change", (e) => {
-      draft.startLife = Math.max(1, parseInt(e.target.value, 10) || preset.defaultLife);
-    });
+    bindLifeField(s, (v) => { draft.startLife = Math.max(1, v || preset.defaultLife); });
     if (preset.cmdDmgToggle) {
       s.querySelector("#cfg-cmddmg").addEventListener("change", (e) => { draft.cmdDmgEnabled = e.target.checked; });
     }
@@ -1848,26 +1894,18 @@
           <div class="setup-controls">
             <div class="field">
               <label>${tr("Equipas")}</label>
-              <div class="stepper-field">
-                <button class="btn btn-icon" type="button" id="teams-minus">${I("minus")}</button>
-                <input type="number" id="cfg-teams" min="2" max="4" value="${draft.numTeams}">
-                <button class="btn btn-icon" type="button" id="teams-plus">${I("plus")}</button>
-              </div>
+              ${chipRowHtml("teams-chips", [2, 3, 4], draft.numTeams)}
             </div>
             <div class="field">
               <label>${tr("Jogadores/equipa")}</label>
-              <div class="stepper-field">
-                <button class="btn btn-icon" type="button" id="ppt-minus">${I("minus")}</button>
-                <input type="number" id="cfg-ppt" min="1" max="4" value="${draft.playersPerTeam}">
-                <button class="btn btn-icon" type="button" id="ppt-plus">${I("plus")}</button>
-              </div>
+              ${chipRowHtml("ppt-chips", [1, 2, 3, 4], draft.playersPerTeam)}
             </div>
             <div class="field">
               <label>${tr("Vida inicial (por equipa)")}</label>
-              <input type="number" id="cfg-life" min="1" value="${draft.startLife}">
+              ${lifeFieldHtml(draft.startLife)}
             </div>
           </div>
-          ${trackTurnsFieldHtml(draft.trackTurns !== false)}
+          ${moreOptionsHtml(tr("Tempo e turnos"), trackTurnsFieldHtml(draft.trackTurns !== false))}
           <div class="footer-note" style="margin-bottom:12px">${tr("Vida partilhada por equipa (estilo Two-Headed Giant): a equipa toda soma/perde vida em conjunto. Os turnos alternam entre equipas.")}</div>
           <div id="teams-list"></div>
         </div>
@@ -1971,7 +2009,6 @@
 
     function setNumTeams(n) {
       n = Math.max(2, Math.min(4, n || 2));
-      s.querySelector("#cfg-teams").value = n;
       const cur = draft.teams.length;
       if (n > cur) {
         for (let t = cur; t < n; t++) {
@@ -1987,7 +2024,6 @@
     }
     function setPlayersPerTeam(n) {
       n = Math.max(1, Math.min(4, n || 1));
-      s.querySelector("#cfg-ppt").value = n;
       draft.teams.forEach((team) => {
         const cur = team.players.length;
         if (n > cur) for (let i = cur; i < n; i++) team.players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
@@ -1996,15 +2032,9 @@
       draft.playersPerTeam = n;
       renderTeamsList();
     }
-    s.querySelector("#cfg-teams").addEventListener("change", (e) => setNumTeams(parseInt(e.target.value, 10)));
-    s.querySelector("#teams-minus").addEventListener("click", () => setNumTeams(draft.numTeams - 1));
-    s.querySelector("#teams-plus").addEventListener("click", () => setNumTeams(draft.numTeams + 1));
-    s.querySelector("#cfg-ppt").addEventListener("change", (e) => setPlayersPerTeam(parseInt(e.target.value, 10)));
-    s.querySelector("#ppt-minus").addEventListener("click", () => setPlayersPerTeam(draft.playersPerTeam - 1));
-    s.querySelector("#ppt-plus").addEventListener("click", () => setPlayersPerTeam(draft.playersPerTeam + 1));
-    s.querySelector("#cfg-life").addEventListener("change", (e) => {
-      draft.startLife = Math.max(1, parseInt(e.target.value, 10) || 40);
-    });
+    bindChipRow(s, "teams-chips", setNumTeams);
+    bindChipRow(s, "ppt-chips", setPlayersPerTeam);
+    bindLifeField(s, (v) => { draft.startLife = Math.max(1, v || 40); });
     s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
     s.querySelector("#start-btn").addEventListener("click", () => {

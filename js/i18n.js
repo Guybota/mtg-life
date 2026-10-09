@@ -289,6 +289,11 @@
     "Últimos {n} jogos com tempo contado, em minutos": "Last {n} timed games, in minutes",
     "Histórico de jogos": "Game history",
     "Ainda sem jogos": "No games yet",
+    // setup refinado
+    "Outra": "Other",
+    "Mais opções": "More options",
+    "Tempo e turnos": "Time and turns",
+    "Contador de dano de commander por oponente (21 elimina).": "Commander damage tracker per opponent (21 eliminates).",
   };
 
   const missing = new Set();

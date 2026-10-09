@@ -127,6 +127,25 @@
     toast._t = setTimeout(() => toastEl.classList.remove("show"), ms || 2200);
   }
 
+  /** Reinicia uma animação CSS (remove a classe, força reflow, volta a pôr). */
+  function retrigger(elm, cls) {
+    if (!elm) return;
+    elm.classList.remove(cls);
+    void elm.offsetWidth;
+    elm.classList.add(cls);
+  }
+
+  /** Atualiza o número de vida com um pequeno "salto" verde/vermelho. */
+  function setLifeAnimated(lifeEl, value) {
+    if (!lifeEl) return;
+    const prev = parseInt(lifeEl.textContent, 10);
+    lifeEl.textContent = value;
+    if (isNaN(prev) || prev === value) return;
+    lifeEl.classList.remove("bump-up", "bump-down");
+    void lifeEl.offsetWidth;
+    lifeEl.classList.add(value > prev ? "bump-up" : "bump-down");
+  }
+
   function debounce(fn, wait) {
     let t;
     return (...args) => {
@@ -169,20 +188,26 @@
   /** Tap simples + press-and-hold repetido (para os contadores de vida). */
   function bindPressRepeat(elm, callback) {
     let timer = null, interval = null, fired = false;
+    function fire(e) {
+      retrigger(elm, "tap-flash");
+      callback(e);
+    }
     function start(e) {
       e.preventDefault();
       fired = false;
+      elm.classList.add("pressed");
       timer = setTimeout(() => {
         fired = true;
-        callback(e);
-        interval = setInterval(() => callback(e), 120);
+        fire(e);
+        interval = setInterval(() => fire(e), 120);
       }, 420);
     }
     function stop() {
       clearTimeout(timer); clearInterval(interval); timer = null; interval = null;
+      elm.classList.remove("pressed");
     }
     function up(e) {
-      if (!fired) callback(e);
+      if (!fired) fire(e);
       stop();
     }
     elm.addEventListener("pointerdown", start);
@@ -241,9 +266,12 @@
   // ---------------------------------------------------------
   // ROUTER
   // ---------------------------------------------------------
+  let lastRenderedScreen = null;
   function render() {
     if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
     appEl.innerHTML = "";
+    const sameScreen = screen === lastRenderedScreen;
+    lastRenderedScreen = screen;
     if (screen === "menu") renderMenu();
     else if (screen === "setup-standard") renderSetupStandard();
     else if (screen === "game-standard") renderGameStandard();
@@ -253,6 +281,9 @@
     else if (screen === "game-teams") renderGameTeams();
     else if (screen === "stats-standard") renderStatsStandard();
     else if (screen === "profiles") renderProfilesScreen();
+    // Re-renders do mesmo ecrã (ex: passar turno) não repetem a animação
+    // de entrada — senão o tabuleiro inteiro "pisca" a cada turno.
+    if (sameScreen && appEl.firstElementChild) appEl.firstElementChild.classList.add("no-enter");
 
     if (screen === "game-standard" || screen === "game-br" || screen === "game-teams") requestWakeLock();
     else releaseWakeLock();
@@ -902,6 +933,7 @@
       deltaEl.classList.toggle("plus", deltaAcc >= 0);
       deltaEl.classList.toggle("minus", deltaAcc < 0);
       deltaEl.classList.add("show");
+      retrigger(deltaEl, "pop");
       deltaTimer = setTimeout(() => {
         deltaEl.classList.remove("show");
         deltaAcc = 0;
@@ -1065,7 +1097,7 @@
           const row = el(`
             <div class="cd-list-item" style="${inPool ? "" : "opacity:.4"}">
               <div class="nm">${esc(p.name)}</div>
-              <div class="val">${r === null ? "…" : "🎲 " + r}</div>
+              <div class="val ${r === null ? "" : "dice-roll"}">${r === null ? "…" : "🎲 " + r}</div>
             </div>
           `);
           list.appendChild(row);
@@ -1124,8 +1156,7 @@
     const panel = appEl.querySelector(`.player-panel[data-player-id="${pid}"]`);
     if (!p || !panel) return;
     panel.classList.toggle("eliminated", p.eliminated);
-    const lifeEl = panel.querySelector(".life-total");
-    if (lifeEl) lifeEl.textContent = p.life;
+    setLifeAnimated(panel.querySelector(".life-total"), p.life);
     syncEliminationBadges(panel, p);
     panel.querySelectorAll(".cmd-badge").forEach((b) => {
       const oppId = b.dataset.oppId;
@@ -2005,6 +2036,7 @@
       deltaEl.classList.toggle("plus", deltaAcc >= 0);
       deltaEl.classList.toggle("minus", deltaAcc < 0);
       deltaEl.classList.add("show");
+      retrigger(deltaEl, "pop");
       deltaTimer = setTimeout(() => {
         deltaEl.classList.remove("show");
         deltaAcc = 0;
@@ -2047,8 +2079,7 @@
     const panel = appEl.querySelector(`.team-panel[data-team-id="${teamId}"]`);
     if (!team || !panel) return;
     panel.classList.toggle("eliminated", team.eliminated);
-    const lifeEl = panel.querySelector(".life-total");
-    if (lifeEl) lifeEl.textContent = team.life;
+    setLifeAnimated(panel.querySelector(".life-total"), team.life);
     syncTeamEliminationBadge(panel, team);
   }
 

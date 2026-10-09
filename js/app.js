@@ -207,35 +207,62 @@
     document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
   }
 
+  // Repetições ativas (manter premido) — para as poder parar todas de uma
+  // vez. No iPad, minimizar a app a meio de um toque pode não entregar o
+  // "levantar o dedo" ao botão; sem isto a repetição ficava a correr para
+  // sempre (e, depois de o painel ser redesenhado, já nenhum toque a parava).
+  const activeRepeats = new Set();
+  function stopAllRepeats() { Array.from(activeRepeats).forEach((stop) => stop()); }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "visible") stopAllRepeats(); });
+  window.addEventListener("blur", stopAllRepeats);
+  window.addEventListener("pagehide", stopAllRepeats);
+  // qualquer dedo levantado/cancelado em qualquer sítio também para
+  document.addEventListener("pointerup", stopAllRepeats, true);
+  document.addEventListener("pointercancel", stopAllRepeats, true);
+
+  const REPEAT_MAX_MS = 20000; // segurança: nenhuma repetição dura mais do que isto
+
   /** Tap simples + press-and-hold repetido (para os contadores de vida). */
   function bindPressRepeat(elm, callback) {
-    let timer = null, interval = null, fired = false;
+    let timer = null, interval = null, fired = false, startedAt = 0;
     function fire(e) {
       retrigger(elm, "tap-flash");
       callback(e);
     }
-    function start(e) {
-      e.preventDefault();
-      fired = false;
-      elm.classList.add("pressed");
-      timer = setTimeout(() => {
-        fired = true;
-        fire(e);
-        interval = setInterval(() => fire(e), 120);
-      }, 420);
-    }
     function stop() {
       clearTimeout(timer); clearInterval(interval); timer = null; interval = null;
       elm.classList.remove("pressed");
+      activeRepeats.delete(stop);
+    }
+    function start(e) {
+      e.preventDefault();
+      stop(); // nunca duas repetições do mesmo botão
+      fired = false;
+      startedAt = Date.now();
+      elm.classList.add("pressed");
+      try { elm.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
+      activeRepeats.add(stop);
+      timer = setTimeout(() => {
+        fired = true;
+        fire(e);
+        interval = setInterval(() => {
+          if (!elm.isConnected || document.hidden || Date.now() - startedAt > REPEAT_MAX_MS) { stop(); return; }
+          fire(e);
+        }, 120);
+      }, 420);
     }
     function up(e) {
-      if (!fired) fire(e);
+      // toque curto = um passo (o listener global de pointerup já pode ter
+      // parado o temporizador antes de chegar aqui, por isso usa-se o tempo)
+      if (!fired && startedAt && Date.now() - startedAt < 600) fire(e);
+      startedAt = 0;
       stop();
     }
     elm.addEventListener("pointerdown", start);
     elm.addEventListener("pointerup", up);
     elm.addEventListener("pointerleave", stop);
     elm.addEventListener("pointercancel", stop);
+    elm.addEventListener("lostpointercapture", stop);
     elm.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
@@ -423,6 +450,7 @@
   // ---------------------------------------------------------
   let lastRenderedScreen = null;
   function render() {
+    stopAllRepeats();
     if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
     if (Charts) Charts.hideTip();
     appEl.innerHTML = "";

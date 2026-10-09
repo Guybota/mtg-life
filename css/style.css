@@ -1383,6 +1383,22 @@ input.switch:checked::after{ transform: translateX(18px); }
 .profile-chevron{ display:flex; justify-content:center; color: var(--text-dim); }
 .profile-chevron .ic{ width:18px; height:18px; }
 
+/* ---------- Sequência de vitórias (detalhe do perfil) ---------- */
+.streak-card{
+  display:flex; align-items:center; gap:12px;
+  background: var(--surface); border:1px solid var(--line); border-radius: var(--radius);
+  padding:12px 14px; margin-bottom:10px;
+  animation: cardIn .35s var(--ease-out) both;
+}
+.streak-icon{ width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.streak-icon.win{ background: var(--butter); color: var(--butter-ink); }
+.streak-icon.loss{ background: var(--surface-2); color: var(--text-dim); }
+.streak-icon .ic{ width:20px; height:20px; }
+.streak-text{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.streak-value{ font-size:1.05rem; font-weight:700; }
+.streak-best{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+.streak-best strong{ font-size:1.2rem; }
+
 /* ---------- Pesquisar e ordenar perfis ---------- */
 .profiles-tools{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }
 .search-field{

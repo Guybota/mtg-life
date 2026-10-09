@@ -219,6 +219,30 @@
     elm.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
+  // Feedback ao tocar: uma "onda" que nasce no ponto tocado nos botões e
+  // cartões retangulares, e um pequeno "pop" (encolhe e volta com mola)
+  // nos botões redondos/pequenos, onde uma onda quase não se veria. Um só
+  // listener global, por isso apanha também elementos criados mais tarde.
+  const RIPPLE_SEL = ".btn:not(.btn-icon), .mode-card, .loot-card, .search-result-item, .profile-card, .panel-pass-turn-btn, .switch-field, .cd-list-item[data-pid], .modal-sheet label.row";
+  const POP_SEL = ".btn-icon, .mini-btn, .cmd-badge, .tax-badge, .tax-badge-sm, .commander-thumb, .fullscreen-toggle-btn, .eliminated-badge, .protected-badge";
+  document.addEventListener("pointerdown", (e) => {
+    if (e.button > 0) return;
+    const pop = e.target.closest(POP_SEL);
+    if (pop) { if (!pop.disabled) retrigger(pop, "tap-pop"); return; }
+    const host = e.target.closest(RIPPLE_SEL);
+    if (!host || host.disabled) return;
+    const r = host.getBoundingClientRect();
+    const size = Math.max(r.width, r.height) * 1.6;
+    const wave = document.createElement("span");
+    wave.className = "ripple";
+    wave.style.width = wave.style.height = size + "px";
+    wave.style.left = (e.clientX - r.left - size / 2) + "px";
+    wave.style.top = (e.clientY - r.top - size / 2) + "px";
+    host.appendChild(wave);
+    wave.addEventListener("animationend", () => wave.remove());
+    setTimeout(() => wave.remove(), 900); // por segurança, se a animação não correr
+  }, { passive: true });
+
   /** Chips de estado do tabuleiro (vez/ronda/relógios) — só existem em
    *  jogos com contagem de tempo e turnos. */
   function turnChipsHtml(turnName, roundNumber, paused) {

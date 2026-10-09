@@ -198,6 +198,111 @@
     return res;
   }
 
+  // ---------------------------------------------------------
+  // Fundir com os perfis de outro aparelho
+  // ---------------------------------------------------------
+  // Cada perfil guarda em `aliases` os ids que teve noutros aparelhos e
+  // que já foram fundidos com ele. Assim, da próxima vez que se fundir
+  // com o mesmo aparelho, o par é reconhecido sozinho. Cada jogo do
+  // histórico tem um id próprio: um jogo que o perfil já tenha nunca é
+  // somado outra vez, por isso fundir várias vezes não duplica nada.
+
+  const norm = (x) => String(x || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const idsOf = (p) => [p.id].concat(Array.isArray(p.aliases) ? p.aliases : []);
+  const cmdName = (p) => norm(p.commander && p.commander.name);
+
+  /** Analisa os perfis recebidos sem gravar nada. Para cada um devolve
+   *  { incoming, match, auto, newGames, dupGames }:
+   *  - auto: já é o mesmo perfil (mesmo id ou fundido antes) → junta sempre;
+   *  - match: perfil local sugerido (mesmo jogador e mesmo commander),
+   *    ou null para entrar como perfil novo. */
+  function mergePreview(incomingList) {
+    const local = load();
+    const byId = new Map();
+    local.forEach((p) => idsOf(p).forEach((id) => byId.set(id, p)));
+    const taken = new Set();
+    const rows = [];
+    (Array.isArray(incomingList) ? incomingList : []).forEach((inc) => {
+      if (!inc || typeof inc !== "object" || !inc.id) return;
+      let match = null;
+      let auto = false;
+      for (const id of idsOf(inc)) if (byId.has(id)) { match = byId.get(id); auto = true; break; }
+      if (!match) {
+        const key = norm(inc.playerName) + "|" + (cmdName(inc) || norm(inc.name));
+        match = local.find((p) => !taken.has(p.id) && norm(p.playerName) + "|" + (cmdName(p) || norm(p.name)) === key) || null;
+      }
+      if (match) taken.add(match.id);
+      const have = new Set(match ? (match.history || []).map((g) => g.id) : []);
+      const hist = Array.isArray(inc.history) ? inc.history : [];
+      const newGames = hist.filter((g) => g && !have.has(g.id)).length;
+      rows.push({ incoming: inc, match, auto, newGames, dupGames: hist.length - newGames });
+    });
+    return rows;
+  }
+
+  /** Aplica a fusão. `targets` é { idRecebido: idLocal | null } (null =
+   *  entra como perfil novo). Devolve { profiles, games } acrescentados. */
+  function applyMerge(incomingList, targets) {
+    const list = load();
+    const res = { profiles: 0, games: 0 };
+    const incoming = (Array.isArray(incomingList) ? incomingList : []).filter((x) => x && x.id);
+    // para onde vai cada id recebido (inclui aliases) — usado para
+    // corrigir os adversários guardados nos jogos
+    const remap = new Map();
+    const plan = incoming.map((inc) => {
+      const want = targets && Object.prototype.hasOwnProperty.call(targets, inc.id) ? targets[inc.id] : null;
+      let dest = want ? list.find((p) => p.id === want) : null;
+      if (!dest) dest = list.find((p) => p.id === inc.id) || null; // nunca dois perfis com o mesmo id
+      const destId = dest ? dest.id : inc.id;
+      idsOf(inc).forEach((id) => remap.set(id, destId));
+      return { inc, dest };
+    });
+    const fixOpponents = (g) => {
+      if (!Array.isArray(g.opponents)) return g;
+      return Object.assign({}, g, { opponents: g.opponents.map((o) => (o && o.profileId && remap.has(o.profileId) ? Object.assign({}, o, { profileId: remap.get(o.profileId) }) : o)) });
+    };
+    plan.forEach(({ inc, dest }) => {
+      let clone;
+      try { clone = JSON.parse(JSON.stringify(inc)); } catch (e) { return; }
+      const hist = (Array.isArray(clone.history) ? clone.history : []).filter((g) => g && g.id).map(fixOpponents);
+      if (!dest) {
+        clone.history = hist;
+        if (!clone.stats) clone.stats = { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 };
+        if (!clone.createdAt) clone.createdAt = Date.now();
+        list.push(clone);
+        res.profiles++;
+        res.games += hist.length;
+        return;
+      }
+      if (!dest.history) dest.history = [];
+      const have = new Set(dest.history.map((g) => g.id));
+      hist.forEach((g) => {
+        if (have.has(g.id)) return;
+        have.add(g.id);
+        dest.history.push(g);
+        dest.stats.games += 1;
+        if (g.won) dest.stats.wins += 1;
+        dest.stats.totalGameTimeMs += g.gameTimeMs || 0;
+        dest.stats.totalTurnTimeMs += g.turnTimeMs || 0;
+        dest.stats.turnsTaken += g.turnsTaken || 0;
+        res.games++;
+      });
+      const al = new Set(dest.aliases || []);
+      idsOf(inc).forEach((id) => { if (id !== dest.id) al.add(id); });
+      if (al.size) dest.aliases = Array.from(al);
+      if (!dest.commander && clone.commander) dest.commander = clone.commander;
+      if (!dest.playerName && clone.playerName) dest.playerName = clone.playerName;
+    });
+    // jogos que já cá estavam também podem citar ids do outro aparelho
+    list.forEach((p) => { if (p.history) p.history = p.history.map(fixOpponents); });
+    persist(list);
+    return res;
+  }
+
+  /** Cópia de todos os perfis (para "Desfazer" uma fusão). */
+  function snapshot() { return load(); }
+  function replaceAll(listIn) { if (Array.isArray(listIn)) persist(listIn); }
+
   /** N.º de jogos diferentes registados (o mesmo jogo aparece no histórico
    *  de cada perfil que lá esteve; agrupa-se pela hora de registo). */
   function gameCount() {
@@ -207,5 +312,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount };
+  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll };
 })(window);

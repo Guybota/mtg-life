@@ -3,7 +3,7 @@
    seguem sempre para a rede; as imagens das cartas (cards.scryfall.io)
    ficam guardadas numa cache própria para as artes dos perfis
    aparecerem também sem rede. */
-const CACHE = "mtg-life-counter-v47";
+const CACHE = "mtg-life-counter-v48";
 const ART_CACHE = "mtg-life-art-v1";   // não muda com as versões da app
 const ART_MAX = 200;                   // n.º máximo de imagens guardadas
 const NET_TIMEOUT_MS = 3000;           // rede fraca: usa a cache ao fim disto
@@ -14,6 +14,7 @@ const SHELL = [
   "./css/style.css",
   "./js/i18n.js",
   "./js/icons.js",
+  "./js/mana.js",
   "./js/charts.js",
   "./js/scryfall.js",
   "./js/profiles.js",

@@ -4503,7 +4503,7 @@
   }
   function pipsHtml(ids) {
     if (!ids || !ids.length) return "";
-    return `<span class="pips" aria-label="${esc(ids.map((m) => tr(MANA_NAMES[m])).join(", "))}">${ids.map((m) => `<span class="pip pip-${m}" title="${tr(MANA_NAMES[m])}">${m}</span>`).join("")}</span>`;
+    return `<span class="pips" aria-label="${esc(ids.map((m) => tr(MANA_NAMES[m])).join(", "))}">${ids.map((m) => `<span class="pip pip-${m}" title="${tr(MANA_NAMES[m])}">${MTG.Mana.svg(m, 16, tr(MANA_NAMES[m]))}</span>`).join("")}</span>`;
   }
   /** Taxa de vitórias por cor: soma os jogos dos perfis cujo commander
    *  tem essa cor na identidade (um deck de 2 cores conta para as duas). */
@@ -4965,10 +4965,8 @@
           <div style="flex:1; min-width:0;">
             <div class="nm">${g.won ? tr("Vitória") : tr("Derrota")} — ${esc(modeLabel(g.mode))}</div>
             <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
-            ${(g.commander && normName(g.commander) !== normName(mainName)) || g.playedBy ? `<div class="history-meta">${[
-              g.commander && normName(g.commander) !== normName(mainName) ? tr("Com {name}", { name: esc(g.commander) }) : "",
-              g.playedBy ? tr("Jogado por {name}", { name: esc(g.playedBy) }) : "",
-            ].filter(Boolean).join(" · ")}</div>` : ""}
+            ${pilotOf(profile, g) ? `<div class="history-who">${I("user")}<span>${esc(pilotOf(profile, g))}</span>${g.playedBy && profile.playerName ? `<small class="borrow-tag">${tr("emprestado")}</small>` : ""}</div>` : ""}
+            ${g.commander && normName(g.commander) !== normName(mainName) ? `<div class="history-meta">${tr("Com {name}", { name: esc(g.commander) })}</div>` : ""}
             ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>` : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
           </div>
           <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="${tr("Apagar este jogo")}">${I("trash")}</button>

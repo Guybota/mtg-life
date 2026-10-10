@@ -95,3 +95,30 @@ module.exports.push({
     t.ok((await page.evaluate(() => document.documentElement.className)).includes("force-landscape"), "Commander de 4 continua deitado");
   },
 });
+
+module.exports.push({
+  name: "veneno está nos contadores do jogador (10 elimina)",
+  async run(t) {
+    const page = await t.page({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+    await openWith(t, page, null);
+    await page.click(".mode-card.commander");
+    if (await page.$("#qs-setup")) {
+      await page.click("#qs-setup");
+      t.eq(await page.$("#cfg-poison"), null, "sem opção de veneno no setup");
+      await page.click("#start-btn");
+      const who = await page.waitForSelector(".modal-sheet .cd-list-item", { timeout: 1500 }).catch(() => null);
+      if (who) await who.click();
+    } else await page.click("#qs-go");
+    await page.waitForSelector(".player-panel");
+    t.eq(await page.$(".poison-badge"), null, "sem distintivo de veneno no cartão");
+    await page.click('.player-panel >> nth=0 >> [data-action="player-sheet"] >> nth=0');
+    const keys = await page.$$eval(".ps-counter", (x) => x.map((e) => e.dataset.key));
+    t.eq(keys[0], "poison", "veneno é o primeiro contador");
+    for (let i = 0; i < 10; i++) await page.click('.ps-counter[data-key="poison"] [data-c="1"]');
+    const st = await page.evaluate(() => JSON.parse(localStorage.getItem("mtg_lc_game_v2")).standard.players[0]);
+    t.eq([st.poison, st.eliminated], [10, true], "10 venenos eliminam");
+    await page.click("#ps-close");
+    const chip = await page.$eval(".player-panel .st-chip.poison", (e) => [e.textContent.trim(), e.classList.contains("lethal")]);
+    t.eq(chip, ["10", true], "insígnia de veneno no cartão");
+  },
+});

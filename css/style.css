@@ -533,6 +533,10 @@ input.switch:checked::after{ transform: translateX(18px); }
   box-shadow: var(--shadow-lg);
   animation: sheetUp .32s var(--ease-out) both;
 }
+/* nada dentro de uma janela encolhe abaixo do seu conteúdo: se não couber,
+   a janela (ou a lista com scroll próprio) faz scroll. Sem isto, linhas
+   com overflow:hidden (por causa do efeito de toque) ficavam esmagadas. */
+.modal-sheet > *, .modal-sheet .col > *, .modal-sheet .cd-list > *{ flex-shrink:0; }
 /* "pega" da folha que sobe do fundo */
 .modal-backdrop:not(.center) .modal-sheet::before{
   content:"";
@@ -596,6 +600,7 @@ input.switch:checked::after{ transform: translateX(18px); }
 .player-panel{
   /* sem arte: fundo pastel + texto escuro */
   --panel-ink: var(--text);
+  container-type: size;
   position:relative;
   overflow:hidden;
   display:flex;
@@ -721,6 +726,9 @@ input.switch:checked::after{ transform: translateX(18px); }
 .life-tap.plus.pressed .tap-circle{ background: var(--mint); color: var(--plus-ink); }
 .life-total{
   font-size: clamp(2.8rem, 12vw, 5.2rem);
+  /* tamanho conforme o próprio cartão (não o ecrã): funciona em telemóvel
+     deitado, rodado, iPad e com muitos jogadores */
+  font-size: clamp(2rem, min(36cqh, 24cqw), 5.2rem);
   font-weight:800;
   letter-spacing:-2px;
   pointer-events:none;
@@ -934,6 +942,57 @@ html.force-landscape body{
   transform-origin: top left;
   transform: translateX(var(--app-w, 100vw)) rotate(90deg);
 }
+/* ---------- Tabuleiro compacto (ecrãs baixos: iPhone deitado/rodado) ----------
+   Os chips de vez/ronda/tempo passam para a barra de topo (no lugar do
+   título), as barras ficam mais baixas e, nos cartões, os ícones de dano de
+   commander e o "Passar turno" vão para os cantos de baixo em vez de
+   ocuparem linhas próprias. */
+html.compact-board .screen{ position:relative; }
+html.compact-board .topbar{ padding: 6px 10px; }
+html.compact-board .topbar h1{ visibility:hidden; }
+html.compact-board .br-status-row{
+  position:absolute; top:6px; left:58px; right:104px; height:40px;
+  padding:0; align-items:center; justify-content:center; z-index:2;
+}
+html.compact-board .br-chip{ padding:5px 9px; font-size:.7rem; }
+html.compact-board .board{ padding-top:2px; }
+html.compact-board .board-toolbar{ padding: 4px 10px 6px; }
+html.compact-board .board-toolbar .btn{ min-height:38px; height:38px; }
+html.compact-board .player-header{ padding: 6px 40px 0 10px; }
+html.compact-board .player-name{ font-size:.82rem; }
+html.compact-board .mini-actions{ top:4px; right:4px; }
+html.compact-board .commander-badges{
+  position:absolute; left:8px; bottom:4px; z-index:4;
+  padding:0; gap:4px; justify-content:flex-start; max-width:60%;
+}
+html.compact-board .cmd-badge{ width:26px; height:26px; }
+html.compact-board .cmd-badge .ic{ width:12px; height:12px; }
+html.compact-board .panel-pass-turn-btn{
+  position:absolute; right:8px; bottom:5px; margin:0; z-index:4;
+  min-width:0; width:auto; max-width:56%;
+  padding:5px 10px; font-size:.7rem;
+}
+/* faixa de baixo reservada aos ícones de dano e ao "Passar turno": a zona
+   de vida acaba antes dela, por isso os +/− e o número sobem um pouco */
+html.compact-board .life-zone{ margin-bottom: 30px; }
+html.compact-board .cmd-badge{ width:24px; height:24px; }
+/* cartões estreitos (5+ jogadores): o botão fica só com o ícone e o tempo,
+   para não chocar com os ícones de dano */
+/* cartões muito estreitos (7–8 jogadores): ícones mais pequenos, numa só
+   linha e ligeiramente sobrepostos; em ordem invertida para o número de
+   dano (canto direito) de cada um ficar por cima do vizinho */
+@container (max-width: 260px){
+  html.compact-board .commander-badges{ flex-wrap:nowrap; flex-direction:row-reverse; justify-content:flex-end; gap:0; max-width:62%; }
+  html.compact-board .cmd-badge{ width:20px; height:20px; border-width:1.5px; }
+  html.compact-board .cmd-badge + .cmd-badge{ margin-right:-5px; }
+  html.compact-board .cmd-badge .dmg{ min-width:14px; height:14px; font-size:.55rem; bottom:-4px; right:-5px; }
+  html.compact-board .cmd-badge .ic{ width:10px; height:10px; }
+}
+@container (max-width: 340px){
+  html.compact-board .pass-label{ display:none; }
+  html.compact-board .panel-pass-turn-btn .pass-time{ margin-left:0; padding-left:0; border-left:none; }
+}
+
 /* faixa central (entre as filas) com ronda, tempo de jogo e sair */
 .fs-hub-row{ flex:0 0 auto; display:flex; justify-content:center; align-items:center; height:34px; margin: -2px 0; }
 .fs-hub{

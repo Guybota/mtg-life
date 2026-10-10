@@ -12,14 +12,14 @@
   // Cores de fundo (pastel) sorteadas para jogadores sem commander escolhido
   // (sem arte de fundo). Cada entrada é [corClara, corEscura] para um gradiente.
   const FALLBACK_PALETTE = [
-    ["#f7cdcd", "#f0b7ba"], // rosa-coral
+    ["#f8d3c6", "#f2bba9"], // coral
     ["#cfe0f5", "#b6cfee"], // azul
     ["#cdebd8", "#b3dfc4"], // menta
-    ["#ddd3f5", "#c9bcef"], // lavanda
+    ["#d7dcf5", "#c0c8ef"], // índigo
     ["#f8e8b5", "#f1db95"], // manteiga
-    ["#fad8c1", "#f5c3a3"], // pêssego
+    ["#fbe0c2", "#f6cc9f"], // damasco
     ["#c9ece8", "#ade0da"], // água
-    ["#f6d0e3", "#efb9d4"], // rosa
+    ["#e1eec4", "#cfe3a6"], // lima
   ];
 
   /** Garante que todos os jogadores sem arte de commander têm uma cor de

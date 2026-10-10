@@ -110,10 +110,17 @@
 
   /** Regista o resultado de um jogo terminado nas stats agregadas do perfil
    *  e acrescenta uma entrada ao histórico de jogos desse perfil. */
-  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode, timed, opponents }) {
+  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode, timed, opponents, pilot, commanderName }) {
     const list = load();
     const p = byAnyId(list, id);
     if (!p) return null;
+    // deck emprestado: quem jogou (nome escrito no lugar) não é o dono
+    const who = pilot && String(pilot).trim() ? canonicalPlayer(String(pilot).trim()) : "";
+    const playedBy = who && norm(who) !== norm(p.playerName) ? who : undefined;
+    // commander usado neste jogo, quando não é o principal do deck
+    const mainCmd = p.commander && p.commander.name;
+    // guarda-se sempre (assim continua certo se o principal mudar depois)
+    const cmdUsed = commanderName || mainCmd || undefined;
     if (!p.history) p.history = [];
     p.stats.games += 1;
     if (won) p.stats.wins += 1;
@@ -132,6 +139,8 @@
       // adversários à mesa: [{ profileId, name, won }] (won = esse adversário
       // venceu / estava na equipa vencedora) — usado nos confrontos diretos
       opponents: Array.isArray(opponents) ? opponents : undefined,
+      playedBy,     // só quando o deck foi emprestado a outra pessoa
+      commander: cmdUsed, // nome do commander com que se jogou (principal ou alternativo)
     });
     persist(list);
     return p;
@@ -342,11 +351,21 @@
       if (al.size) dest.aliases = Array.from(al);
       if (!dest.commander && clone.commander) dest.commander = clone.commander;
       if (!dest.playerName && clone.playerName) dest.playerName = clone.playerName;
+      joinAltCommanders(dest, clone);
     });
     // jogos que já cá estavam também podem citar ids do outro aparelho
     list.forEach((p) => { if (p.history) p.history = p.history.map(fixOpponents); });
     persist(list);
     return res;
+  }
+
+  /** Junta os commanders alternativos de `src` aos de `dst` (sem repetir
+   *  nem incluir o principal de `dst`). */
+  function joinAltCommanders(dst, src) {
+    const names = new Set([norm(dst.commander && dst.commander.name)].concat((dst.altCommanders || []).map((c) => norm(c && c.name))));
+    const extra = [src.commander].concat(src.altCommanders || []).filter((c) => c && c.name && !names.has(norm(c.name)) && names.add(norm(c.name)));
+    // o principal de src só entra como alternativo se dst já tiver um principal diferente
+    if (extra.length) dst.altCommanders = (dst.altCommanders || []).concat(extra);
   }
 
   // ---------------------------------------------------------
@@ -410,6 +429,7 @@
     dst.aliases = Array.from(al);
     if (!dst.commander && src.commander) dst.commander = src.commander;
     if (!dst.playerName && src.playerName) dst.playerName = src.playerName;
+    joinAltCommanders(dst, src);
     const out = list.filter((p) => p !== src);
     out.forEach((p) => (p.history || []).forEach((g) => (g.opponents || []).forEach((o) => { if (o && o.profileId === src.id) o.profileId = dst.id; })));
     persist(out);
@@ -427,7 +447,15 @@
     let n = 0;
     list.forEach((p) => {
       if (norm(p.playerName) === from) { p.playerName = to; p.updatedAt = Date.now(); n++; }
-      (p.history || []).forEach((g) => (g.opponents || []).forEach((o) => { if (o && norm(o.name) === from) o.name = to; }));
+      (p.history || []).forEach((g) => {
+        (g.opponents || []).forEach((o) => {
+          if (o && norm(o.name) === from) o.name = to;
+          if (o && norm(o.pilot) === from) o.pilot = to;
+        });
+        if (g.playedBy && norm(g.playedBy) === from) g.playedBy = to;
+        // depois da fusão pode ter passado a ser o próprio dono
+        if (g.playedBy && norm(g.playedBy) === norm(p.playerName)) delete g.playedBy;
+      });
     });
     persist(list);
     const al = playerAliases();
@@ -446,7 +474,7 @@
     return { app: "mtg-life-counter", v: 1, profiles: load(), deleted: deleted(), playerAliases: playerAliases() };
   }
 
-  const SYNC_META = ["name", "playerName", "commander", "colorIdx"];
+  const SYNC_META = ["name", "playerName", "commander", "altCommanders", "colorIdx"];
 
   /** Junta os dados do grupo com os deste aparelho, sem duplicar nada:
    *  - apagados de um lado ficam apagados dos dois (perfis e jogos);

@@ -2275,3 +2275,26 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
   .rank-layout .ll-row{ grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap:4px; }
   .rank-layout .ll-name{ grid-column: 1 / -1; }
 }
+
+/* ---------- Decks emprestados e commanders alternativos ---------- */
+.seat-borrow{
+  display:flex; align-items:center; gap:6px; margin-top:6px;
+  font-size:.76rem; font-weight:600; color: var(--sky-ink);
+  background: var(--sky); border-radius:10px; padding:5px 9px; width:fit-content; max-width:100%;
+}
+.seat-borrow .ic{ width:14px; height:14px; }
+.seat-alt{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.alt-chip[aria-pressed="true"]{ background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.alt-list{ display:flex; flex-direction:column; gap:6px; margin:6px 0; }
+.alt-list:empty{ display:none; }
+.alt-row{ display:flex; align-items:center; gap:8px; background: var(--surface-2); border-radius:12px; padding:6px 6px 6px 8px; }
+.alt-row .commander-thumb.sm{ width:32px; height:32px; border-radius:8px; flex-shrink:0; }
+.alt-name{ flex:1; min-width:0; font-weight:600; font-size:.86rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.owner-chips{ display:flex; gap:6px; flex-wrap:wrap; margin:2px 0 6px; }
+.owner-chips .sort-chip{ height:30px; font-size:.8rem; }
+.lend-list{ display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.lend-row{ display:flex; justify-content:space-between; gap:10px; font-size:.84rem; padding:6px 0; border-bottom:1px solid var(--line); }
+.lend-row:last-child{ border-bottom:none; }
+.lend-name{ font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lend-val{ color: var(--text-dim); white-space:nowrap; font-variant-numeric: tabular-nums; }
+.borrow-tag{ font-size:.66rem; font-weight:700; color: var(--sky-ink); background: var(--sky); border-radius:6px; padding:1px 5px; vertical-align:1px; }

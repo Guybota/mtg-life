@@ -1575,6 +1575,9 @@
           </div>
           <div id="pp-new-form" class="col hidden" style="margin-top:10px">
             <input type="text" id="pp-new-name" placeholder="${tr("Nome do perfil")}" value="${commander ? esc(commander.name) : ""}">
+            <label for="pp-new-owner">${tr("Dono do deck")}</label>
+            <input type="text" id="pp-new-owner" placeholder="${tr("Nome de quem é este deck")}" value="${esc(playerName && !/^\s*$/.test(playerName) ? playerName : "")}">
+            ${ownerChipsHtml("pp-owners")}
             <button class="btn btn-primary" id="pp-new-confirm">${tr("Criar e ligar")}</button>
           </div>
           <button class="btn btn-ghost" id="pp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
@@ -1593,13 +1596,14 @@
           ${p.commander && p.commander.art ? `<img src="${esc(p.commander.art)}">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center">${I("card")}</div>`}
           <div>
             <div class="name">${esc(p.name)}</div>
-            <div class="type">${tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins })}${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
+            <div class="type">${p.playerName ? esc(p.playerName) + " · " : ""}${tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins })}${d.games ? " (" + Math.round(d.winRate * 100) + "%)" : ""}</div>
           </div>
         </div>
       `);
       item.addEventListener("click", () => { onSelect(p.id); backdrop.remove(); });
       list.appendChild(item);
     });
+    bindOwnerChips(backdrop, "pp-owners", backdrop.querySelector("#pp-new-owner"));
     backdrop.querySelector("#pp-cancel").addEventListener("click", () => backdrop.remove());
     const clearBtn = backdrop.querySelector("#pp-clear");
     if (clearBtn) clearBtn.addEventListener("click", () => { onSelect(null); backdrop.remove(); });
@@ -1609,7 +1613,7 @@
     });
     backdrop.querySelector("#pp-new-confirm").addEventListener("click", () => {
       const name = backdrop.querySelector("#pp-new-name").value.trim();
-      const profile = Profiles.create({ name, commander, playerName });
+      const profile = Profiles.create({ name, commander, playerName: backdrop.querySelector("#pp-new-owner").value.trim() });
       onSelect(profile.id);
       backdrop.remove();
     });
@@ -1710,6 +1714,40 @@
     }
     return "";
   }
+  /** Nome do lugar depois de escolher um deck: passa a ser o dono, a não
+   *  ser que já lá esteja escrito o nome de outra pessoa (deck emprestado).
+   *  Se o nome era o dono do deck anterior, troca para o novo dono. */
+  function seatNameAfterProfile(curName, prevProfileId, prof) {
+    const cur = (curName || "").trim();
+    if (!prof || !(prof.playerName || "").trim()) return curName;
+    const prev = prevProfileId ? Profiles.get(prevProfileId) : null;
+    if (!cur || (prev && normName(prev.playerName) === normName(cur))) return prof.playerName;
+    return curName;
+  }
+  /** Commanders que um deck pode usar: o principal e os alternativos. */
+  function deckCommanders(prof) {
+    return prof ? [prof.commander].concat(prof.altCommanders || []).filter((c) => c && c.name) : [];
+  }
+  /** O dono do deck é outra pessoa que não quem está sentado? */
+  function isBorrowed(name, prof) {
+    const owner = prof && (prof.playerName || "").trim();
+    const who = (name || "").trim();
+    return !!(owner && who && normName(Profiles.canonicalPlayer(who)) !== normName(owner));
+  }
+  /** Aviso de deck emprestado + escolha do commander (principal ou
+   *  alternativo) para este jogo. Os botões têm data-alt="índice". */
+  function seatDeckExtrasHtml(name, commander, prof) {
+    if (!prof) return "";
+    const cmds = deckCommanders(prof);
+    const cur = commander ? normName(commander.name) : "";
+    return `
+      ${isBorrowed(name, prof) ? `<div class="seat-borrow">${I("user")}<span>${tr("Deck emprestado por {name}", { name: esc(prof.playerName.trim()) })}</span></div>` : ""}
+      ${cmds.length > 1 ? `<div class="seat-alt" role="group" aria-label="${tr("Commander deste jogo")}">${cmds.map((c, k) => `
+        <button type="button" class="recent-chip alt-chip" data-alt="${k}" aria-pressed="${normName(c.name) === cur}">
+          <span class="recent-avatar" style="${c.art ? commanderThumbStyle(c) : ""}">${c.art ? "" : esc(c.name.slice(0, 2).toUpperCase())}</span>
+          <span class="recent-name">${esc(c.name)}</span>
+        </button>`).join("")}</div>` : ""}`;
+  }
   /** HTML dos extras de um lugar. `seats` = todos os lugares (para saber
    *  que perfis já estão ocupados e se este perfil está repetido). */
   function seatExtrasHtml(p, idx, seats) {
@@ -1717,7 +1755,9 @@
     const dupAt = p.profileId ? seats.findIndex((x, j) => j !== idx && x.profileId === p.profileId) : -1;
     const recents = p.profileId ? [] : recentProfiles(others, 3);
     const palette = State.FALLBACK_PALETTE;
+    const prof = p.profileId ? Profiles.get(p.profileId) : null;
     return `
+      ${seatDeckExtrasHtml(p.name, p.commander, prof)}
       ${recents.length ? `<div class="seat-recents" role="group" aria-label="${tr("Perfis recentes")}">${recents.map((pr) => `
         <button type="button" class="recent-chip" data-recent="${pr.id}" title="${tr("Usar o perfil {name}", { name: esc(pr.name) })}">
           <span class="recent-avatar" style="${pr.commander && pr.commander.art ? commanderThumbStyle(pr.commander) : ""}">${pr.commander && pr.commander.art ? "" : esc(pr.name.slice(0, 2).toUpperCase())}</span>
@@ -1735,11 +1775,19 @@
         const pr = Profiles.get(rb.dataset.recent);
         const seat = getSeat();
         if (!pr || !seat) return;
+        seat.name = seatNameAfterProfile(seat.name, seat.profileId, pr);
         seat.profileId = pr.id;
         if (pr.commander) seat.commander = pr.commander;
-        if (pr.playerName) seat.name = pr.playerName;
         if (typeof pr.colorIdx === "number") seat.colorIdx = pr.colorIdx;
         rerender();
+        return;
+      }
+      const ab = e.target.closest("[data-alt]");
+      if (ab) {
+        const seat = getSeat();
+        const pr = seat && seat.profileId ? Profiles.get(seat.profileId) : null;
+        const c = deckCommanders(pr)[parseInt(ab.dataset.alt, 10)];
+        if (c) { seat.commander = c; rerender(); }
         return;
       }
       const cb = e.target.closest("[data-color]");
@@ -1830,6 +1878,7 @@
       card.querySelector(".name-input").addEventListener("input", (e) => {
         draft.players[i].name = e.target.value;
         s.querySelector("#mesa").innerHTML = mesaInnerHtml(draft.players);
+        card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(draft.players[i], i, draft.players);
       });
       card.querySelector(".profile-btn").addEventListener("click", () => {
         openProfilePicker({
@@ -1837,10 +1886,10 @@
           currentProfileId: draft.players[i].profileId,
           playerName: draft.players[i].name,
           onSelect: (id) => {
-            draft.players[i].profileId = id;
             const prof = id ? Profiles.get(id) : null;
+            draft.players[i].name = seatNameAfterProfile(draft.players[i].name, draft.players[i].profileId, prof);
+            draft.players[i].profileId = id;
             if (prof && prof.commander) draft.players[i].commander = prof.commander;
-            if (prof && prof.playerName) draft.players[i].name = prof.playerName;
             renderPlayersList();
           },
         });
@@ -1923,6 +1972,7 @@
     st.standard.players.forEach((p, i) => {
       const dp = d.players[i];
       if (dp.name && dp.name.trim()) p.name = dp.name.trim();
+      p.pilot = dp.name && dp.name.trim() ? dp.name.trim() : null;
       p.commander = dp.commander;
       p.partnerCommander = dp.partnerCommander || null;
       p.profileId = dp.profileId || null;
@@ -2867,9 +2917,10 @@
             thumb.style.cssText = commanderThumbStyle(prof.commander);
             thumb.textContent = "";
           }
-          if (prof && prof.playerName) {
-            backdrop.querySelector("#ep-name").value = prof.playerName;
-          }
+          const nameEl = backdrop.querySelector("#ep-name");
+          // o nome por defeito ("Jogador 2") não conta como alguém escrito
+          const typed = nameEl.value.trim() && (p.pilot || nameEl.value.trim() !== p.name) ? nameEl.value : "";
+          nameEl.value = seatNameAfterProfile(typed, p.profileId, prof) || nameEl.value;
         },
       });
     });
@@ -2885,6 +2936,8 @@
     backdrop.querySelector("#ep-cancel").addEventListener("click", () => backdrop.remove());
     backdrop.querySelector("#ep-save").addEventListener("click", () => {
       const name = backdrop.querySelector("#ep-name").value.trim() || p.name;
+      // quem está a jogar (para decks emprestados): só um nome escrito/mudado
+      if (name !== p.name) p.pilot = name;
       if (mode === "standard") {
         State.stdSetName(game, playerId, name);
         State.stdSetCommander(game, playerId, pendingCommander);
@@ -2940,37 +2993,49 @@
             <input type="text" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(name)}">
             <div class="commander-name">${draft.commanders[i] ? esc(draft.commanders[i].name) : tr("Sem commander escolhido")}</div>
             <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
+            <div class="seat-extras"></div>
           </div>
         </div>
       `);
+      const paintCmd = () => {
+        const c = draft.commanders[i];
+        card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(c);
+        card.querySelector(".commander-thumb").innerHTML = c ? "" : I("card");
+        card.querySelector(".commander-name").textContent = c ? c.name : tr("Sem commander escolhido");
+      };
+      const paintExtras = () => {
+        const prof = draft.profileIds[i] ? Profiles.get(draft.profileIds[i]) : null;
+        card.querySelector(".seat-extras").innerHTML = seatDeckExtrasHtml(draft.names[i], draft.commanders[i], prof);
+      };
+      paintExtras();
+      card.querySelector(".seat-extras").addEventListener("click", (e) => {
+        const ab = e.target.closest("[data-alt]");
+        if (!ab) return;
+        const prof = draft.profileIds[i] ? Profiles.get(draft.profileIds[i]) : null;
+        const c = deckCommanders(prof)[parseInt(ab.dataset.alt, 10)];
+        if (c) { draft.commanders[i] = c; paintCmd(); paintExtras(); }
+      });
       card.querySelector(".commander-thumb").addEventListener("click", () => {
         openCommanderPicker((c) => {
           draft.commanders[i] = c;
-          card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(c);
-          card.querySelector(".commander-thumb").innerHTML = c ? "" : I("card");
-          card.querySelector(".commander-name").textContent = c ? c.name : tr("Sem commander escolhido");
+          paintCmd();
+          paintExtras();
         });
       });
-      card.querySelector(".name-input").addEventListener("input", (e) => { draft.names[i] = e.target.value; });
+      card.querySelector(".name-input").addEventListener("input", (e) => { draft.names[i] = e.target.value; paintExtras(); });
       card.querySelector(".profile-btn").addEventListener("click", () => {
         openProfilePicker({
           commander: draft.commanders[i],
           currentProfileId: draft.profileIds[i],
           playerName: draft.names[i],
           onSelect: (id) => {
-            draft.profileIds[i] = id;
             const p = id ? Profiles.get(id) : null;
+            draft.names[i] = seatNameAfterProfile(draft.names[i], draft.profileIds[i], p);
+            card.querySelector(".name-input").value = draft.names[i] || "";
+            draft.profileIds[i] = id;
             card.querySelector(".profile-btn").innerHTML = profileBtnHtml(p);
-            if (p && p.commander) {
-              draft.commanders[i] = p.commander;
-              card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(p.commander);
-              card.querySelector(".commander-thumb").textContent = "";
-              card.querySelector(".commander-name").textContent = p.commander.name;
-            }
-            if (p && p.playerName) {
-              draft.names[i] = p.playerName;
-              card.querySelector(".name-input").value = p.playerName;
-            }
+            if (p && p.commander) { draft.commanders[i] = p.commander; paintCmd(); }
+            paintExtras();
           },
         });
       });
@@ -2995,6 +3060,7 @@
     st.br.players.forEach((p, i) => {
       p.commander = d.commanders[i];
       p.profileId = (d.profileIds && d.profileIds[i]) || null;
+      p.pilot = d.names[i] && d.names[i].trim() ? d.names[i].trim() : null;
     });
     State.ensureFallbackColors(st.br.players);
     State.save(st);
@@ -3380,17 +3446,23 @@
       card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
         openCommanderPicker((c) => { draft.teams[t].players[i].partnerCommander = c; renderTeamsList(); }, tr("Escolher commander parceiro"));
       });
-      card.querySelector(".name-input").addEventListener("input", (e) => { draft.teams[t].players[i].name = e.target.value; });
+      card.querySelector(".name-input").addEventListener("input", (e) => {
+        draft.teams[t].players[i].name = e.target.value;
+        const allSeats = draft.teams.reduce((acc, tm) => acc.concat(tm.players), []);
+        const flatIdx = draft.teams.slice(0, t).reduce((a, tm) => a + tm.players.length, 0) + i;
+        card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(draft.teams[t].players[i], flatIdx, allSeats);
+      });
       card.querySelector(".profile-btn").addEventListener("click", () => {
         openProfilePicker({
           commander: draft.teams[t].players[i].commander,
           currentProfileId: draft.teams[t].players[i].profileId,
           playerName: draft.teams[t].players[i].name,
           onSelect: (id) => {
-            draft.teams[t].players[i].profileId = id;
             const prof = id ? Profiles.get(id) : null;
-            if (prof && prof.commander) draft.teams[t].players[i].commander = prof.commander;
-            if (prof && prof.playerName) draft.teams[t].players[i].name = prof.playerName;
+            const tp = draft.teams[t].players[i];
+            tp.name = seatNameAfterProfile(tp.name, tp.profileId, prof);
+            tp.profileId = id;
+            if (prof && prof.commander) tp.commander = prof.commander;
             renderTeamsList();
           },
         });
@@ -3496,6 +3568,7 @@
       team.players.forEach((p, i) => {
         const dp = d.teams[t].players[i];
         if (dp.name && dp.name.trim()) p.name = dp.name.trim();
+        p.pilot = dp.name && dp.name.trim() ? dp.name.trim() : null;
         p.commander = dp.commander;
         p.partnerCommander = dp.partnerCommander || null;
         p.profileId = dp.profileId || null;
@@ -4475,7 +4548,8 @@
     games.forEach((g) => {
       (g.opponents || []).forEach((o) => {
         const op = o.profileId ? Profiles.get(o.profileId) : null;
-        const label = (op && (op.playerName || op.name)) || o.name;
+        // quem estava sentado (deck emprestado) > dono do deck > nome do lugar
+        const label = o.pilot || (op && (op.playerName || op.name)) || o.name;
         if (!label) return;
         const key = label.trim().toLowerCase();
         if (skip.has(key)) return;
@@ -4496,22 +4570,42 @@
       </div>`;
   }
 
-  /** Agrupa os perfis (decks) pelo jogador (campo "Jogador" do perfil). */
+  /** Quem jogou um jogo de um deck: quem o pediu emprestado, ou o dono. */
+  const pilotOf = (p, g) => (g.playedBy || p.playerName || "").trim();
+
+  /** Jogadores: os decks de que são donos (campo "Dono" do perfil) e os
+   *  jogos que jogaram — com os seus decks ou com decks emprestados. Um
+   *  jogo com um deck emprestado conta para quem jogou, não para o dono. */
   function playersFromProfiles(profiles) {
     const map = new Map();
-    profiles.forEach((p) => {
-      const name = (p.playerName || "").trim();
-      if (!name) return;
+    const get = (name) => {
       const key = name.toLowerCase();
-      if (!map.has(key)) map.set(key, { key, name, profiles: [] });
-      map.get(key).profiles.push(p);
+      if (!map.has(key)) map.set(key, { key, name, profiles: [], history: [], extraGames: 0, extraWins: 0 });
+      return map.get(key);
+    };
+    profiles.forEach((p) => {
+      const owner = (p.playerName || "").trim();
+      if (!owner) return;
+      const pl = get(owner);
+      pl.profiles.push(p);
+      // jogos antigos só nas stats (sem histórico) contam para o dono
+      const hist = p.history || [];
+      pl.extraGames += Math.max(0, p.stats.games - hist.length);
+      pl.extraWins += Math.max(0, p.stats.wins - hist.filter((g) => g.won).length);
     });
+    profiles.forEach((p) => (p.history || []).forEach((g) => {
+      const who = pilotOf(p, g);
+      if (!who) return;
+      const owner = (p.playerName || "").trim();
+      const borrowedFrom = g.playedBy && owner && normName(owner) !== normName(who) ? owner : null;
+      get(who).history.push(Object.assign({ deck: p.name, deckId: p.id, borrowedFrom }, g));
+    }));
     return Array.from(map.values()).map((pl) => {
-      const games = pl.profiles.reduce((a, p) => a + p.stats.games, 0);
-      const wins = pl.profiles.reduce((a, p) => a + p.stats.wins, 0);
-      const history = pl.profiles.reduce((acc, p) => acc.concat((p.history || []).map((g) => Object.assign({ deck: p.name, deckId: p.id }, g))), []).sort((a, b) => a.date - b.date);
-      return Object.assign(pl, { games, wins, winRate: games ? wins / games : 0, history });
-    });
+      pl.history.sort((a, b) => a.date - b.date);
+      const games = pl.history.length + pl.extraGames;
+      const wins = pl.history.filter((g) => g.won).length + pl.extraWins;
+      return Object.assign(pl, { games, wins, winRate: games ? wins / games : 0 });
+    }).filter((pl) => pl.profiles.length || pl.history.length);
   }
 
   function initialsAvatar(name, i) {
@@ -4523,12 +4617,37 @@
     return `<div class="kpi"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${esc(value)}</div>${sub ? `<div class="kpi-sub">${esc(sub)}</div>` : ""}</div>`;
   }
 
+  /** Nomes de jogadores já conhecidos (donos e quem jogou), por ordem. */
+  function knownPlayers() {
+    return playersFromProfiles(Profiles.all()).map((pl) => pl.name).sort((a, b) => a.localeCompare(b));
+  }
+  /** Fila de botões com os jogadores conhecidos, para escolher o dono. */
+  function ownerChipsHtml(id) {
+    const names = knownPlayers();
+    if (!names.length) return "";
+    return `<div class="owner-chips" id="${id}" role="group" aria-label="${tr("Jogadores conhecidos")}">${names.map((n) => `<button type="button" class="sort-chip" data-owner="${esc(n)}">${esc(n)}</button>`).join("")}</div>`;
+  }
+  function bindOwnerChips(root, id, input) {
+    const row = root.querySelector("#" + id);
+    if (!row || !input) return;
+    const paint = () => row.querySelectorAll("[data-owner]").forEach((b) => b.setAttribute("aria-pressed", String(normName(b.dataset.owner) === normName(input.value))));
+    row.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-owner]");
+      if (!b) return;
+      input.value = normName(input.value) === normName(b.dataset.owner) ? "" : b.dataset.owner;
+      paint();
+    });
+    input.addEventListener("input", paint);
+    paint();
+  }
+
   /** Editar um perfil: nome, jogador, commander (e arte) e cor quando não
    *  há arte. As estatísticas e o histórico ficam iguais. */
   function openEditProfileModal(profileId) {
     const profile = Profiles.get(profileId);
     if (!profile) return;
     let pendingCommander = profile.commander || null;
+    let pendingAlts = (profile.altCommanders || []).slice();
     let pendingColor = typeof profile.colorIdx === "number" ? profile.colorIdx : null;
     closeAnyModal();
     const backdrop = el(`
@@ -4548,8 +4667,13 @@
           <div class="col" style="margin-top:12px">
             <label for="epf-name">${tr("Nome do perfil")}</label>
             <input type="text" id="epf-name" value="${esc(profile.name)}">
-            <label for="epf-player">${tr("Jogador")}</label>
-            <input type="text" id="epf-player" value="${esc(profile.playerName || "")}" placeholder="${tr("Nome de quem joga com este deck")}">
+            <label for="epf-player">${tr("Dono do deck")}</label>
+            <input type="text" id="epf-player" value="${esc(profile.playerName || "")}" placeholder="${tr("Nome de quem é este deck")}">
+            ${ownerChipsHtml("epf-owners")}
+            <label>${tr("Commanders alternativos")}</label>
+            <div class="footer-note">${tr("Outros commanders que este deck pode usar. No setup escolhes com qual vais jogar e as estatísticas ficam todas neste deck.")}</div>
+            <div class="alt-list" id="epf-alts"></div>
+            <button type="button" class="btn btn-ghost btn-sm" id="epf-alt-add">${I("plus")} ${tr("Adicionar commander alternativo")}</button>
             <div id="epf-colors-wrap">
               <label>${tr("Cor quando não há arte")}</label>
               <div class="seat-colors" id="epf-colors" style="margin-top:8px">${State.FALLBACK_PALETTE.map((c, k) => `
@@ -4573,8 +4697,38 @@
       backdrop.querySelector("#epf-art").classList.toggle("hidden", !(pendingCommander && pendingCommander.printsUri));
       backdrop.querySelector("#epf-colors-wrap").classList.toggle("hidden", !!(pendingCommander && pendingCommander.art));
       backdrop.querySelectorAll("#epf-colors .color-dot").forEach((b) => b.setAttribute("aria-pressed", String(parseInt(b.dataset.color, 10) === pendingColor)));
+      backdrop.querySelector("#epf-alts").innerHTML = pendingAlts.map((c, k) => `
+        <div class="alt-row">
+          <span class="commander-thumb sm" style="${commanderThumbStyle(c)}">${c.art ? "" : I("card")}</span>
+          <span class="alt-name">${esc(c.name)}</span>
+          <button type="button" class="btn btn-ghost btn-sm" data-alt-main="${k}">${tr("Tornar principal")}</button>
+          <button type="button" class="btn btn-icon" data-alt-del="${k}" title="${tr("Remover")}" aria-label="${tr("Remover")}">${I("x")}</button>
+        </div>`).join("");
     }
     paint();
+    bindOwnerChips(backdrop, "epf-owners", backdrop.querySelector("#epf-player"));
+    backdrop.querySelector("#epf-alt-add").addEventListener("click", () => {
+      openCommanderPicker((c) => {
+        if (!c) return;
+        const names = [pendingCommander].concat(pendingAlts).filter(Boolean).map((x) => normName(x.name));
+        if (names.includes(normName(c.name))) { toast(tr("Esse commander já está neste deck")); return; }
+        if (!pendingCommander) pendingCommander = c; else pendingAlts.push(c);
+        paint();
+      }, tr("Commander alternativo"));
+    });
+    backdrop.querySelector("#epf-alts").addEventListener("click", (e) => {
+      const del = e.target.closest("[data-alt-del]");
+      if (del) { pendingAlts.splice(parseInt(del.dataset.altDel, 10), 1); paint(); return; }
+      const mk = e.target.closest("[data-alt-main]");
+      if (mk) {
+        const k = parseInt(mk.dataset.altMain, 10);
+        const next = pendingAlts[k];
+        pendingAlts.splice(k, 1, pendingCommander);
+        pendingAlts = pendingAlts.filter(Boolean);
+        pendingCommander = next;
+        paint();
+      }
+    });
     backdrop.querySelector("#epf-change").addEventListener("click", () => {
       openCommanderPicker((c) => { pendingCommander = c; paint(); });
     });
@@ -4589,12 +4743,26 @@
     });
     backdrop.querySelector("#epf-cancel").addEventListener("click", () => backdrop.remove());
     backdrop.querySelector("#epf-save").addEventListener("click", () => {
-      Profiles.update(profileId, {
+      const patch = {
         name: backdrop.querySelector("#epf-name").value.trim() || profile.name,
-        playerName: backdrop.querySelector("#epf-player").value.trim(),
+        playerName: Profiles.canonicalPlayer(backdrop.querySelector("#epf-player").value.trim()),
         commander: pendingCommander,
+        altCommanders: pendingAlts,
         colorIdx: pendingColor,
-      });
+      };
+      // jogos antigos sem o commander guardado eram com o principal de então
+      const oldMain = profile.commander && profile.commander.name;
+      if (oldMain && (!pendingCommander || normName(pendingCommander.name) !== normName(oldMain)) && (profile.history || []).some((g) => !g.commander)) {
+        patch.history = profile.history.map((g) => (g.commander ? g : Object.assign({}, g, { commander: oldMain })));
+      }
+      // jogos que tinham sido emprestados ao novo dono deixam de o ser
+      if (patch.playerName && (profile.history || []).some((g) => g.playedBy && normName(g.playedBy) === normName(patch.playerName))) {
+        patch.history = (patch.history || profile.history).map((g) => {
+          if (!g.playedBy || normName(g.playedBy) !== normName(patch.playerName)) return g;
+          const c = Object.assign({}, g); delete c.playedBy; return c;
+        });
+      }
+      Profiles.update(profileId, patch);
       backdrop.remove();
       render();
       toast(tr("Perfil guardado"));
@@ -4629,7 +4797,8 @@
         <div class="commander-thumb" style="${seatThumbStyle(profile)}">${profile.commander && profile.commander.art ? "" : I("card")}</div>
         <div class="pd-head-info">
           <div class="profile-sub">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")} ${pipsHtml(colorIdentityOf(profile))}</div>
-          ${profile.playerName ? `<div class="profile-sub">${I("user")} ${esc(profile.playerName)}</div>` : ""}
+          ${(profile.altCommanders || []).length ? `<div class="profile-sub">${tr("Alternativos: {list}", { list: profile.altCommanders.map((c) => esc(c.name)).join(", ") })}</div>` : ""}
+          ${profile.playerName ? `<div class="profile-sub">${I("user")} ${tr("Dono: {name}", { name: esc(profile.playerName) })}</div>` : ""}
         </div>
       </div>`;
 
@@ -4720,6 +4889,43 @@
     // senão pelo nome do lugar; "a – b" = vitórias deste perfil vs vitórias dele.
     const h2hHtml = headToHeadHtml(chrono, tr("Jogos em que estiveram os dois à mesa: vitórias deste perfil – vitórias do adversário"), tr("Este perfil ganhou"));
 
+    // resultados por commander (principal e alternativos)
+    const mainName = profile.commander ? profile.commander.name : "";
+    const byCmd = new Map();
+    chrono.forEach((g) => {
+      const name = g.commander || mainName;
+      if (!name) return;
+      const k = normName(name);
+      if (!byCmd.has(k)) byCmd.set(k, { name, games: 0, wins: 0 });
+      const r = byCmd.get(k); r.games++; if (g.won) r.wins++;
+    });
+    const cmdHtml = byCmd.size > 1 ? `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Por commander")}</div>
+        <div class="chart-sub">${tr("Taxa de vitórias com cada commander deste deck")}</div>
+        ${Charts.hbars(Array.from(byCmd.values()).sort((a, b) => b.games - a.games).map((r) => ({
+          label: r.name, value: r.wins / r.games,
+          valueLabel: `${Math.round((r.wins / r.games) * 100)}% · ${tr("{n} jogo(s)", { n: r.games })}`,
+          tip: `${Math.round((r.wins / r.games) * 100)}%`, tipLabel: `${r.name} · ${tr("{w} de {g} vitórias", { w: r.wins, g: r.games })}`,
+        })))}
+      </div>` : "";
+
+    // empréstimos: quem jogou com este deck sem ser o dono
+    const lent = new Map();
+    chrono.forEach((g) => {
+      if (!g.playedBy) return;
+      const k = normName(g.playedBy);
+      if (!lent.has(k)) lent.set(k, { name: g.playedBy, games: 0, wins: 0 });
+      const r = lent.get(k); r.games++; if (g.won) r.wins++;
+    });
+    const lentHtml = lent.size ? `
+      <div class="chart-card">
+        <div class="chart-title">${profile.playerName ? tr("Emprestado a outros") : tr("Quem jogou com este deck")}</div>
+        <div class="chart-sub">${tr("Estes jogos contam para o deck e para quem jogou")}</div>
+        <div class="lend-list">${Array.from(lent.values()).sort((a, b) => b.games - a.games).map((r) => `
+          <div class="lend-row"><span class="lend-name">${esc(r.name)}</span><span class="lend-val">${tr("{g} jogos · {w} vitórias", { g: r.games, w: r.wins })}</span></div>`).join("")}</div>
+      </div>` : "";
+
     // duração dos últimos jogos com tempo contado
     const timedGames = chrono.filter((g) => g.timed !== false && g.gameTimeMs > 0).slice(-12);
     let durations = "";
@@ -4744,7 +4950,7 @@
     const eloAll = MTG.Elo.compute(Profiles.all());
     const eloRec = eloAll.decks.find((r) => r.key === profile.id || (profile.aliases || []).includes(r.key));
     body.classList.add("pd-body");
-    body.innerHTML = head + kpis + `<div class="pd-cards">` + eloCardHtml(eloRec, eloAll.decks.length) + `<div class="pd-stack">` + streak + form + `</div>` + evo + modes + h2hHtml + durations + `</div>
+    body.innerHTML = head + kpis + `<div class="pd-cards">` + eloCardHtml(eloRec, eloAll.decks.length) + `<div class="pd-stack">` + streak + form + `</div>` + evo + cmdHtml + modes + lentHtml + h2hHtml + durations + `</div>
       <div class="section-title">${tr("Histórico de jogos")}</div>
       <div class="col pd-history" id="history-list"></div>
       <button class="btn btn-ghost btn-block merge-entry" id="merge-deck-btn">${I("merge")} ${tr("Fundir com outro deck")}</button>`;
@@ -4759,6 +4965,10 @@
           <div style="flex:1; min-width:0;">
             <div class="nm">${g.won ? tr("Vitória") : tr("Derrota")} — ${esc(modeLabel(g.mode))}</div>
             <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
+            ${(g.commander && normName(g.commander) !== normName(mainName)) || g.playedBy ? `<div class="history-meta">${[
+              g.commander && normName(g.commander) !== normName(mainName) ? tr("Com {name}", { name: esc(g.commander) }) : "",
+              g.playedBy ? tr("Jogado por {name}", { name: esc(g.playedBy) }) : "",
+            ].filter(Boolean).join(" · ")}</div>` : ""}
             ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>` : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
           </div>
           <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="${tr("Apagar este jogo")}">${I("trash")}</button>
@@ -4799,7 +5009,28 @@
     const body = s.querySelector("#pl-scroll");
     const pct = Math.round(pl.winRate * 100);
     const recent = pl.history.slice(-10);
-    const decks = pl.profiles.map((p) => ({ p, d: Profiles.derived(p) })).sort((a, b) => (b.d.winRate - a.d.winRate) || (b.d.games - a.d.games));
+    // resultados de ESTE jogador com cada deck (os seus e os emprestados);
+    // jogos dos seus decks jogados por outras pessoas não entram aqui
+    const deckStats = new Map();
+    pl.profiles.forEach((p) => {
+      const hist = p.history || [];
+      deckStats.set(p.id, { p, borrowed: false, games: Math.max(0, p.stats.games - hist.length), wins: Math.max(0, p.stats.wins - hist.filter((g) => g.won).length) });
+    });
+    pl.history.forEach((g) => {
+      if (!deckStats.has(g.deckId)) {
+        const p = Profiles.get(g.deckId);
+        if (!p) return;
+        deckStats.set(g.deckId, { p, borrowed: true, games: 0, wins: 0 });
+      }
+      const r = deckStats.get(g.deckId); r.games++; if (g.won) r.wins++;
+    });
+    const decks = Array.from(deckStats.values()).map((r) => Object.assign(r, { d: { games: r.games, wins: r.wins, winRate: r.games ? r.wins / r.games : 0 } }))
+      .sort((a, b) => (a.borrowed - b.borrowed) || (b.d.winRate - a.d.winRate) || (b.d.games - a.d.games));
+    const ownDecks = decks.filter((x) => !x.borrowed);
+    const borrowedDecks = decks.filter((x) => x.borrowed);
+    // os decks deste jogador que outras pessoas usaram
+    const lentOut = [];
+    pl.profiles.forEach((p) => (p.history || []).forEach((g) => { if (g.playedBy) lentOut.push({ deck: p.name, who: g.playedBy, won: g.won }); }));
     const plEloAll = MTG.Elo.compute(Profiles.all());
     const normKey = (x) => String(x || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const plElo = plEloAll.players.find((r) => r.key === normKey(pl.name));
@@ -4830,17 +5061,24 @@
       <div class="chart-card">
         <div class="chart-title">${tr("Decks de {name}", { name: esc(pl.name) })}</div>
         <div class="chart-sub">${tr("Taxa de vitórias de cada deck")}</div>
-        ${Charts.hbars(decks.map(({ p, d }) => ({
-          label: p.name, labelHtml: `${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}`,
+        ${Charts.hbars(decks.map(({ p, d, borrowed }) => ({
+          label: p.name, labelHtml: `${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}${borrowed ? ` <small class="borrow-tag">${tr("emprestado")}</small>` : ""}`,
           value: d.winRate, valueLabel: `${Math.round(d.winRate * 100)}% · ${tr("{n} jogo(s)", { n: d.games })}`,
           tip: `${Math.round(d.winRate * 100)}%`, tipLabel: `${p.name} · ${tr("{w} de {g} vitórias", { w: d.wins, g: d.games })}`,
           muted: !d.games,
         })))}
       </div>
       ${headToHeadHtml(pl.history, tr("Jogos em que estiveram os dois à mesa, com qualquer deck: vitórias de {name} – vitórias do adversário", { name: esc(pl.name) }), tr("{name} ganhou", { name: esc(pl.name) }), [pl.name])}
+      ${lentOut.length ? `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Decks emprestados a outros")}</div>
+        <div class="chart-sub">${tr("Jogos com os decks de {name} jogados por outras pessoas (contam para quem jogou)", { name: esc(pl.name) })}</div>
+        <div class="lend-list">${Object.values(lentOut.reduce((acc, x) => { const k = x.deck + "|" + normName(x.who); (acc[k] = acc[k] || { deck: x.deck, who: x.who, g: 0, w: 0 }).g++; if (x.won) acc[k].w++; return acc; }, {})).sort((a, b) => b.g - a.g).map((r) => `
+          <div class="lend-row"><span class="lend-name">${esc(r.deck)} → ${esc(r.who)}</span><span class="lend-val">${tr("{g} jogos · {w} vitórias", { g: r.g, w: r.w })}</span></div>`).join("")}</div>
+      </div>` : ""}
       </div>
       <div class="section-title">${tr("Decks")}</div>
-      <div class="pf-grid">${decks.map(({ p, d }) => `
+      <div class="pf-grid">${ownDecks.map(({ p, d }) => `
         <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
           <div class="commander-thumb" style="${seatThumbStyle(p)}">${p.commander && p.commander.art ? "" : I("card")}</div>
           <div class="profile-info">
@@ -4848,7 +5086,19 @@
             <div class="profile-summary">${d.games ? tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins }) + ` (${Math.round(d.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
           </div>
           <span class="profile-chevron">${I("chevron-right")}</span>
-        </div>`).join("")}</div>`;
+        </div>`).join("")}</div>
+      ${borrowedDecks.length ? `
+      <div class="section-title">${tr("Decks de outros com que jogou")}</div>
+      <div class="pf-grid">${borrowedDecks.map(({ p, d }) => `
+        <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
+          <div class="commander-thumb" style="${seatThumbStyle(p)}">${p.commander && p.commander.art ? "" : I("card")}</div>
+          <div class="profile-info">
+            <div class="profile-name">${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}</div>
+            <div class="profile-sub">${p.playerName ? tr("Deck de {name}", { name: esc(p.playerName) }) : tr("Sem dono")}</div>
+            <div class="profile-summary">${tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins })} (${Math.round(d.winRate * 100)}%)</div>
+          </div>
+          <span class="profile-chevron">${I("chevron-right")}</span>
+        </div>`).join("")}</div>` : ""}`;
     body.insertAdjacentHTML("beforeend", `<button class="btn btn-ghost btn-block merge-entry" id="merge-player-btn">${I("merge")} ${tr("Fundir com outro jogador")}</button>`);
     body.querySelector("#merge-player-btn").addEventListener("click", () => openMergePlayerSheet(pl.key));
     body.querySelectorAll(".profile-card[data-id]").forEach((c) => c.addEventListener("click", () => nav("profile-detail", { id: c.dataset.id, fromPlayer: pl.key })));

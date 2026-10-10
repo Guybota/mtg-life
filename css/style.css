@@ -1777,6 +1777,21 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 }
 .mesa-seat.dragging{ z-index:5; pointer-events:none; cursor:grabbing; box-shadow: var(--shadow-lg); transform: scale(1.04); transition:none; }
 .mesa-seat.drop-target{ box-shadow: 0 0 0 3px var(--surface-3), 0 0 0 5px var(--text); }
+/* "Trocar posições" durante o jogo: a mesa tal como está no tabuleiro */
+.reorder-sheet{ max-width:620px; }
+.reorder-mesa .mesa-seat{ height:84px; }
+.reorder-mesa .mesa-seat.current{ box-shadow: 0 0 0 3px var(--surface-3), 0 0 0 5px var(--lavender-ink); }
+.reorder-mesa .mesa-seat.current .mesa-num{ background: var(--lavender-ink); }
+.mesa-seat.picked{ box-shadow: 0 0 0 3px var(--surface-3), 0 0 0 5px var(--text) !important; transform: scale(.97); }
+.mesa-seat.seat-swap{ animation: seatSwap .35s var(--ease-spring); }
+@keyframes seatSwap{ 0%{ transform: scale(.9); } 100%{ transform: none; } }
+.reorder-list{ gap:6px; }
+.reorder-row{ display:flex; align-items:center; gap:8px; background: var(--surface-2); border-radius:14px; padding:6px 6px 6px 10px; }
+.reorder-row .mesa-num{ position:static; flex-shrink:0; }
+.reorder-row.current .mesa-num{ background: var(--lavender-ink); }
+.reorder-name{ flex:1; min-width:0; font-weight:600; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.reorder-row .btn-icon{ width:36px; height:36px; }
+@media (prefers-reduced-motion: reduce){ .mesa-seat.seat-swap{ animation:none; } }
 .mesa-hint{ display:flex; align-items:center; justify-content:center; gap:6px; font-size:.72rem; color: var(--text-dim); margin-top:8px; text-align:center; }
 .mesa-hint .ic{ width:14px; height:14px; }
 .player-setup-card.seat-flash{ animation: seatFlash .9s ease; }

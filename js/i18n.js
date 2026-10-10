@@ -229,8 +229,6 @@
     "Resultado": "Results",
 
     // trocar posições / histórico
-    "Usa as setas para mudar a posição de cada jogador no tabuleiro — não afeta a ordem dos turnos.": "Use the arrows to move each player around the board — this doesn't change the turn order.",
-    "Usa as setas para mudar a posição de cada equipa no tabuleiro — não afeta a ordem dos turnos.": "Use the arrows to move each team around the board — this doesn't change the turn order.",
     "Concluído": "Done",
     "Ainda não há alterações de vida registadas neste jogo.": "No life changes recorded in this game yet.",
     "Turno de {name}": "{name}'s turn",
@@ -309,6 +307,8 @@
     "Receber do outro": "Receive theirs",
     "Enviar ficheiro": "Send file",
     "Abrir ficheiro": "Open file",
+    "Descer": "Move down",
+    "Subir": "Move up",
     "Menu": "Menu",
     "{n} jogos sem cópia": "{n} games without a backup",
     "2 jogadores · 40 vidas": "2 players · 40 life",

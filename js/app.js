@@ -1479,7 +1479,7 @@
     const top = Math.floor(n / 2);
     const seat = (p, i, rotated) => {
       const art = p.commander && p.commander.art;
-      const style = seatThumbStyle(p);
+      const style = p.seatStyle != null ? p.seatStyle : seatThumbStyle(p);
       return `<button type="button" class="mesa-seat ${rotated ? "rot" : ""} ${art ? "has-art" : ""} ${style ? "" : "plain"}" data-seat="${i}" style="${style}" aria-label="${esc(tr("Lugar {n}", { n: i + 1 }))}">
         <span class="mesa-num">${i + 1}</span>
         <span class="mesa-inner">
@@ -1510,7 +1510,9 @@
       if (!drag.moved && Math.hypot(dx, dy) < 8) return;
       drag.moved = true;
       drag.el.classList.add("dragging");
-      drag.el.style.translate = `${dx}px ${dy}px`;
+      // com o ecrã rodado 90° (contador deitado) os eixos do ecrã e da página trocam
+      const rotated = document.documentElement.classList.contains("force-landscape");
+      drag.el.style.translate = rotated ? `${dy}px ${-dx}px` : `${dx}px ${dy}px`;
       const under = document.elementFromPoint(e.clientX, e.clientY);
       const target = under && under.closest(".mesa-seat");
       if (drag.over && drag.over !== target) drag.over.classList.remove("drop-target");
@@ -3516,66 +3518,78 @@
    *  "br" | "teams". */
   function openReorderPositionsModal(mode) {
     closeAnyModal();
+    const ms = mode === "standard" ? game.standard : mode === "teams" ? game.teams : game.br;
+    const curId = ms.turnOrder ? ms.turnOrder[ms.currentTurnIndex] : null;
     let items;
-    if (mode === "standard") items = game.standard.players.map((p) => ({ id: p.id, name: p.name }));
-    else if (mode === "teams") items = game.teams.teams.map((t) => ({ id: t.id, name: t.name }));
-    else items = game.br.players.map((p) => ({ id: p.id, name: p.name }));
-    const reorderHint = mode === "teams"
-      ? tr("Usa as setas para mudar a posição de cada equipa no tabuleiro — não afeta a ordem dos turnos.")
-      : tr("Usa as setas para mudar a posição de cada jogador no tabuleiro — não afeta a ordem dos turnos.");
+    if (mode === "standard") items = game.standard.players.map((p) => ({ id: p.id, name: p.name, commander: p.commander, seatStyle: playerBgStyle(p) }));
+    else if (mode === "teams") items = game.teams.teams.map((t) => ({ id: t.id, name: t.name, commander: t.players[0] && t.players[0].commander, seatStyle: t.players[0] ? playerBgStyle(t.players[0]) : "" }));
+    else items = game.br.players.map((p) => ({ id: p.id, name: p.name, commander: p.commander, seatStyle: playerBgStyle(p) }));
+    const asTable = mode !== "br"; // o Battle Royale é uma lista, não uma mesa
 
     const backdrop = el(`
       <div class="modal-backdrop center">
-        <div class="modal-sheet">
+        <div class="modal-sheet reorder-sheet">
           <h2>${tr("Trocar posições")}</h2>
-          <div class="footer-note" style="margin-bottom:10px">${reorderHint}</div>
-          <div class="col" id="reorder-list"></div>
-          <div class="row" style="margin-top:14px">
-            <button class="btn btn-primary grow" id="reorder-done-btn">${tr("Concluído")}</button>
-          </div>
+          ${asTable ? `<div class="mesa reorder-mesa" id="ro-mesa"></div>` : `<div class="col reorder-list" id="reorder-list"></div>`}
+          <button class="btn btn-primary btn-block" id="reorder-done-btn" style="margin-top:14px">${tr("Concluído")}</button>
         </div>
       </div>
     `);
     document.body.appendChild(backdrop);
 
+    // cada troca fica logo guardada; a ordem dos turnos segue os lugares
     function applyOrder() {
       const ids = items.map((it) => it.id);
       if (mode === "standard") State.stdReorderPlayers(game, ids);
       else if (mode === "teams") State.teamsReorderTeams(game, ids);
       else State.brReorderPlayers(game, ids);
     }
+    function swap(i, j) {
+      if (i === j || i < 0 || j < 0) return;
+      [items[i], items[j]] = [items[j], items[i]];
+      applyOrder();
+      paint();
+      [i, j].forEach((k) => { const el2 = backdrop.querySelector(`[data-seat="${k}"]`); if (el2) retrigger(el2, "seat-swap"); });
+    }
 
-    function paintList() {
+    let picked = null; // tocar num lugar e depois noutro troca-os
+    function paint() {
+      if (asTable) {
+        const mesa = backdrop.querySelector("#ro-mesa");
+        mesa.innerHTML = mesaInnerHtml(items);
+        items.forEach((it, i) => {
+          const seatEl = mesa.querySelector(`[data-seat="${i}"]`);
+          if (!seatEl) return;
+          seatEl.classList.toggle("current", it.id === curId);
+          seatEl.classList.toggle("picked", picked === i);
+        });
+        return;
+      }
       const list = backdrop.querySelector("#reorder-list");
-      list.innerHTML = "";
-      items.forEach((it, idx) => {
-        const row = el(`
-          <div class="row" style="align-items:center;background:var(--surface-2);border-radius:10px;padding:8px 10px;margin-bottom:6px;gap:8px;">
-            <span class="grow" style="font-weight:600;font-size:.85rem;">${esc(it.name)}</span>
-            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>${I("chevron-up")}</button>
-            <button class="btn btn-icon" style="width:34px;height:34px;font-size:.85rem;" data-act="down" data-idx="${idx}" ${idx === items.length - 1 ? "disabled" : ""}>${I("chevron-down")}</button>
-          </div>
-        `);
-        list.appendChild(row);
-      });
-      list.querySelectorAll('[data-act="up"]').forEach((btn) => btn.addEventListener("click", () => {
-        const i = parseInt(btn.dataset.idx, 10);
-        if (i <= 0) return;
-        [items[i - 1], items[i]] = [items[i], items[i - 1]];
-        applyOrder();
-        paintList();
-      }));
-      list.querySelectorAll('[data-act="down"]').forEach((btn) => btn.addEventListener("click", () => {
-        const i = parseInt(btn.dataset.idx, 10);
-        if (i >= items.length - 1) return;
-        [items[i + 1], items[i]] = [items[i], items[i + 1]];
-        applyOrder();
-        paintList();
+      list.innerHTML = items.map((it, i) => `
+        <div class="reorder-row ${it.id === curId ? "current" : ""}" data-seat="${i}">
+          <span class="mesa-num">${i + 1}</span>
+          <span class="reorder-name">${esc(it.name)}</span>
+          <button class="btn btn-icon" data-act="up" data-i="${i}" aria-label="${tr("Subir")}" ${i === 0 ? "disabled" : ""}>${I("chevron-up")}</button>
+          <button class="btn btn-icon" data-act="down" data-i="${i}" aria-label="${tr("Descer")}" ${i === items.length - 1 ? "disabled" : ""}>${I("chevron-down")}</button>
+        </div>`).join("");
+      list.querySelectorAll("[data-act]").forEach((btn) => btn.addEventListener("click", () => {
+        const i = parseInt(btn.dataset.i, 10);
+        swap(i, btn.dataset.act === "up" ? i - 1 : i + 1);
       }));
     }
-    paintList();
-    backdrop.querySelector("#reorder-done-btn").addEventListener("click", () => { backdrop.remove(); render(); });
-    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) { backdrop.remove(); render(); } });
+    paint();
+    if (asTable) {
+      bindMesa(backdrop.querySelector("#ro-mesa"), (a, b) => { picked = null; swap(a, b); }, (i) => {
+        if (picked === null) picked = i;
+        else if (picked === i) picked = null;
+        else { const a = picked; picked = null; swap(a, i); return; }
+        paint();
+      });
+    }
+    const close = () => { backdrop.remove(); render(); };
+    backdrop.querySelector("#reorder-done-btn").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
   }
 
   /** Histórico ao vivo das alterações de vida do jogo atual (qualquer modo),

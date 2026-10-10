@@ -501,8 +501,14 @@ let lastRenderedScreen = null;
 const GAME_SCREENS = ["game-standard", "game-teams", "game-br"];
 const isTouchDevice = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
 let orientationLocked = false;
+/** Jogo de 2 (1v1): fica bem ao alto — um painel em cima (virado para o
+ *  adversário) e outro em baixo — por isso não se força o modo deitado. */
+function isPortraitFriendlyGame() {
+  return currentScreen === "game-standard" && game && game.standard && game.standard.players.length === 2;
+}
+
 function applyGameOrientation() {
-  const inGame = GAME_SCREENS.includes(currentScreen);
+  const inGame = GAME_SCREENS.includes(currentScreen) && !isPortraitFriendlyGame();
   const so = window.screen && window.screen.orientation;
   if (inGame && so && so.lock && !orientationLocked) {
     so.lock("landscape").then(() => { orientationLocked = true; applyGameOrientation(); }).catch(() => {});
@@ -520,6 +526,8 @@ function applyGameOrientation() {
   // aparelho): abaixo disto usa-se o tabuleiro compacto
   const layoutH = rotated ? window.innerWidth : window.innerHeight;
   root.classList.toggle("compact-board", inGame && layoutH < 520);
+  // 1v1 ao alto num telemóvel: tabuleiro em coluna (classe própria para o CSS)
+  root.classList.toggle("duel-portrait", isPortraitFriendlyGame() && portrait && window.innerWidth < 700);
 }
 window.addEventListener("resize", applyGameOrientation);
 window.addEventListener("orientationchange", () => setTimeout(applyGameOrientation, 150));

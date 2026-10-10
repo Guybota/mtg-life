@@ -67,3 +67,31 @@ module.exports.push({
     t.eq(await page.textContent("[data-n-val]"), "2", "− tira");
   },
 });
+
+module.exports.push({
+  name: "1v1 fica ao alto no telemóvel com + em cima e − em baixo",
+  async run(t) {
+    const page = await t.page({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    await openWith(t, page, null);
+    await page.click(".mode-card.duel");
+    await page.click("#qs-go");
+    await page.waitForSelector(".player-panel");
+    const cls = await page.evaluate(() => document.documentElement.className);
+    t.ok(!cls.includes("force-landscape") && cls.includes("duel-portrait"), "classes: " + cls);
+    const pos = await page.$$eval(".player-panel", (ps) => ps.map((p) => {
+      const plus = p.querySelector(".life-tap.plus").getBoundingClientRect(), minus = p.querySelector(".life-tap.minus").getBoundingClientRect();
+      return { stacked: Math.abs(plus.left - minus.left) < 2 && Math.abs(plus.top - minus.top) > 20 };
+    }));
+    t.ok(pos.every((x) => x.stacked), "+ e − empilhados em cada painel");
+    // o painel de baixo (não rodado): + em cima, − em baixo
+    const bottom = await page.$eval(".player-panel:not(.rot180)", (p) => p.querySelector(".life-tap.plus").getBoundingClientRect().top < p.querySelector(".life-tap.minus").getBoundingClientRect().top);
+    t.ok(bottom, "+ acima do −");
+    t.ok(await page.evaluate(() => document.querySelector(".board-toolbar").scrollWidth <= document.querySelector(".board-toolbar").clientWidth + 1), "barra de botões cabe na largura");
+    // com 4 jogadores continua deitado
+    await page.goto(t.url);
+    await page.click(".mode-card.commander");
+    await page.click("#qs-go");
+    await page.waitForSelector(".player-panel");
+    t.ok((await page.evaluate(() => document.documentElement.className)).includes("force-landscape"), "Commander de 4 continua deitado");
+  },
+});

@@ -83,7 +83,7 @@ function openGameSheet(cfg) {
   function seatHtml(s, i) {
     const prof = s.profileId ? Profiles.get(s.profileId) : null;
     const cmds = deckCommanders(prof);
-    const cur = s.commander ? normName(s.commander.name) : (prof && prof.commander ? normName(prof.commander.name) : "");
+    const cur = s.commander ? normName(s.commander.name) : (cmds[0] ? normName(cmds[0].name) : "");
     return `
       <div class="mg-seat ${st.winner === i ? "won" : ""}" data-i="${i}">
         <div class="mg-seat-top">
@@ -134,7 +134,7 @@ function openGameSheet(cfg) {
           const prof = id ? Profiles.get(id) : null;
           st.seats[i].who = seatNameAfterProfile(st.seats[i].who, st.seats[i].profileId, prof);
           st.seats[i].profileId = id;
-          st.seats[i].commander = prof ? prof.commander : null;
+          st.seats[i].commander = prof ? deckCommanders(prof)[0] || null : null;
           paint();
         },
       });
@@ -188,7 +188,7 @@ function openManualGame(opts) {
   opts = opts || {};
   const first = opts.profileId ? Profiles.get(opts.profileId) : null;
   const seats = Array.from({ length: 4 }, () => ({ profileId: null, who: "", commander: null }));
-  if (first) seats[0] = { profileId: first.id, who: first.playerName || "", commander: first.commander || null };
+  if (first) seats[0] = { profileId: first.id, who: first.playerName || "", commander: deckCommanders(first)[0] || null };
   openGameSheet({
     title: tr("Registar jogo"),
     edit: false,
@@ -224,7 +224,7 @@ function openGameEditor(profileId, gameId) {
   const seats = group.map(({ profile, game }) => ({
     profileId: profile.id, gameId: game.id,
     who: game.playedBy || profile.playerName || "",
-    commander: game.commander ? (deckCommanders(profile).find((c) => normName(c.name) === normName(game.commander)) || { name: game.commander }) : profile.commander,
+    commander: game.commander ? (deckCommanders(profile).find((c) => normName(c.name) === normName(game.commander)) || { name: game.commander }) : deckCommanders(profile)[0] || null,
     won: !!game.won,
   }));
   // adversários sem deck registado neste aparelho entram como convidados

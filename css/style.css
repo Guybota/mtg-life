@@ -2460,3 +2460,10 @@ html.compact-board .lh-table td .lh-d{ display:inline; font-size:.85rem; margin-
 html.compact-board .lh-table td .lh-l{ display:inline; }
 html.compact-board .lh-row{ padding:4px 2px; }
 html.compact-board .lh-turn{ padding:5px 2px 2px; }
+.pp-new-partner{ align-self:flex-start; }
+.alt-row .btn-sm{ flex-shrink:0; padding:0 8px; }
+/* alternativos: nome do par em cima (inteiro), botões por baixo */
+.alt-row{ flex-wrap:wrap; row-gap:6px; }
+.alt-row .alt-name{ flex: 1 1 calc(100% - 46px); white-space:normal; line-height:1.3; }
+.alt-row [data-alt-partner]{ margin-left:40px; }
+.alt-row [data-alt-del]{ margin-left:auto; }

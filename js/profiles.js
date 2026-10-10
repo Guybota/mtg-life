@@ -73,13 +73,14 @@
     return byAnyId(load(), id);
   }
 
-  function create({ name, commander, playerName }) {
+  function create({ name, commander, playerName, partnerCommander }) {
     const list = load();
     const profile = {
       id: uid(),
       name: name && name.trim() ? name.trim() : commander ? commander.name : (global.MTG && global.MTG.i18n ? global.MTG.i18n.t("Novo perfil") : "Novo perfil"),
       playerName: playerName && playerName.trim() ? canonicalPlayer(playerName.trim()) : "",
       commander: commander || null,
+      partnerCommander: partnerCommander || undefined,
       stats: { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 },
       history: [],
       createdAt: Date.now(),
@@ -118,7 +119,7 @@
     const who = pilot && String(pilot).trim() ? canonicalPlayer(String(pilot).trim()) : "";
     const playedBy = who && norm(who) !== norm(p.playerName) ? who : undefined;
     // commander usado neste jogo, quando não é o principal do deck
-    const mainCmd = p.commander && p.commander.name;
+    const mainCmd = p.commander && p.commander.name ? p.commander.name + (p.partnerCommander && p.partnerCommander.name ? " + " + p.partnerCommander.name : "") : null;
     // guarda-se sempre (assim continua certo se o principal mudar depois)
     const cmdUsed = commanderName || mainCmd || undefined;
     if (!p.history) p.history = [];
@@ -356,7 +357,7 @@
       const al = new Set(dest.aliases || []);
       idsOf(inc).forEach((id) => { if (id !== dest.id) al.add(id); });
       if (al.size) dest.aliases = Array.from(al);
-      if (!dest.commander && clone.commander) dest.commander = clone.commander;
+      if (!dest.commander && clone.commander) { dest.commander = clone.commander; dest.partnerCommander = clone.partnerCommander; }
       if (!dest.playerName && clone.playerName) dest.playerName = clone.playerName;
       joinAltCommanders(dest, clone);
     });
@@ -480,8 +481,11 @@
   /** Junta os commanders alternativos de `src` aos de `dst` (sem repetir
    *  nem incluir o principal de `dst`). */
   function joinAltCommanders(dst, src) {
-    const names = new Set([norm(dst.commander && dst.commander.name)].concat((dst.altCommanders || []).map((c) => norm(c && c.name))));
-    const extra = [src.commander].concat(src.altCommanders || []).filter((c) => c && c.name && !names.has(norm(c.name)) && names.add(norm(c.name)));
+    // cada opção é um commander com o seu parceiro (opcional); compara-se o par
+    const label = (c, p) => norm(c && c.name) + "+" + norm(p && p.name);
+    const names = new Set([label(dst.commander, dst.partnerCommander)].concat((dst.altCommanders || []).map((c) => label(c, c && c.partner))));
+    const srcMain = src.commander ? Object.assign({}, src.commander, src.partnerCommander ? { partner: src.partnerCommander } : {}) : null;
+    const extra = [srcMain].concat(src.altCommanders || []).filter((c) => c && c.name && !names.has(label(c, c.partner)) && names.add(label(c, c.partner)));
     // o principal de src só entra como alternativo se dst já tiver um principal diferente
     if (extra.length) dst.altCommanders = (dst.altCommanders || []).concat(extra);
   }
@@ -545,7 +549,7 @@
     const al = new Set(dst.aliases || []);
     idsOf(src).forEach((id) => { if (id !== dst.id) al.add(id); });
     dst.aliases = Array.from(al);
-    if (!dst.commander && src.commander) dst.commander = src.commander;
+    if (!dst.commander && src.commander) { dst.commander = src.commander; dst.partnerCommander = src.partnerCommander; }
     if (!dst.playerName && src.playerName) dst.playerName = src.playerName;
     joinAltCommanders(dst, src);
     const out = list.filter((p) => p !== src);
@@ -592,7 +596,7 @@
     return { app: "mtg-life-counter", v: 1, profiles: load(), deleted: deleted(), playerAliases: playerAliases() };
   }
 
-  const SYNC_META = ["name", "playerName", "commander", "altCommanders", "colorIdx"];
+  const SYNC_META = ["name", "playerName", "commander", "partnerCommander", "altCommanders", "colorIdx"];
 
   /** Junta os dados do grupo com os deste aparelho, sem duplicar nada:
    *  - apagados de um lado ficam apagados dos dois (perfis e jogos);

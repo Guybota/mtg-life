@@ -89,6 +89,7 @@ function renderSetupTeams() {
     card.querySelector(".profile-btn").addEventListener("click", () => {
       openProfilePicker({
         commander: draft.teams[t].players[i].commander,
+        partner: draft.teams[t].players[i].partnerCommander,
         currentProfileId: draft.teams[t].players[i].profileId,
         playerName: draft.teams[t].players[i].name,
         onSelect: (id) => {
@@ -96,7 +97,7 @@ function renderSetupTeams() {
           const tp = draft.teams[t].players[i];
           tp.name = seatNameAfterProfile(tp.name, tp.profileId, prof);
           tp.profileId = id;
-          if (prof && prof.commander) tp.commander = prof.commander;
+          if (prof && prof.commander) { tp.commander = prof.commander; tp.partnerCommander = prof.partnerCommander || null; }
           renderTeamsList();
         },
       });

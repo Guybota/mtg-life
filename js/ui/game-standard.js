@@ -90,13 +90,14 @@ function renderSetupStandard() {
     card.querySelector(".profile-btn").addEventListener("click", () => {
       openProfilePicker({
         commander: draft.players[i].commander,
+        partner: draft.players[i].partnerCommander,
         currentProfileId: draft.players[i].profileId,
         playerName: draft.players[i].name,
         onSelect: (id) => {
           const prof = id ? Profiles.get(id) : null;
           draft.players[i].name = seatNameAfterProfile(draft.players[i].name, draft.players[i].profileId, prof);
           draft.players[i].profileId = id;
-          if (prof && prof.commander) draft.players[i].commander = prof.commander;
+          if (prof && prof.commander) { draft.players[i].commander = prof.commander; draft.players[i].partnerCommander = prof.partnerCommander || null; }
           renderPlayersList();
         },
       });
@@ -1112,6 +1113,7 @@ function openEditPlayerModal({ mode, playerId }) {
   backdrop.querySelector("#ep-profile").addEventListener("click", () => {
     openProfilePicker({
       commander: pendingCommander,
+      partner: pendingPartnerCommander,
       currentProfileId: pendingProfileId,
       playerName: backdrop.querySelector("#ep-name").value,
       onSelect: (id) => {
@@ -1123,6 +1125,13 @@ function openEditPlayerModal({ mode, playerId }) {
           const thumb = backdrop.querySelector("#ep-thumb");
           thumb.style.cssText = commanderThumbStyle(prof.commander);
           thumb.textContent = "";
+          // o parceiro do deck vem junto (só nos modos com parceiros)
+          const pThumb = backdrop.querySelector("#ep-thumb-partner");
+          if (pThumb) {
+            pendingPartnerCommander = prof.partnerCommander || null;
+            pThumb.style.cssText = commanderThumbStyle(pendingPartnerCommander);
+            pThumb.innerHTML = pendingPartnerCommander ? "" : I("card");
+          }
         }
         const nameEl = backdrop.querySelector("#ep-name");
         // o nome por defeito ("Jogador 2") não conta como alguém escrito

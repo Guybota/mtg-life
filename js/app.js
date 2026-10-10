@@ -4780,17 +4780,31 @@
         altCommanders: pendingAlts,
         colorIdx: pendingColor,
       };
-      // jogos antigos sem o commander guardado eram com o principal de então
+      // Quem jogou e com que commander passa a ficar escrito em cada jogo,
+      // para não mudar quando se troca o dono ou o commander principal.
+      // editedAt faz a correção chegar aos outros aparelhos do grupo.
+      const now = Date.now();
       const oldMain = profile.commander && profile.commander.name;
-      if (oldMain && (!pendingCommander || normName(pendingCommander.name) !== normName(oldMain)) && (profile.history || []).some((g) => !g.commander)) {
-        patch.history = profile.history.map((g) => (g.commander ? g : Object.assign({}, g, { commander: oldMain })));
-      }
-      // jogos que tinham sido emprestados ao novo dono deixam de o ser
-      if (patch.playerName && (profile.history || []).some((g) => g.playedBy && normName(g.playedBy) === normName(patch.playerName))) {
-        patch.history = (patch.history || profile.history).map((g) => {
-          if (!g.playedBy || normName(g.playedBy) !== normName(patch.playerName)) return g;
-          const c = Object.assign({}, g); delete c.playedBy; return c;
+      const mainChanged = oldMain && (!pendingCommander || normName(pendingCommander.name) !== normName(oldMain));
+      const oldOwner = (profile.playerName || "").trim();
+      const newOwner = patch.playerName.trim();
+      const ownerChanged = normName(oldOwner) !== normName(newOwner);
+      if ((mainChanged || ownerChanged) && (profile.history || []).length) {
+        let touched = false;
+        const hist = profile.history.map((g) => {
+          const c = Object.assign({}, g);
+          // jogos antigos sem o commander guardado eram com o principal de então
+          if (mainChanged && !c.commander) c.commander = oldMain;
+          if (ownerChanged) {
+            // jogados pelo dono anterior: ficam dele (agora como emprestados)
+            if (!c.playedBy && oldOwner) c.playedBy = oldOwner;
+            // jogados pelo novo dono: deixam de ser emprestados
+            if (c.playedBy && normName(c.playedBy) === normName(newOwner)) delete c.playedBy;
+          }
+          if (c.commander !== g.commander || c.playedBy !== g.playedBy) { c.editedAt = now; touched = true; return c; }
+          return g;
         });
+        if (touched) patch.history = hist;
       }
       Profiles.update(profileId, patch);
       backdrop.remove();

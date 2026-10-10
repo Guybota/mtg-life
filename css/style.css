@@ -28,8 +28,8 @@
   --text: #2e2a35;
   --text-dim: #857e8e;
   /* pastéis (fundo) + respetiva "tinta" (texto/ícone sobre esse fundo) */
-  --lavender: #ddd5f6;  --lavender-ink: #54468f;
-  --rose: #f7d3d7;      --rose-ink: #a03a4b;
+  --lavender: #d9dff6;  --lavender-ink: #3e4d9c; /* índigo suave (antes lilás) */
+  --rose: #fbd8cd;      --rose-ink: #a6432b;     /* coral (antes rosa) */
   --mint: #cfeedd;      --mint-ink: #2d7350;
   --sky: #d3e4f7;       --sky-ink: #2f5e8c;
   --butter: #f8ecc0;    --butter-ink: #7a5d10;
@@ -37,7 +37,7 @@
   /* atalhos semânticos */
   --primary: var(--text);
   --plus-ink: #2d7350;
-  --minus-ink: #b23a4c;
+  --minus-ink: #b5402c;
   --radius: 18px;
   --radius-sm: 12px;
   --shadow-sm: 0 1px 2px rgba(46,42,53,.06), 0 1px 3px rgba(46,42,53,.04);
@@ -47,7 +47,7 @@
   --on-primary: #ffffff;           /* texto sobre --primary */
   --primary-active: #45404d;
   --primary-hover: #3b3643;
-  --accent-active: #cfc5f0;
+  --accent-active: #c6cef0;
   --gold-active: #f3e2a6;
   --ring: #ffffff;                 /* contorno de avatares/badges */
   --chip-bg: rgba(255,255,255,.62); /* chips translúcidos por cima dos painéis */
@@ -56,10 +56,10 @@
   --icon-tile: rgba(255,255,255,.65);
   --backdrop: rgba(46,42,53,.32);
   --overlay: rgba(246,243,238,.82);
-  --stripe: #fbe6e8;
+  --stripe: #fbe6de;
   --pastel-veil: transparent;      /* véu por cima das cores pastel dos painéis */
   /* gráficos (paleta validada: destaque + cinzento de "ênfase") */
-  --chart-accent: #7262d0;
+  --chart-accent: #4f63c9;
   /* séries categóricas (ordem fixa; validadas para daltonismo sobre --surface) */
   --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
   --series-5: #e87ba4; --series-6: #008300; --series-7: #6250d6; --series-8: #e34948;
@@ -86,21 +86,21 @@
     --text: #f1edf5;
     --text-dim: #a59eae;
     /* pastéis "escurecidos" como fundo, e o pastel claro como tinta */
-    --lavender: #383156;  --lavender-ink: #cdc1ff;
-    --rose: #4a2a33;      --rose-ink: #ffb6c2;
+    --lavender: #2c3358;  --lavender-ink: #c2cbff;
+    --rose: #4a2d24;      --rose-ink: #ffb9a3;
     --mint: #213f2f;      --mint-ink: #a3e5be;
     --sky: #22364b;       --sky-ink: #b3d4f7;
     --butter: #463c1c;    --butter-ink: #f3db8d;
     --peach: #48301f;     --peach-ink: #f8c4a1;
     --plus-ink: #93e2b3;
-    --minus-ink: #ff9cab;
+    --minus-ink: #ffa48f;
     --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
     --shadow: 0 4px 16px rgba(0,0,0,.35);
     --shadow-lg: 0 18px 50px rgba(0,0,0,.55);
     --on-primary: #17151b;
     --primary-active: #d6d0dc;
     --primary-hover: #ffffff;
-    --accent-active: #433b63;
+    --accent-active: #394170;
     --gold-active: #524722;
     --ring: #2a2730;
     --chip-bg: rgba(23,21,27,.5);
@@ -109,10 +109,10 @@
     --icon-tile: rgba(0,0,0,.22);
     --backdrop: rgba(0,0,0,.55);
     --overlay: rgba(23,21,27,.86);
-    --stripe: #3a222a;
+    --stripe: #3a2620;
     /* as cores pastel dos painéis ficam mais profundas, com texto claro */
     --pastel-veil: rgba(23,21,27,.52);
-    --chart-accent: #8d7ee6;
+    --chart-accent: #8c9bf0;
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
     --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
     --chart-muted: #4a4552;

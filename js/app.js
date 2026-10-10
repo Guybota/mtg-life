@@ -3331,7 +3331,7 @@
     return { name: p.name, commander: p.commander, bgStyle: playerBgStyle(p), subtitle: p.commander ? p.commander.name : "" };
   }
 
-  const CONFETTI_COLORS = ["#f4b6bd", "#b9d5f2", "#bfe4cc", "#d2c5f2", "#f5e0a0", "#f8c9a8", "#b8e3de"];
+  const CONFETTI_COLORS = ["#f4b3a0", "#b9d5f2", "#bfe4cc", "#c4cdf2", "#f5e0a0", "#f8cfa0", "#b8e3de", "#d6e8b4"];
 
   /** Mostra o vencedor por cima do ecrã de resultado, com confetes a cair.
    *  Toca em qualquer sítio para fechar (fecha sozinho ao fim de uns segundos). */

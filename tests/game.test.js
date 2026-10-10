@@ -47,3 +47,23 @@ module.exports = [
     },
   },
 ];
+
+module.exports.push({
+  name: "folha do jogador: + em cima e − em baixo no valor para os outros",
+  async run(t) {
+    const page = await t.page({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+    await openWith(t, page, null);
+    await page.click(".mode-card.commander");
+    await page.click("#qs-go");
+    await page.waitForSelector(".player-panel");
+    await page.click('.player-panel >> nth=0 >> [data-action="player-sheet"] >> nth=0');
+    await page.waitForSelector(".ps-n");
+    const order = await page.$$eval(".ps-n > *", (x) => x.map((e) => e.getAttribute("data-n") || "val"));
+    t.eq(order, ["1", "val", "-1"], "ordem dos botões");
+    await page.click('.ps-n [data-n="1"]');
+    await page.click('.ps-n [data-n="1"]');
+    t.eq(await page.textContent("[data-n-val]"), "3", "+ soma");
+    await page.click('.ps-n [data-n="-1"]');
+    t.eq(await page.textContent("[data-n-val]"), "2", "− tira");
+  },
+});

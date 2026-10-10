@@ -725,9 +725,9 @@ function openPlayerSheet(playerId) {
         <div class="section-title">${tr("Para os outros")}</div>
         <div class="ps-group">
           <div class="ps-n">
-            <button class="ps-n-btn" data-n="-1" aria-label="${tr("Menos")}">${I("minus")}</button>
-            <b data-n-val>1</b>
             <button class="ps-n-btn" data-n="1" aria-label="${tr("Mais")}">${I("plus")}</button>
+            <b data-n-val>1</b>
+            <button class="ps-n-btn" data-n="-1" aria-label="${tr("Menos")}">${I("minus")}</button>
           </div>
           <div class="ps-group-btns">
             <button class="btn btn-ghost btn-sm" data-group="opponents">${tr("Cada adversário −{n}", { n: "<span data-n-txt>1</span>" })}</button>

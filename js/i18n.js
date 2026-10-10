@@ -309,6 +309,7 @@
     "Receber do outro": "Receive theirs",
     "Enviar ficheiro": "Send file",
     "Abrir ficheiro": "Open file",
+    "Menu": "Menu",
     "{n} jogos sem cópia": "{n} games without a backup",
     "2 jogadores · 40 vidas": "2 players · 40 life",
     "Jogadores e vida à escolha": "Choose players and life",

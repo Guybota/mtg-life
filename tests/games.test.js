@@ -63,7 +63,7 @@ module.exports = [
       await page.waitForSelector(".game-sheet", { state: "detached" });
       const m = (await stored(page)).find((p) => p.name === "Meren").history.find((g) => g.manual);
       t.eq([m.timed, m.gameTimeMs, m.won], [true, 2400000, true], "jogo com tempo");
-      t.ok((await page.$eval("#history-list .cd-list-item", (e) => e.textContent)).includes("Registado à mão"), "histórico mostra que foi à mão");
+      t.ok((await page.$$eval("#history-list .hist-row", (x) => x.map((e) => e.textContent).join("|"))).includes("registado à mão"), "histórico mostra que foi à mão");
     },
   },
   {

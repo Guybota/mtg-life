@@ -526,10 +526,13 @@ function bindMesa(mesa, onSwap, onTap) {
 
 /** Perfis usados mais recentemente (último jogo, ou data de criação),
  *  sem os que já estão sentados noutros lugares. */
-function recentProfiles(excludeIds, n) {
+function recentProfiles(excludeIds, n, playerName) {
   const used = new Set(excludeIds.filter(Boolean));
   const lastUse = (pr) => (pr.history && pr.history.length ? Math.max(...pr.history.map((h) => h.date || 0)) : pr.createdAt || 0);
-  return Profiles.all().filter((pr) => !used.has(pr.id)).sort((a, b) => lastUse(b) - lastUse(a)).slice(0, n);
+  // com um nome escrito no lugar, os decks dessa pessoa vêm primeiro
+  const who = normName(Profiles.canonicalPlayer((playerName || "").trim()));
+  const mine = (pr) => (who && normName(pr.playerName) === who ? 1 : 0);
+  return Profiles.all().filter((pr) => !used.has(pr.id)).sort((a, b) => (mine(b) - mine(a)) || (lastUse(b) - lastUse(a))).slice(0, n);
 }
 /** Miniatura do lugar: a arte do commander, ou a cor escolhida para ele. */
 function seatThumbStyle(p) {
@@ -602,7 +605,8 @@ function seatDeckExtrasHtml(name, commander, prof, partner) {
 function seatExtrasHtml(p, idx, seats) {
   const others = seats.filter((_, j) => j !== idx).map((x) => x.profileId);
   const dupAt = p.profileId ? seats.findIndex((x, j) => j !== idx && x.profileId === p.profileId) : -1;
-  const recents = p.profileId ? [] : recentProfiles(others, 3);
+  // até 8 sugestões; o CSS mostra 3 no telemóvel, 6 no iPad ao alto e 8 deitado
+  const recents = p.profileId ? [] : recentProfiles(others, 8, p.name);
   const palette = State.FALLBACK_PALETTE;
   const prof = p.profileId ? Profiles.get(p.profileId) : null;
   return `
@@ -610,7 +614,7 @@ function seatExtrasHtml(p, idx, seats) {
     ${recents.length ? `<div class="seat-recents" role="group" aria-label="${tr("Perfis recentes")}">${recents.map((pr) => `
       <button type="button" class="recent-chip" data-recent="${pr.id}" title="${tr("Usar o perfil {name}", { name: esc(pr.name) })}">
         <span class="recent-avatar" style="${pr.commander && pr.commander.art ? commanderThumbStyle(pr.commander) : ""}">${pr.commander && pr.commander.art ? "" : esc(pr.name.slice(0, 2).toUpperCase())}</span>
-        <span class="recent-name">${esc(pr.name)}</span>
+        <span class="recent-name">${esc(pr.name)}${pr.playerName ? `<small class="recent-owner">${esc(pr.playerName)}</small>` : ""}</span>
       </button>`).join("")}</div>` : ""}
     ${!p.commander ? `<div class="seat-colors" role="group" aria-label="${tr("Cor sem commander")}">${palette.map((c, k) => `
       <button type="button" class="color-dot" data-color="${k}" aria-pressed="${p.colorIdx === k}" aria-label="${tr("Cor {n}", { n: k + 1 })}" style="background:${c[0]}"></button>`).join("")}</div>` : ""}

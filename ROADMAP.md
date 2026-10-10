@@ -5,8 +5,10 @@ Playgroup.gg, Moxtopper) e do que os utilizadores mais pedem em reviews.
 Ainda não estão feitas; ficam aqui para decidir mais tarde.
 
 ## Estatísticas de grupo
-- **Classificação do grupo (ELO ou pontos)** por jogador e por deck, com
-  ligas/escalões (Spark, Playgroup.gg). Encaixa na sincronização por grupo.
+- ~~Classificação do grupo (ELO) por jogador e por deck, com ligas~~ —
+  feito (separador "Classificação" nos perfis).
+- **ELO por grupo/temporada**: recomeçar a classificação numa nova época,
+  ou ter classificações separadas por grupo de jogo.
 - **Power level / bracket de cada deck** (Playgroup.gg estima a partir dos
   resultados).
 - **Registar um jogo à mão depois de acabar**, sem ter usado o contador

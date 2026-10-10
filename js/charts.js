@@ -219,7 +219,7 @@
       </button>`).join("");
     return `
       <div class="chart-multiline" data-n="${n}">
-        <div class="ml-legend">${legend}</div>
+        ${series.length > 1 ? `<div class="ml-legend">${legend}</div>` : ""}
         <svg viewBox="0 0 ${ML.W} ${ML.H}" role="img" aria-label="${esc(opts.aria || "")}">
           ${grid}${xt}${lines}${ends}
           <line class="crosshair" x1="0" x2="0" y1="${ML.t}" y2="${ML.t + ih}" style="display:none"/>

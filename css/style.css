@@ -2017,6 +2017,58 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .br-chip.daynight.day, .fs-chip.daynight.day{ color: var(--butter-ink); }
 .br-chip.daynight.night, .fs-chip.daynight.night{ color: var(--lavender-ink); }
 
+/* ---------- Classificação ELO ---------- */
+.seg.seg-3{ grid-template-columns: repeat(3, 1fr); }
+.rank-kind{ display:flex; gap:6px; margin-bottom:10px; }
+.rank-list{ display:flex; flex-direction:column; gap:6px; }
+.rank-row{
+  display:flex; align-items:center; gap:10px; cursor:pointer;
+  background: var(--surface); border:1px solid var(--line); border-radius:16px; padding:8px 12px 8px 8px;
+  transition: transform .15s var(--ease-spring);
+}
+.rank-row:active{ transform: scale(.98); }
+.rank-pos{
+  width:28px; height:28px; border-radius:50%; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:.86rem; font-variant-numeric: tabular-nums;
+  background: var(--surface-2); color: var(--text-dim);
+}
+.rank-row.top-1 .rank-pos{ background: var(--butter); color: var(--butter-ink); }
+.rank-row.top-2 .rank-pos{ background: var(--surface-3); color: var(--text); }
+.rank-row.top-3 .rank-pos{ background: var(--peach); color: var(--peach-ink); }
+.rank-row.top-1{ border-color: color-mix(in srgb, var(--butter-ink) 35%, var(--line)); }
+.player-avatar.sm{ width:36px; height:36px; font-size:.78rem; }
+.commander-thumb.sm{ width:36px; height:36px; border-radius:10px; cursor:inherit; }
+.commander-thumb.sm .ic{ width:16px; height:16px; }
+.rank-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.rank-name{ font-weight:700; font-size:.92rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rank-sub{ font-size:.74rem; color: var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rank-score{ display:flex; flex-direction:column; align-items:flex-end; min-width:48px; font-variant-numeric: tabular-nums; }
+.rank-score b{ font-size:1.05rem; font-weight:800; }
+.elo-delta{ font-size:.72rem; font-weight:700; }
+.elo-delta.up{ color: var(--plus-ink); }
+.elo-delta.down{ color: var(--minus-ink); }
+.tier-chip{
+  flex-shrink:0; height:22px; padding:0 8px; border-radius:999px;
+  display:inline-flex; align-items:center; font-size:.68rem; font-weight:700; white-space:nowrap;
+  background: var(--surface-2); color: var(--text-dim);
+}
+.tier-chip.tier-bronze{ background: var(--peach); color: var(--peach-ink); }
+.tier-chip.tier-silver{ background: var(--surface-3); color: var(--text); }
+.tier-chip.tier-gold{ background: var(--butter); color: var(--butter-ink); }
+.tier-chip.tier-platinum{ background: var(--sky); color: var(--sky-ink); }
+.tier-chip.tier-diamond{ background: var(--lavender); color: var(--lavender-ink); }
+.tier-chip.tier-provisional{ background: transparent; border:1px dashed var(--line); }
+.rank-help{ margin-top:12px; font-size:.8rem; color: var(--text-dim); }
+.rank-help summary{ cursor:pointer; }
+.rank-help p{ margin:8px 0 0; line-height:1.45; }
+.elo-head{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.elo-rank{ font-weight:800; font-size:1.1rem; font-variant-numeric: tabular-nums; }
+.elo-rank small{ font-size:.75rem; color: var(--text-dim); font-weight:600; }
+.elo-main{ flex:1; display:flex; align-items:baseline; gap:6px; font-variant-numeric: tabular-nums; }
+.elo-main b{ font-size:1.6rem; font-weight:800; }
+@media (max-width: 380px){ .rank-row .tier-chip{ display:none; } }
+
 /* ---------- Sincronização na nuvem ---------- */
 .sync-card{
   display:flex; align-items:center; gap:10px;

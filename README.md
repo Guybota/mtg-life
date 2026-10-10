@@ -99,6 +99,12 @@ Ver [ROADMAP.md](ROADMAP.md) — funcionalidades que as apps de topo têm ou que
 ---
 Os símbolos de mana são copyright Wizards of the Coast; os traçados vêm do projeto [Mana](https://mana.andrewgioia.com) de Andrew Gioia (SIL OFL 1.1). Esta app é conteúdo de fãs, não oficial.
 
+## Organização do código
+
+- `js/i18n.js`, `icons.js`, `mana.js`, `charts.js`, `badges.js` — traduções, ícones, símbolos de mana, gráficos e emblemas.
+- `js/scryfall.js`, `profiles.js`, `elo.js`, `state.js`, `qrsync.js`, `cloudsync.js` — dados: cartas, perfis e histórico, classificação, estado do jogo, partilha por QR e nuvem.
+- `js/ui/*.js` — a interface, dividida por áreas e carregada por esta ordem: `core` (estado, utilitários, navegação), `data` (cópias de segurança, fundir, nuvem), `pickers` (menu e janelas de escolha), `game-standard`, `game-br`, `game-teams`, `endgame`, `profiles-ui` e `main` (arranque). Partilham o mesmo âmbito: o que um ficheiro declara no topo os outros usam diretamente.
+
 ## Testes
 
 Os testes automáticos estão em `tests/` e usam o Playwright com o Chromium:

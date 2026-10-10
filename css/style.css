@@ -652,22 +652,6 @@ input.switch:checked::after{ transform: translateX(18px); }
   box-shadow: inset 0 0 0 3px var(--text);
 }
 .player-panel.has-art.active-turn::after{ box-shadow: inset 0 0 0 3px #fff; }
-.turn-badge{
-  position:absolute; top:10px; left:10px; z-index:5;
-  background: var(--text);
-  color: var(--on-primary);
-  font-size:.64rem; font-weight:700; letter-spacing:.4px; text-transform:uppercase;
-  padding: 4px 9px;
-  border-radius: 999px;
-  animation: fadeIn .3s ease both;
-}
-.player-panel.has-art .turn-badge{ background:#fff; color:#2e2a35; }
-.player-panel.rot180 .turn-badge{ top:auto; bottom:10px; }
-/* nos painéis rodados o badge fica no fundo do painel (por cima do botão
-   de passar turno / roster da equipa): reserva-lhe espaço */
-.player-panel.rot180.active-turn .content{ padding-bottom: 30px; }
-/* nos painéis normais fica ao lado do nome: empurra o nome */
-.player-panel:not(.rot180) .turn-badge + .player-header{ padding-left: 84px; }
 .turn-badge-sm{
   display:inline-flex; align-items:center;
   background: var(--text);

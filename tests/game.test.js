@@ -160,3 +160,21 @@ module.exports.push({
     t.ok(await page.isVisible(".board-toolbar"), "mostrar barras sai do ecrã inteiro");
   },
 });
+
+module.exports.push({
+  name: "hub do ecrã inteiro: lateral no telemóvel deitado, central no iPad e no 1v1",
+  async run(t) {
+    const hubSide = async (size, mode, mobile) => {
+      const page = await t.page({ viewport: size, hasTouch: true, isMobile: mobile });
+      await openWith(t, page, null);
+      await page.click(`.mode-card.${mode}`);
+      await page.click("#qs-go");
+      await page.waitForSelector(".fs-hub");
+      return page.$eval(".fs-hub", (h) => getComputedStyle(h).flexDirection === "column");
+    };
+    t.eq(await hubSide({ width: 390, height: 844 }, "commander", true), true, "iPhone deitado, 4 jogadores: lateral");
+    t.eq(await hubSide({ width: 1180, height: 820 }, "commander", false), false, "iPad: central");
+    t.eq(await hubSide({ width: 390, height: 844 }, "duel", true), false, "1v1 ao alto: central");
+    t.eq(await hubSide({ width: 844, height: 390 }, "duel", true), false, "1v1 com o telemóvel deitado: central");
+  },
+});

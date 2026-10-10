@@ -165,6 +165,7 @@ function renderSetupStandard() {
 /** Cria e arranca um jogo Commander/Duelo/Livre a partir de um rascunho de
  *  setup (usado pelo botão "Começar jogo" e pelo "Repetir último jogo"). */
 function startStandardFromDraft(d, opts) {
+  boardFullscreen = true; // cada jogo novo começa em ecrã inteiro
   const preset = PRESETS[d.preset];
   rememberSetup("standard", d);
   const st = State.createStandardGame({
@@ -284,6 +285,8 @@ function renderGameStandard() {
   });
   const fsExitBtn = s.querySelector("#fullscreen-exit-btn");
   if (fsExitBtn) fsExitBtn.addEventListener("click", () => { boardFullscreen = !boardFullscreen; render(); });
+  const fsMore = s.querySelector("#fs-more-btn");
+  if (fsMore) fsMore.addEventListener("click", () => openBoardMenu(s));
   s.querySelector("#end-game-btn").addEventListener("click", () => openEndGameModal());
 }
 

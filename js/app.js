@@ -190,7 +190,9 @@
     const icons = scope.querySelectorAll(".board-toolbar .btn-icon");
     if (!endBtn || !icons.length) return;
     requestAnimationFrame(() => {
-      const h = endBtn.getBoundingClientRect().height;
+      // offsetHeight = altura no layout (getBoundingClientRect daria a
+      // largura quando o ecrã está rodado para ficar deitado)
+      const h = endBtn.offsetHeight;
       if (!h) return;
       icons.forEach((btn) => { btn.style.width = h + "px"; btn.style.height = h + "px"; });
     });
@@ -289,12 +291,17 @@
     const host = e.target.closest(RIPPLE_SEL);
     if (!host || host.disabled) return;
     const r = host.getBoundingClientRect();
-    const size = Math.max(r.width, r.height) * 1.6;
+    const size = Math.max(host.offsetWidth, host.offsetHeight) * 1.6;
+    // ponto tocado em coordenadas do próprio elemento (com o ecrã rodado
+    // 90° para ficar deitado, os eixos do ecrã e do elemento trocam)
+    const rotated = document.documentElement.classList.contains("force-landscape");
+    const lx = rotated ? e.clientY - r.top : e.clientX - r.left;
+    const ly = rotated ? r.right - e.clientX : e.clientY - r.top;
     const wave = document.createElement("span");
     wave.className = "ripple";
     wave.style.width = wave.style.height = size + "px";
-    wave.style.left = (e.clientX - r.left - size / 2) + "px";
-    wave.style.top = (e.clientY - r.top - size / 2) + "px";
+    wave.style.left = (lx - size / 2) + "px";
+    wave.style.top = (ly - size / 2) + "px";
     host.appendChild(wave);
     wave.addEventListener("animationend", () => wave.remove());
     setTimeout(() => wave.remove(), 900); // por segurança, se a animação não correr
@@ -321,6 +328,7 @@
             <span class="fs-chip">${I("repeat")}${tr("Ronda {n}", { n: modeState.roundNumber || 1 })}</span>
             <span class="fs-chip">${I("hourglass")}<span data-fs-total>00:00</span></span>
             ${paused ? `<span class="fs-chip paused">${I("pause")}${tr("Pausado")}</span>` : ""}` : ""}
+          ${timed ? `<button class="fs-exit fs-pause" id="fs-pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}" aria-label="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
           <button class="fs-exit" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}" aria-label="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>
         </div>
       </div>`;
@@ -479,6 +487,33 @@
   // ROUTER
   // ---------------------------------------------------------
   let lastRenderedScreen = null;
+  // ---------------------------------------------------------
+  // Contador sempre em "landscape": num ecrã de jogo com o aparelho na
+  // vertical, roda-se a página 90° (o jogo fica igual ao modo deitado e
+  // basta virar o aparelho). Onde o browser deixa, tranca-se também a
+  // orientação (ex: Android com a app instalada).
+  // ---------------------------------------------------------
+  const GAME_SCREENS = ["game-standard", "game-teams", "game-br"];
+  const isTouchDevice = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  let orientationLocked = false;
+  function applyGameOrientation() {
+    const inGame = GAME_SCREENS.includes(screen);
+    const so = window.screen && window.screen.orientation;
+    if (inGame && so && so.lock && !orientationLocked) {
+      so.lock("landscape").then(() => { orientationLocked = true; applyGameOrientation(); }).catch(() => {});
+    } else if (!inGame && orientationLocked && so && so.unlock) {
+      try { so.unlock(); } catch (e) { /* ok */ }
+      orientationLocked = false;
+    }
+    const root = document.documentElement;
+    root.style.setProperty("--app-w", window.innerWidth + "px");
+    root.style.setProperty("--app-h", window.innerHeight + "px");
+    const portrait = window.innerHeight > window.innerWidth;
+    root.classList.toggle("force-landscape", inGame && portrait && isTouchDevice);
+  }
+  window.addEventListener("resize", applyGameOrientation);
+  window.addEventListener("orientationchange", () => setTimeout(applyGameOrientation, 150));
+
   function render() {
     stopAllRepeats();
     if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
@@ -497,6 +532,7 @@
     else if (screen === "profiles") renderProfilesScreen();
     else if (screen === "profile-detail") renderProfileDetail();
     else if (screen === "player-detail") renderPlayerDetail();
+    applyGameOrientation();
     // Re-renders do mesmo ecrã (ex: passar turno) não repetem a animação
     // de entrada — senão o tabuleiro inteiro "pisca" a cada turno.
     if (sameScreen && appEl.firstElementChild) appEl.firstElementChild.classList.add("no-enter");
@@ -1813,11 +1849,10 @@
       State.save(game);
       render();
     });
-    const pauseBtn = s.querySelector("#pause-btn");
-    if (pauseBtn) pauseBtn.addEventListener("click", () => {
+    s.querySelectorAll("#pause-btn, #fs-pause-btn").forEach((b) => b.addEventListener("click", () => {
       State.stdTogglePause(game);
       render();
-    });
+    }));
     s.querySelector("#history-btn").addEventListener("click", () => openLifeHistoryModal());
     s.querySelector("#reorder-btn").addEventListener("click", () => openReorderPositionsModal("standard"));
     s.querySelector("#fullscreen-btn").addEventListener("click", () => {
@@ -3268,11 +3303,10 @@
       State.save(game);
       render();
     });
-    const pauseBtn = s.querySelector("#pause-btn");
-    if (pauseBtn) pauseBtn.addEventListener("click", () => {
+    s.querySelectorAll("#pause-btn, #fs-pause-btn").forEach((b) => b.addEventListener("click", () => {
       State.teamsTogglePause(game);
       render();
-    });
+    }));
     s.querySelector("#history-btn").addEventListener("click", () => openLifeHistoryModal());
     s.querySelector("#reorder-btn").addEventListener("click", () => openReorderPositionsModal("teams"));
     s.querySelector("#fullscreen-btn").addEventListener("click", () => {

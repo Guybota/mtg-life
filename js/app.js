@@ -509,7 +509,12 @@
     root.style.setProperty("--app-w", window.innerWidth + "px");
     root.style.setProperty("--app-h", window.innerHeight + "px");
     const portrait = window.innerHeight > window.innerWidth;
-    root.classList.toggle("force-landscape", inGame && portrait && isTouchDevice);
+    const rotated = inGame && portrait && isTouchDevice;
+    root.classList.toggle("force-landscape", rotated);
+    // altura disponível para o tabuleiro (com o ecrã rodado é a largura do
+    // aparelho): abaixo disto usa-se o tabuleiro compacto
+    const layoutH = rotated ? window.innerWidth : window.innerHeight;
+    root.classList.toggle("compact-board", inGame && layoutH < 520);
   }
   window.addEventListener("resize", applyGameOrientation);
   window.addEventListener("orientationchange", () => setTimeout(applyGameOrientation, 150));
@@ -1934,7 +1939,7 @@
             <div class="life-total">${p.life}</div>
           </div>
           ${cmdEnabled ? `<div class="commander-badges">${cmdBadgeList.join("")}</div>` : ""}
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}<span class="pass-time" data-turn-time>00:00</span></button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" aria-label="${tr("Passar turno")}" title="${tr("Passar turno")}" ${game.standard.paused ? "disabled" : ""}>${I("skip")} <span class="pass-label">${tr("Passar turno")}</span><span class="pass-time" data-turn-time>00:00</span></button>` : ""}
         </div>
       </div>
     `);
@@ -3131,7 +3136,7 @@
             <div class="life-delta-fixed"></div>
             <div class="life-total">${team.life}</div>
           </div>
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}<span class="pass-time" data-turn-time>00:00</span></button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" aria-label="${tr("Passar turno")}" title="${tr("Passar turno")}" ${game.teams.paused ? "disabled" : ""}>${I("skip")} <span class="pass-label">${tr("Passar turno")}</span><span class="pass-time" data-turn-time>00:00</span></button>` : ""}
           <div class="team-roster">${team.players.map((p) => teamRosterRowHtml(p, isActive)).join("")}</div>
         </div>
       </div>

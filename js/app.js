@@ -328,6 +328,8 @@
             <span class="fs-chip">${I("repeat")}${tr("Ronda {n}", { n: modeState.roundNumber || 1 })}</span>
             <span class="fs-chip">${I("hourglass")}<span data-fs-total>00:00</span></span>
             ${paused ? `<span class="fs-chip paused">${I("pause")}${tr("Pausado")}</span>` : ""}` : ""}
+          ${modeState === game.standard ? dayNightChipHtml("fs-chip") : ""}
+          <button class="fs-exit" id="fs-tools-btn" title="${tr("Ferramentas da mesa")}" aria-label="${tr("Ferramentas da mesa")}">${I("dice")}</button>
           ${timed ? `<button class="fs-exit fs-pause" id="fs-pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}" aria-label="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
           <button class="fs-exit" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}" aria-label="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>
         </div>
@@ -1960,7 +1962,7 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        ${timed ? `<div class="br-status-row">${turnChipsHtml(currentPlayer ? currentPlayer.name : "-", game.standard.roundNumber, paused)}</div>` : ""}
+        ${timed ? `<div class="br-status-row">${turnChipsHtml(currentPlayer ? currentPlayer.name : "-", game.standard.roundNumber, paused)}${dayNightChipHtml()}</div>` : (game.standard.dayNight ? `<div class="br-status-row">${dayNightChipHtml()}</div>` : "")}
         <div class="board">
           <div class="board-row" id="row-top"></div>
           ${boardFullscreen ? fsHubHtml(game.standard, timed, paused) : ""}
@@ -1970,6 +1972,7 @@
           <button class="btn btn-icon" id="menu-btn" title="${tr("Menu")}" aria-label="${tr("Menu")}">${I("menu")}</button>
           ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
           <button class="btn btn-icon" id="history-btn" title="${tr("Histórico de vida")}">${I("history")}</button>
+          <button class="btn btn-icon" id="tools-btn" title="${tr("Ferramentas da mesa")}" aria-label="${tr("Ferramentas da mesa")}">${I("dice")}</button>
           <button class="btn btn-icon" id="reorder-btn" title="${tr("Trocar posições")}">${I("reorder")}</button>
           <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
           <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
@@ -1997,7 +2000,10 @@
     s.querySelector("#reset-btn").addEventListener("click", () => {
       if (!confirm(timed ? tr("Reiniciar vidas, commander damage e os relógios de turno/jogo de todos os jogadores?") : tr("Reiniciar vidas e commander damage de todos os jogadores?"))) return;
       const now = Date.now();
-      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.poison = 0; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; });
+      game.standard.players.forEach((p) => { p.life = game.standard.startLife; p.cmdDamage = {}; p.poison = 0; p.eliminated = false; p.protected = false; p.cmdTax = 0; p.partnerCmdTax = 0; p.counters = {}; p.blessing = false; });
+      game.standard.monarchId = null;
+      game.standard.initiativeId = null;
+      game.standard.dayNight = null;
       game.standard.roundNumber = 1;
       game.standard.roundStartIndex = game.standard.currentTurnIndex;
       game.standard.turnSeq = 1;
@@ -2009,6 +2015,7 @@
       State.save(game);
       render();
     });
+    s.querySelectorAll("#tools-btn, #fs-tools-btn").forEach((b) => b.addEventListener("click", () => openTableTools("standard")));
     s.querySelectorAll("#pause-btn, #fs-pause-btn").forEach((b) => b.addEventListener("click", () => {
       State.stdTogglePause(game);
       render();
@@ -2078,7 +2085,10 @@
     const panel = el(`
       <div class="player-panel ${rotated ? "rot180" : ""} ${hasArt([p]) ? "has-art" : ""} ${p.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-player-id="${p.id}">
         ${panelBgHtml(p)}
-        <div class="mini-actions"><button class="mini-btn" data-action="edit">${I("pencil")}</button></div>
+        <div class="mini-actions">
+          <button class="mini-btn" data-action="player-sheet" title="${tr("Contadores e ações")}" aria-label="${tr("Contadores e ações")}">${I("layers")}</button>
+          <button class="mini-btn" data-action="edit" title="${tr("Editar jogador")}" aria-label="${tr("Editar jogador")}">${I("pencil")}</button>
+        </div>
         <div class="content">
         <div class="player-header">
             <div class="player-name">${esc(p.name)}</div>
@@ -2087,6 +2097,7 @@
               <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
             </div>
           </div>
+          <div class="status-chips" data-action="player-sheet">${statusChipsHtml(p)}</div>
           <div class="life-zone">
             <div class="life-tap minus"><span class="tap-circle">${I("minus")}</span></div>
             <div class="life-tap plus"><span class="tap-circle">${I("plus")}</span></div>
@@ -2136,6 +2147,10 @@
       ev.stopPropagation();
       openEditPlayerModal({ mode: "standard", playerId: p.id });
     });
+    panel.querySelectorAll('[data-action="player-sheet"]').forEach((b) => b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      openPlayerSheet(p.id);
+    }));
     const poisonBadge = panel.querySelector('[data-action="poison"]');
     if (poisonBadge) poisonBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openPoisonModal(p.id); });
     panel.querySelector('[data-action="tax"]').addEventListener("click", (ev) => {
@@ -2382,6 +2397,258 @@
       b.querySelector(".dmg").textContent = dmg;
       b.classList.toggle("lethal", dmg >= 21);
     });
+    const chips = panel.querySelector(".status-chips");
+    if (chips) chips.innerHTML = statusChipsHtml(p);
+  }
+
+  // ===========================================================
+  // CONTADORES EXTRA, MONARCA/INICIATIVA, DIA/NOITE E DADOS
+  // Só aparecem no cartão quando estão em uso (inspirado na Lifetap:
+  // insígnias pequenas junto ao nome; e na Lotus: painel do próprio
+  // jogador, virado para ele).
+  // ===========================================================
+  const COUNTER_META = {
+    energy: { icon: "zap", label: () => tr("Energia") },
+    experience: { icon: "star", label: () => tr("Experiência") },
+    treasure: { icon: "coins", label: () => tr("Tesouros") },
+    rad: { icon: "atom", label: () => tr("Rad") },
+  };
+  function statusChipsHtml(p) {
+    const std = game && game.standard;
+    if (!std) return "";
+    let out = "";
+    if (std.monarchId === p.id) out += `<span class="st-chip monarch" title="${tr("Monarca")}">${I("crown")}</span>`;
+    if (std.initiativeId === p.id) out += `<span class="st-chip initiative" title="${tr("Iniciativa")}">${I("door")}</span>`;
+    if (p.blessing) out += `<span class="st-chip blessing" title="${tr("City's Blessing")}">${I("shield")}</span>`;
+    Object.keys(COUNTER_META).forEach((k) => {
+      const v = p.counters && p.counters[k];
+      if (v) out += `<span class="st-chip" title="${esc(COUNTER_META[k].label())}">${I(COUNTER_META[k].icon)}<b>${v}</b></span>`;
+    });
+    return out;
+  }
+  function refreshAllStandardPanels() {
+    game.standard.players.forEach((p) => updateStandardPanel(p.id));
+    document.querySelectorAll("[data-daynight]").forEach((dn) => {
+      dn.outerHTML = dayNightChipHtml(dn.classList.contains("fs-chip") ? "fs-chip" : "br-chip");
+    });
+  }
+  function dayNightChipHtml(cls) {
+    const v = game.standard && game.standard.dayNight;
+    if (!v) return `<span class="${cls || "br-chip"}" data-daynight hidden></span>`;
+    return `<span class="${cls || "br-chip"} daynight ${v}" data-daynight>${I(v === "day" ? "sun" : "moon")} ${v === "day" ? tr("Dia") : tr("Noite")}</span>`;
+  }
+
+  /** Abre uma janela virada para o jogador do cartão de onde veio (os de
+   *  cima estão rodados 180°). */
+  function flipForPlayer(backdrop, playerId) {
+    const panel = appEl.querySelector(`.player-panel[data-player-id="${playerId}"]`);
+    if (panel && panel.classList.contains("rot180")) backdrop.classList.add("flip");
+  }
+
+  /** Painel do jogador: vida rápida (±5/±10), ações para os outros
+   *  (cada adversário perde N, drenar, toda a mesa), contadores e estado. */
+  function openPlayerSheet(playerId) {
+    const std = game.standard;
+    const p = std.players.find((x) => x.id === playerId);
+    if (!p) return;
+    closeAnyModal();
+    let n = 1;
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet ps-sheet">
+          <div class="ps-head">
+            <h2>${esc(p.name)}</h2>
+            <span class="ps-life">${I("heart")}<b data-life>${p.life}</b></span>
+          </div>
+          <div class="ps-quick">
+            ${[-10, -5, 5, 10].map((d) => `<button class="ps-q ${d < 0 ? "minus" : "plus"}" data-life-d="${d}">${d > 0 ? "+" : "−"}${Math.abs(d)}</button>`).join("")}
+          </div>
+
+          <div class="section-title">${tr("Para os outros")}</div>
+          <div class="ps-group">
+            <div class="ps-n">
+              <button class="ps-n-btn" data-n="-1" aria-label="${tr("Menos")}">${I("minus")}</button>
+              <b data-n-val>1</b>
+              <button class="ps-n-btn" data-n="1" aria-label="${tr("Mais")}">${I("plus")}</button>
+            </div>
+            <div class="ps-group-btns">
+              <button class="btn btn-ghost btn-sm" data-group="opponents">${tr("Cada adversário −{n}", { n: "<span data-n-txt>1</span>" })}</button>
+              <button class="btn btn-ghost btn-sm" data-group="drain">${tr("Drenar {n}", { n: "<span data-n-txt>1</span>" })}</button>
+              <button class="btn btn-ghost btn-sm" data-group="all">${tr("Toda a mesa −{n}", { n: "<span data-n-txt>1</span>" })}</button>
+            </div>
+          </div>
+
+          <div class="section-title">${tr("Contadores")}</div>
+          <div class="ps-counters">${Object.keys(COUNTER_META).map((k) => `
+            <div class="ps-counter" data-key="${k}">
+              <span class="ps-c-label">${I(COUNTER_META[k].icon)} ${esc(COUNTER_META[k].label())}</span>
+              <button class="ps-c-btn" data-c="-1" aria-label="${tr("Menos")}">${I("minus")}</button>
+              <b data-c-val>${(p.counters && p.counters[k]) || 0}</b>
+              <button class="ps-c-btn" data-c="1" aria-label="${tr("Mais")}">${I("plus")}</button>
+            </div>`).join("")}
+          </div>
+
+          <div class="section-title">${tr("Estado")}</div>
+          <div class="ps-toggles">
+            <button class="ps-toggle" data-toggle="monarch">${I("crown")} ${tr("Monarca")}</button>
+            <button class="ps-toggle" data-toggle="initiative">${I("door")} ${tr("Iniciativa")}</button>
+            <button class="ps-toggle" data-toggle="blessing">${I("shield")} ${tr("City's Blessing")}</button>
+          </div>
+          <button class="btn btn-primary btn-block" id="ps-close" style="margin-top:14px">${tr("Fechar")}</button>
+        </div>
+      </div>`);
+    flipForPlayer(backdrop, playerId);
+    document.body.appendChild(backdrop);
+    const paint = () => {
+      backdrop.querySelector("[data-life]").textContent = p.life;
+      backdrop.querySelectorAll("[data-n-txt]").forEach((x) => { x.textContent = n; });
+      backdrop.querySelector("[data-n-val]").textContent = n;
+      backdrop.querySelectorAll(".ps-counter").forEach((row) => { row.querySelector("[data-c-val]").textContent = (p.counters && p.counters[row.dataset.key]) || 0; });
+      backdrop.querySelector('[data-toggle="monarch"]').setAttribute("aria-pressed", String(std.monarchId === p.id));
+      backdrop.querySelector('[data-toggle="initiative"]').setAttribute("aria-pressed", String(std.initiativeId === p.id));
+      backdrop.querySelector('[data-toggle="blessing"]').setAttribute("aria-pressed", String(!!p.blessing));
+    };
+    paint();
+    const done = () => { refreshAllStandardPanels(); paint(); };
+    backdrop.querySelectorAll("[data-life-d]").forEach((b) => b.addEventListener("click", () => {
+      State.stdAdjustLife(game, p.id, parseInt(b.dataset.lifeD, 10));
+      retrigger(backdrop.querySelector("[data-life]"), "cdx-bump");
+      done();
+    }));
+    backdrop.querySelectorAll("[data-n]").forEach((b) => bindPressRepeat(b, () => {
+      n = Math.max(1, Math.min(99, n + parseInt(b.dataset.n, 10)));
+      paint();
+    }));
+    backdrop.querySelectorAll("[data-group]").forEach((b) => b.addEventListener("click", () => {
+      const mode = b.dataset.group;
+      const hit = State.stdGroupLife(game, p.id, mode, n);
+      done();
+      const msg = mode === "drain" ? tr("{name} drenou {n} de {k} adversário(s)", { name: p.name, n, k: hit })
+        : mode === "all" ? tr("Toda a mesa perdeu {n}", { n })
+        : tr("Cada adversário perdeu {n}", { n });
+      toast(msg);
+    }));
+    backdrop.querySelectorAll(".ps-counter").forEach((row) => row.querySelectorAll("[data-c]").forEach((b) => bindPressRepeat(b, () => {
+      State.stdAdjustCounter(game, p.id, row.dataset.key, parseInt(b.dataset.c, 10));
+      done();
+    })));
+    backdrop.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", () => {
+      const t = b.dataset.toggle;
+      if (t === "monarch") State.stdSetMonarch(game, std.monarchId === p.id ? null : p.id);
+      else if (t === "initiative") State.stdSetInitiative(game, std.initiativeId === p.id ? null : p.id);
+      else State.stdToggleBlessing(game, p.id);
+      done();
+    }));
+    const close = () => backdrop.remove();
+    backdrop.querySelector("#ps-close").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+  }
+
+  /** Ferramentas da mesa: dados, moeda, jogador ao acaso e (no modo normal)
+   *  dia/noite, monarca e iniciativa. Os dados "rolam" antes de parar. */
+  function openTableTools(mode) {
+    closeAnyModal();
+    const isStd = mode === "standard";
+    const std = game.standard;
+    const people = isStd ? std.players.filter((p) => !p.eliminated) : game.teams.teams.filter((t) => !t.eliminated);
+    const pickHtml = (key, current) => `
+      <div class="tt-picks" data-pick="${key}">
+        <button class="tt-pick" data-id="" aria-pressed="${!current}">${tr("Ninguém")}</button>
+        ${std.players.filter((p) => !p.eliminated).map((p) => `<button class="tt-pick" data-id="${p.id}" aria-pressed="${current === p.id}">${esc(p.name)}</button>`).join("")}
+      </div>`;
+    const backdrop = el(`
+      <div class="modal-backdrop center">
+        <div class="modal-sheet tt-sheet">
+          <h2>${tr("Ferramentas da mesa")}</h2>
+          <div class="tt-result" aria-live="polite"><span class="tt-value" data-val>—</span><span class="tt-label" data-label>${tr("Escolhe um dado")}</span></div>
+          <div class="tt-dice">
+            ${[4, 6, 8, 10, 12, 20].map((d) => `<button class="tt-die" data-die="${d}">d${d}</button>`).join("")}
+            <button class="tt-die wide" data-coin>${tr("Moeda")}</button>
+            <button class="tt-die wide" data-random>${isStd ? tr("Jogador ao acaso") : tr("Equipa ao acaso")}</button>
+          </div>
+          <div class="tt-history" data-history></div>
+          ${isStd ? `
+            <div class="section-title">${tr("Dia / Noite")}</div>
+            <div class="seg" id="tt-dn">
+              <button type="button" class="seg-btn" data-dn="" aria-selected="${!std.dayNight}">—</button>
+              <button type="button" class="seg-btn" data-dn="day" aria-selected="${std.dayNight === "day"}">${I("sun")} ${tr("Dia")}</button>
+              <button type="button" class="seg-btn" data-dn="night" aria-selected="${std.dayNight === "night"}">${I("moon")} ${tr("Noite")}</button>
+            </div>
+            <div class="section-title">${I("crown")} ${tr("Monarca")}</div>
+            ${pickHtml("monarch", std.monarchId)}
+            <div class="section-title">${I("door")} ${tr("Iniciativa")}</div>
+            ${pickHtml("initiative", std.initiativeId)}` : ""}
+          <button class="btn btn-primary btn-block" id="tt-close" style="margin-top:14px">${tr("Fechar")}</button>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    const valEl = backdrop.querySelector("[data-val]");
+    const labelEl = backdrop.querySelector("[data-label]");
+    const hist = [];
+    let rolling = null;
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // anima ~0,6 s a mostrar valores ao acaso e para no resultado
+    function roll(label, faces, finalText) {
+      clearInterval(rolling);
+      labelEl.textContent = label;
+      const finish = () => {
+        clearInterval(rolling);
+        rolling = null;
+        valEl.textContent = finalText;
+        valEl.classList.remove("rolling");
+        retrigger(valEl, "cdx-bump");
+        hist.unshift(`${label}: ${finalText}`);
+        backdrop.querySelector("[data-history]").textContent = hist.slice(0, 6).join("  ·  ");
+      };
+      if (reduce) { finish(); return; }
+      valEl.classList.add("rolling");
+      let t = 0;
+      rolling = setInterval(() => {
+        valEl.textContent = faces[Math.floor(Math.random() * faces.length)];
+        if ((t += 60) >= 600) finish();
+      }, 60);
+    }
+    const rnd = (n) => {
+      const a = new Uint32Array(1);
+      (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(a) : (a[0] = Math.floor(Math.random() * 4294967296));
+      return a[0] % n;
+    };
+    backdrop.querySelectorAll("[data-die]").forEach((b) => b.addEventListener("click", () => {
+      const d = parseInt(b.dataset.die, 10);
+      const faces = Array.from({ length: d }, (_, i) => String(i + 1));
+      roll("d" + d, faces, String(rnd(d) + 1));
+    }));
+    backdrop.querySelector("[data-coin]").addEventListener("click", () => {
+      const sides = [tr("Cara"), tr("Coroa")];
+      roll(tr("Moeda"), sides, sides[rnd(2)]);
+    });
+    backdrop.querySelector("[data-random]").addEventListener("click", () => {
+      if (!people.length) return;
+      const who = people[rnd(people.length)];
+      roll(isStd ? tr("Jogador") : tr("Equipa"), people.map((x) => x.name), who.name);
+      setTimeout(() => {
+        const sel = isStd ? `.player-panel[data-player-id="${who.id}"]` : `.player-panel[data-team-id="${who.id}"]`;
+        const panel = appEl.querySelector(sel);
+        if (panel) retrigger(panel, "picked-flash");
+      }, reduce ? 0 : 620);
+    });
+    if (isStd) {
+      backdrop.querySelectorAll("#tt-dn .seg-btn").forEach((b) => b.addEventListener("click", () => {
+        State.stdSetDayNight(game, b.dataset.dn || null);
+        backdrop.querySelectorAll("#tt-dn .seg-btn").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+        refreshAllStandardPanels();
+      }));
+      backdrop.querySelectorAll("[data-pick]").forEach((group) => group.querySelectorAll(".tt-pick").forEach((b) => b.addEventListener("click", () => {
+        const id = b.dataset.id || null;
+        if (group.dataset.pick === "monarch") State.stdSetMonarch(game, id);
+        else State.stdSetInitiative(game, id);
+        group.querySelectorAll(".tt-pick").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+        refreshAllStandardPanels();
+      })));
+    }
+    const close = () => { clearInterval(rolling); backdrop.remove(); };
+    backdrop.querySelector("#tt-close").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
   }
 
   function openEliminationGuardModal(playerId, isEliminated) {
@@ -3417,6 +3684,7 @@
           <button class="btn btn-icon" id="menu-btn" title="${tr("Menu")}" aria-label="${tr("Menu")}">${I("menu")}</button>
           ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
           <button class="btn btn-icon" id="history-btn" title="${tr("Histórico de vida")}">${I("history")}</button>
+          <button class="btn btn-icon" id="tools-btn" title="${tr("Ferramentas da mesa")}" aria-label="${tr("Ferramentas da mesa")}">${I("dice")}</button>
           <button class="btn btn-icon" id="reorder-btn" title="${tr("Trocar posições")}">${I("reorder")}</button>
           <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
           <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
@@ -3456,6 +3724,7 @@
       State.save(game);
       render();
     });
+    s.querySelectorAll("#tools-btn, #fs-tools-btn").forEach((b) => b.addEventListener("click", () => openTableTools("teams")));
     s.querySelectorAll("#pause-btn, #fs-pause-btn").forEach((b) => b.addEventListener("click", () => {
       State.teamsTogglePause(game);
       render();

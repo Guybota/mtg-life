@@ -217,7 +217,7 @@ function renderGameStandard() {
   const paused = !!game.standard.paused;
 
   const s = el(`
-    <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
+    <div class="screen std-game ${boardFullscreen ? "board-fullscreen" : ""}">
       ${timed ? `<div class="br-status-row">${turnChipsHtml(currentPlayer ? currentPlayer.name : "-", game.standard.roundNumber, paused)}${dayNightChipHtml()}</div>` : (game.standard.dayNight ? `<div class="br-status-row">${dayNightChipHtml()}</div>` : "")}
       <div class="board">
         <div class="board-row" id="row-top"></div>

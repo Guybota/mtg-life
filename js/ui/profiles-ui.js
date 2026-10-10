@@ -27,6 +27,7 @@ function renderProfilesScreen() {
           <button class="btn btn-ghost" id="merge-btn" title="${tr("Juntar com outro telemóvel")}" aria-label="${tr("Juntar com outro telemóvel")}">${I("merge")}<span>${tr("Juntar")}</span></button>
           <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
         </div>
+        ${profiles.length ? `<button class="btn btn-ghost btn-block pf-manual" id="manual-game-btn">${I("plus")} ${tr("Registar jogo à mão")}</button>` : ""}
         <div class="backup-note ${Cloud.status().code ? "hidden" : ""}">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
         </aside>
         <div class="pf-main">
@@ -61,6 +62,8 @@ function renderProfilesScreen() {
   appEl.appendChild(s);
   s.querySelector("#export-profiles-btn").addEventListener("click", () => saveBackup().then((ok) => ok && render()));
   s.querySelector("#merge-btn").addEventListener("click", () => openMergeMenu(render));
+  const manualBtn = s.querySelector("#manual-game-btn");
+  if (manualBtn) manualBtn.addEventListener("click", () => openManualGame());
   bindSyncCard(s);
   const importInput = s.querySelector("#import-profiles-input");
   s.querySelector("#import-profiles-btn").addEventListener("click", () => importInput.click());
@@ -680,7 +683,9 @@ function renderProfileDetail() {
 
   s.querySelector("#edit-profile-btn").addEventListener("click", () => openEditProfileModal(profile.id));
   if (!d.games) {
-    body.innerHTML = head + `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div></div>`;
+    body.innerHTML = head + `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div>
+      <button type="button" class="btn btn-ghost btn-sm" id="pd-manual-btn" style="margin-top:10px">${I("plus")} ${tr("Registar jogo")}</button></div>`;
+    body.querySelector("#pd-manual-btn").addEventListener("click", () => openManualGame({ profileId: profile.id }));
     s.querySelector("#back-btn").addEventListener("click", () => (screenParams.fromPlayer ? nav("player-detail", { key: screenParams.fromPlayer }) : nav("profiles")));
     return;
   }
@@ -827,10 +832,11 @@ function renderProfileDetail() {
   const eloRec = eloAll.decks.find((r) => r.key === profile.id || (profile.aliases || []).includes(r.key));
   body.classList.add("pd-body");
   body.innerHTML = head + kpis + `<div class="pd-cards">` + eloCardHtml(eloRec, eloAll.decks.length) + `<div class="pd-stack">` + streak + form + `</div>` + evo + cmdHtml + modes + lentHtml + h2hHtml + durations + `</div>
-    <div class="section-title">${tr("Histórico de jogos")}</div>
+    <div class="section-head"><span class="section-title">${tr("Histórico de jogos")}</span><button type="button" class="btn btn-ghost btn-sm" id="pd-manual-btn">${I("plus")} ${tr("Registar jogo")}</button></div>
     <div class="col pd-history" id="history-list"></div>
     <button class="btn btn-ghost btn-block merge-entry" id="merge-deck-btn">${I("merge")} ${tr("Fundir com outro deck")}</button>`;
   body.querySelector("#merge-deck-btn").addEventListener("click", () => openMergeDeckSheet(profile.id));
+  body.querySelector("#pd-manual-btn").addEventListener("click", () => openManualGame({ profileId: profile.id }));
 
   // histórico (também serve de "vista de tabela" dos gráficos)
   const list = body.querySelector("#history-list");
@@ -843,11 +849,18 @@ function renderProfileDetail() {
           <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
           ${pilotOf(profile, g) ? `<div class="history-who">${I("user")}<span>${esc(pilotOf(profile, g))}</span>${g.playedBy && profile.playerName ? `<small class="borrow-tag">${tr("emprestado")}</small>` : ""}</div>` : ""}
           ${g.commander && normName(g.commander) !== normName(mainName) ? `<div class="history-meta">${tr("Com {name}", { name: esc(g.commander) })}</div>` : ""}
-          ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>` : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
+          ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>`
+            : g.manual || !g.turnsTaken ? `<div class="history-meta">${tr("Jogo: {game}", { game: formatDuration(g.gameTimeMs) })}</div>`
+            : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
+          ${g.manual ? `<div class="history-meta">${tr("Registado à mão")}</div>` : ""}
         </div>
-        <button class="btn btn-icon" style="flex-shrink:0;" data-gid="${g.id}" title="${tr("Apagar este jogo")}">${I("trash")}</button>
+        <div class="history-actions">
+          <button class="btn btn-icon" data-edit="${g.id}" title="${tr("Editar este jogo")}" aria-label="${tr("Editar este jogo")}">${I("pencil")}</button>
+          <button class="btn btn-icon" data-gid="${g.id}" title="${tr("Apagar este jogo")}" aria-label="${tr("Apagar este jogo")}">${I("trash")}</button>
+        </div>
       </div>
     `);
+    row.querySelector("button[data-edit]").addEventListener("click", () => openGameEditor(profile.id, g.id));
     row.querySelector("button[data-gid]").addEventListener("click", () => {
       const snapshot = JSON.parse(JSON.stringify(g));
       Profiles.removeGame(profile.id, g.id);

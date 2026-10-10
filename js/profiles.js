@@ -110,7 +110,7 @@
 
   /** Regista o resultado de um jogo terminado nas stats agregadas do perfil
    *  e acrescenta uma entrada ao histórico de jogos desse perfil. */
-  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode, timed, opponents, pilot, commanderName }) {
+  function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode, timed, opponents, pilot, commanderName, date, manual }) {
     const list = load();
     const p = byAnyId(list, id);
     if (!p) return null;
@@ -122,6 +122,8 @@
     // guarda-se sempre (assim continua certo se o principal mudar depois)
     const cmdUsed = commanderName || mainCmd || undefined;
     if (!p.history) p.history = [];
+    // jogo sem contagem de tempo: não entra nas médias de tempo
+    if (timed === false) { gameTimeMs = 0; turnTimeMs = 0; }
     p.stats.games += 1;
     if (won) p.stats.wins += 1;
     p.stats.totalGameTimeMs += gameTimeMs || 0;
@@ -129,7 +131,8 @@
     p.stats.turnsTaken += turnsTaken || 0;
     p.history.unshift({
       id: uid(),
-      date: Date.now(),
+      date: date || Date.now(),
+      manual: manual ? true : undefined, // registado à mão (sem usar o contador)
       won: !!won,
       mode: mode || "standard",
       gameTimeMs: gameTimeMs || 0,
@@ -204,12 +207,16 @@
   /** Métricas derivadas prontas a mostrar na UI. */
   function derived(profile) {
     const s = profile.stats;
+    // a média por jogo só conta os jogos com tempo contado
+    const untimed = (profile.history || []).filter((g) => g.timed === false).length;
+    const timedGames = Math.max(0, s.games - untimed);
     return {
       games: s.games,
       wins: s.wins,
       losses: Math.max(0, s.games - s.wins),
       winRate: s.games ? s.wins / s.games : 0,
-      avgGameTimeMs: s.games ? s.totalGameTimeMs / s.games : 0,
+      timedGames,
+      avgGameTimeMs: timedGames ? s.totalGameTimeMs / timedGames : 0,
       avgTurnTimeMs: s.turnsTaken ? s.totalTurnTimeMs / s.turnsTaken : 0,
       totalGameTimeMs: s.totalGameTimeMs,
       totalTurnTimeMs: s.totalTurnTimeMs,
@@ -336,7 +343,7 @@
       if (!dest.history) dest.history = [];
       const have = new Map(dest.history.map((g) => [g.id, g]));
       hist.forEach((g) => {
-        if (have.has(g.id)) { takeNewerGameEdit(have.get(g.id), g); return; }
+        if (have.has(g.id)) { takeNewerGameEdit(have.get(g.id), g, dest); return; }
         have.set(g.id, g);
         dest.history.push(g);
         dest.stats.games += 1;
@@ -361,14 +368,113 @@
 
   // Campos de um jogo que se podem corrigir depois (ao trocar o dono ou o
   // commander principal). A correção mais recente (editedAt) ganha.
-  const GAME_EDITABLE = ["playedBy", "commander"];
-  /** Aplica a `local` a correção de `remote` se esta for mais recente.
-   *  Devolve true se mudou alguma coisa. */
-  function takeNewerGameEdit(local, remote) {
+  const GAME_EDITABLE = ["playedBy", "commander", "won", "timed", "gameTimeMs", "turnTimeMs", "opponents"];
+  /** Acerta as stats agregadas de um perfil quando um jogo muda de `before`
+   *  para `after` (vitória e tempos). */
+  function adjustStats(p, before, after) {
+    if (!p || !p.stats) return;
+    p.stats.wins = Math.max(0, p.stats.wins + (after.won ? 1 : 0) - (before.won ? 1 : 0));
+    p.stats.totalGameTimeMs = Math.max(0, p.stats.totalGameTimeMs + (after.gameTimeMs || 0) - (before.gameTimeMs || 0));
+    p.stats.totalTurnTimeMs = Math.max(0, p.stats.totalTurnTimeMs + (after.turnTimeMs || 0) - (before.turnTimeMs || 0));
+  }
+  /** Aplica a `local` (jogo do perfil `p`) a correção de `remote` se esta
+   *  for mais recente. Devolve true se mudou alguma coisa. */
+  function takeNewerGameEdit(local, remote, p) {
     if (!local || !remote || (remote.editedAt || 0) <= (local.editedAt || 0)) return false;
-    GAME_EDITABLE.forEach((k) => { if (remote[k] !== undefined) local[k] = remote[k]; else delete local[k]; });
+    const before = Object.assign({}, local);
+    GAME_EDITABLE.forEach((k) => { if (remote[k] !== undefined) local[k] = JSON.parse(JSON.stringify(remote[k])); else delete local[k]; });
     local.editedAt = remote.editedAt;
+    adjustStats(p, before, local);
     return true;
+  }
+
+  /** Todas as entradas de um jogo (uma por deck que esteve à mesa), a
+   *  partir de uma delas: os decks adversários guardados nesse jogo e,
+   *  no histórico de cada um, o registo do mesmo modo a segundos deste.
+   *  Devolve [{ profile, game }] (o próprio primeiro) ou []. */
+  function gameGroup(profileId, gameId) {
+    const list = load();
+    const self = byAnyId(list, profileId);
+    const g = self && (self.history || []).find((x) => x.id === gameId);
+    if (!g) return [];
+    const out = [{ profile: self, game: g }];
+    const seen = new Set([self.id]);
+    (g.opponents || []).forEach((o) => {
+      const op = o && o.profileId ? byAnyId(list, o.profileId) : null;
+      if (!op || seen.has(op.id)) return;
+      const match = (op.history || []).filter((x) => (x.mode || "standard") === (g.mode || "standard") && Math.abs((x.date || 0) - (g.date || 0)) <= 15000)
+        .sort((a, b) => Math.abs(a.date - g.date) - Math.abs(b.date - g.date))[0];
+      if (match) { out.push({ profile: op, game: match }); seen.add(op.id); }
+    });
+    return out;
+  }
+
+  /** Corrige um jogo em todos os decks onde ficou registado.
+   *  edit = { timed, gameTimeMs, winner: chave do lugar vencedor (id do perfil
+   *  ou "guest:<nome>") ou null, seats: [{ profileId, gameId, pilot, commander }],
+   *  guests: [nomes] }. Acerta as stats e marca a correção (editedAt) para
+   *  chegar aos outros aparelhos. */
+  function editGame(edit) {
+    const list = load();
+    const now = Date.now();
+    const seats = (edit.seats || []).map((s) => {
+      const p = byAnyId(list, s.profileId);
+      const g = p && (p.history || []).find((x) => x.id === s.gameId);
+      return p && g ? { p, g, s } : null;
+    }).filter(Boolean);
+    const keyOf = (x) => x.p.id;
+    const pilotOf = (x) => {
+      const who = (x.s.pilot || "").trim();
+      return who ? canonicalPlayer(who) : (x.p.playerName || "").trim();
+    };
+    seats.forEach((x) => {
+      const before = Object.assign({}, x.g);
+      const who = (x.s.pilot || "").trim() ? canonicalPlayer(x.s.pilot.trim()) : "";
+      x.g.won = edit.winner === keyOf(x);
+      if (who && norm(who) !== norm(x.p.playerName)) x.g.playedBy = who; else delete x.g.playedBy;
+      if (x.s.commander) x.g.commander = x.s.commander;
+      x.g.timed = edit.timed !== false;
+      x.g.gameTimeMs = x.g.timed ? Math.max(0, Math.round(edit.gameTimeMs || 0)) : 0;
+      if (!x.g.timed) x.g.turnTimeMs = 0;
+      x.g.opponents = seats.filter((o) => o !== x).map((o) => ({ profileId: o.p.id, name: pilotOf(o) || o.p.name, pilot: pilotOf(o) || undefined, won: edit.winner === keyOf(o) }))
+        .concat((edit.guests || []).map((n) => ({ profileId: null, name: n, pilot: n, won: edit.winner === "guest:" + n })));
+      x.g.editedAt = now;
+      adjustStats(x.p, before, x.g);
+    });
+    persist(list);
+    return seats.length;
+  }
+
+  /** Regista à mão um jogo que não foi jogado no contador.
+   *  game = { date, mode, timed, gameTimeMs, winner (índice do lugar ou -1),
+   *  seats: [{ profileId | null, name, commander }] }. Lugares sem deck
+   *  entram só como adversários. Devolve o n.º de decks atualizados. */
+  function recordManualGame(game) {
+    const winSeat = (game.seats || [])[game.winner] || null;
+    const seats = (game.seats || []).filter((s) => s && (s.profileId || (s.name || "").trim()));
+    const timed = game.timed === true;
+    const date = game.date || Date.now();
+    const used = new Set();
+    let n = 0;
+    seats.forEach((s) => {
+      if (!s.profileId || used.has(s.profileId)) return;
+      used.add(s.profileId);
+      const res = recordGameResult(s.profileId, {
+        won: s === winSeat,
+        gameTimeMs: timed ? game.gameTimeMs : 0,
+        turnTimeMs: 0,
+        turnsTaken: 0,
+        mode: game.mode || "commander",
+        timed,
+        date: date + n, // mesmo jogo: os registos ficam a milissegundos uns dos outros
+        manual: true,
+        pilot: s.name,
+        commanderName: s.commander && s.commander.name,
+        opponents: seats.filter((o) => o !== s).map((o) => ({ profileId: o.profileId || null, name: (o.name || "").trim() || null, pilot: (o.name || "").trim() || undefined, won: o === winSeat })),
+      });
+      if (res) n++;
+    });
+    return n;
   }
 
   /** Junta os commanders alternativos de `src` aos de `dst` (sem repetir
@@ -535,7 +641,7 @@
         if (!lp.history) lp.history = [];
         const have = new Map(lp.history.map((g) => [g.id, g]));
         hist.forEach((g) => {
-          if (have.has(g.id)) { if (takeNewerGameEdit(have.get(g.id), g)) res.games++; return; }
+          if (have.has(g.id)) { if (takeNewerGameEdit(have.get(g.id), g, lp)) res.games++; return; }
           const copy = JSON.parse(JSON.stringify(g));
           have.set(g.id, copy);
           lp.history.push(copy);
@@ -612,5 +718,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases, onChange, deleted, syncPayload, syncMerge };
+  global.MTG.Profiles = { gameGroup, editGame, recordManualGame, all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases, onChange, deleted, syncPayload, syncMerge };
 })(window);

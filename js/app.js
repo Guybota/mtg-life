@@ -676,6 +676,7 @@
     const auto = rows.filter((r) => r.auto);
     const pick = rows.filter((r) => !r.auto);
     if (!pick.length && auto.every((r) => !r.newGames)) {
+      if (extra && extra.onApplied) { extra.onApplied(); return; } // ex: entrar num grupo
       alert(tr("Já está tudo fundido: não há jogos nem perfis novos."));
       return;
     }
@@ -692,7 +693,7 @@
     const backdrop = el(`
       <div class="modal-backdrop">
         <div class="modal-sheet merge-sheet">
-          <h2>${tr("Fundir perfis")}</h2>
+          <h2>${extra && extra.title ? esc(extra.title) : tr("Fundir perfis")}</h2>
           <p class="merge-summary" id="mg-summary"></p>
           ${pick.length ? `
             <div class="section-title">${tr("Confirmar")}</div>
@@ -720,7 +721,7 @@
               </div>`).join("")}</div>` : ""}
           <div class="row" style="margin-top:16px">
             <button class="btn btn-ghost grow" id="mg-cancel">${tr("Cancelar")}</button>
-            <button class="btn btn-primary grow" id="mg-go">${I("merge")} ${tr("Fundir")}</button>
+            <button class="btn btn-primary grow" id="mg-go">${I("merge")} ${extra && extra.confirmLabel ? esc(extra.confirmLabel) : tr("Fundir")}</button>
           </div>
         </div>
       </div>`);
@@ -760,6 +761,7 @@
         try { localStorage.setItem(LAST_SETUP_KEY, JSON.stringify(extra.lastSetup)); } catch (e) {}
       }
       close();
+      if (extra && extra.onApplied) { extra.onApplied(res); return; }
       done && done();
       undoToast(tr("Fundido: {g} jogo(s) e {p} perfil(is) novo(s)", { g: res.games, p: res.profiles }), () => {
         Profiles.replaceAll(before);
@@ -840,6 +842,8 @@
         stop();
         col.result().then((data) => {
           backdrop.remove();
+          // QR de um grupo na nuvem: entra nesse grupo
+          if (data && data.type === "mtg-group" && data.code) { joinGroupFlow(data.code, done); return; }
           const list = data && Array.isArray(data.profiles) ? data.profiles : null;
           if (!list) { alert(tr("Este QR não é de perfis desta app.")); return; }
           openMergeReview(list, { playerAliases: data.playerAliases }, done);
@@ -1024,6 +1028,157 @@
     });
   }
 
+  // ---------------------------------------------------------
+  // Sincronização na nuvem (grupo com código)
+  // ---------------------------------------------------------
+  const Cloud = window.MTG.Cloud;
+  function agoText(ts) {
+    if (!ts) return tr("nunca");
+    const s = Math.round((Date.now() - ts) / 1000);
+    if (s < 45) return tr("agora mesmo");
+    if (s < 3600) return tr("há {n} min", { n: Math.max(1, Math.round(s / 60)) });
+    return relativeDay(ts);
+  }
+  /** Cartão no ecrã de perfis: estado da sincronização ou convite. */
+  function syncCardHtml() {
+    const st = Cloud.status();
+    if (!st.code) {
+      return `
+        <div class="sync-card off" id="sync-card">
+          <span class="sync-ic">${I("cloud")}</span>
+          <span class="sync-text">
+            <span class="sync-title">${tr("Guardar na nuvem")}</span>
+            <span class="sync-sub">${tr("Perfis guardados online e iguais em todos os telemóveis do grupo.")}</span>
+          </span>
+          <button class="btn btn-primary btn-sm" id="sync-open-btn">${tr("Ativar")}</button>
+        </div>`;
+    }
+    const title = st.syncing ? tr("A sincronizar…")
+      : st.lastError ? tr("Sem ligação — tenta mais tarde")
+      : tr("Sincronizado {when}", { when: agoText(st.lastSync) });
+    return `
+      <div class="sync-card ${st.lastError && !st.syncing ? "err" : ""}" id="sync-card">
+        <span class="sync-ic">${I(st.lastError && !st.syncing ? "cloud-off" : "cloud")}</span>
+        <span class="sync-text">
+          <span class="sync-title">${title}</span>
+          <span class="sync-sub sync-code">${tr("Grupo {code}", { code: esc(st.code) })}</span>
+        </span>
+        <button class="btn btn-icon ${st.syncing ? "spin" : ""}" id="sync-now-btn" title="${tr("Sincronizar agora")}" aria-label="${tr("Sincronizar agora")}">${I("rotate")}</button>
+        <button class="btn btn-ghost btn-sm" id="sync-open-btn">${tr("Grupo")}</button>
+      </div>`;
+  }
+  function bindSyncCard(scope) {
+    const card = scope.querySelector("#sync-card");
+    if (!card) return;
+    const openBtn = card.querySelector("#sync-open-btn");
+    if (openBtn) openBtn.addEventListener("click", () => openCloudSheet());
+    const now = card.querySelector("#sync-now-btn");
+    if (now) now.addEventListener("click", () => {
+      Cloud.sync().then((r) => { if (r && (r.profiles || r.games || r.removed)) render(); }).catch(() => toast(tr("Sem ligação — tenta mais tarde")));
+    });
+  }
+  function repaintSyncCard() {
+    const card = document.querySelector("#sync-card");
+    if (!card) return;
+    const fresh = el(syncCardHtml());
+    card.replaceWith(fresh);
+    bindSyncCard(fresh.parentNode || document);
+  }
+
+  /** Entrar num grupo: lê-o, mostra a revisão (pares parecidos a confirmar)
+   *  e só depois entra e sincroniza. */
+  async function joinGroupFlow(rawCode, done) {
+    const code = Cloud.normalizeCode(rawCode);
+    if (!code) { alert(tr("Código inválido. Tem 12 letras/números, ex: K7QD-9XWM-2HPA.")); return; }
+    toast(tr("A procurar o grupo…"));
+    let remote;
+    try { remote = await Cloud.peekGroup(code); } catch (e) { alert(tr("Sem ligação — tenta mais tarde")); return; }
+    if (!remote || !remote.data) { alert(tr("Não existe nenhum grupo com esse código.")); return; }
+    const dead = (remote.data.deleted && remote.data.deleted.profiles) || {};
+    const list = (remote.data.profiles || []).filter((p) => p && !dead[p.id]);
+    const enter = () => {
+      Cloud.joinGroup(code)
+        .then(() => { toast(tr("Entraste no grupo")); render(); done && done(); })
+        .catch(() => { toast(tr("Sem ligação — tenta mais tarde")); render(); });
+    };
+    if (!list.length) { enter(); return; }
+    openMergeReview(list, { playerAliases: remote.data.playerAliases, title: tr("Entrar no grupo"), confirmLabel: tr("Juntar e entrar"), onApplied: enter }, done);
+  }
+
+  /** Janela do grupo: criar/entrar (sem grupo) ou código, QR e sair. */
+  function openCloudSheet() {
+    closeAnyModal();
+    const st = Cloud.status();
+    const backdrop = el(st.code ? `
+      <div class="modal-backdrop">
+        <div class="modal-sheet qr-sheet cloud-sheet">
+          <h2>${tr("Grupo na nuvem")}</h2>
+          <p class="merge-hint">${tr("Quem tiver este código vê e junta os mesmos perfis e jogos. Partilha-o só com quem joga contigo.")}</p>
+          <div class="cloud-code">${esc(st.code)}</div>
+          <div class="qr-box"><canvas id="cloud-qr"></canvas></div>
+          <div class="merge-actions" style="margin-top:14px">
+            <button class="btn btn-ghost" id="cloud-share">${I("share")} ${tr("Partilhar código")}</button>
+            <button class="btn btn-ghost" id="cloud-sync">${I("rotate")} ${tr("Sincronizar agora")}</button>
+          </div>
+          <button class="btn btn-ghost btn-block danger-text" id="cloud-leave">${tr("Sair do grupo")}</button>
+          <button class="btn btn-ghost btn-block" id="cloud-close" style="margin-top:8px">${tr("Fechar")}</button>
+        </div>
+      </div>` : `
+      <div class="modal-backdrop">
+        <div class="modal-sheet cloud-sheet">
+          <h2>${tr("Guardar na nuvem")}</h2>
+          <p class="merge-hint">${tr("Os perfis e jogos ficam guardados online, num grupo com um código. Se apagares a app ou trocares de telemóvel, entras com o código e fica tudo de volta. Quem tiver o código vê e junta os mesmos perfis.")}</p>
+          <button class="btn btn-primary btn-block" id="cloud-create">${I("cloud")} ${tr("Criar grupo")}</button>
+          <div class="section-title">${tr("Já tenho um código")}</div>
+          <div class="cloud-join">
+            <input type="text" id="cloud-code-input" placeholder="K7QD-9XWM-2HPA" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="16">
+            <button class="btn btn-primary" id="cloud-join">${tr("Entrar")}</button>
+          </div>
+          <button class="btn btn-ghost btn-block" id="cloud-scan" style="margin-top:8px">${I("scan")} ${tr("Ler QR do grupo")}</button>
+          <button class="btn btn-ghost btn-block" id="cloud-close" style="margin-top:8px">${tr("Fechar")}</button>
+        </div>
+      </div>`);
+    document.body.appendChild(backdrop);
+    const close = () => backdrop.remove();
+    backdrop.querySelector("#cloud-close").addEventListener("click", close);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+    if (st.code) {
+      MTG.QrSync.encode({ type: "mtg-group", code: st.code })
+        .then((frames) => MTG.QrSync.draw(backdrop.querySelector("#cloud-qr"), frames[0], Math.min(220, window.innerWidth - 120)))
+        .catch(() => {});
+      backdrop.querySelector("#cloud-share").addEventListener("click", async () => {
+        const text = tr("Código do nosso grupo no MTG Life Counter: {code}", { code: st.code });
+        try {
+          if (navigator.share) { await navigator.share({ text }); return; }
+        } catch (e) { if (e && e.name === "AbortError") return; }
+        try { await navigator.clipboard.writeText(st.code); toast(tr("Código copiado")); } catch (e) { toast(st.code); }
+      });
+      backdrop.querySelector("#cloud-sync").addEventListener("click", () => {
+        close();
+        Cloud.sync().then(() => { toast(tr("Sincronizado")); render(); }).catch(() => toast(tr("Sem ligação — tenta mais tarde")));
+      });
+      backdrop.querySelector("#cloud-leave").addEventListener("click", () => {
+        if (!confirm(tr("Sair do grupo? Os perfis continuam neste telemóvel, mas deixam de sincronizar."))) return;
+        Cloud.leaveGroup();
+        close();
+        render();
+      });
+      return;
+    }
+    backdrop.querySelector("#cloud-create").addEventListener("click", () => {
+      close();
+      toast(tr("A criar o grupo…"));
+      Cloud.createGroup()
+        .then(() => { render(); openCloudSheet(); })
+        .catch(() => { Cloud.leaveGroup(); alert(tr("Sem ligação — tenta mais tarde")); render(); });
+    });
+    const input = backdrop.querySelector("#cloud-code-input");
+    const join = () => { const v = input.value; close(); joinGroupFlow(v, render); };
+    backdrop.querySelector("#cloud-join").addEventListener("click", join);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
+    backdrop.querySelector("#cloud-scan").addEventListener("click", () => openQrScan(render));
+  }
+
   /** Menu "Juntar com outro telemóvel": enviar os meus / receber os do outro. */
   function openMergeMenu(done) {
     closeAnyModal();
@@ -1067,6 +1222,9 @@
     const info = backupInfo();
     const since = games - (info.games || 0);
     if (since < BACKUP_EVERY || games - (info.snooze || 0) < BACKUP_EVERY) return "";
+    // num grupo na nuvem sincronizado na última semana os dados já estão guardados
+    const cs = Cloud.status();
+    if (cs.code && cs.lastSync && Date.now() - cs.lastSync < 7 * 86400000) return "";
     const msg = info.at
       ? tr("{n} jogos novos desde a última cópia ({when}).", { n: since, when: relativeDay(info.at) })
       : tr("Tens {n} jogos guardados só neste aparelho. Guarda uma cópia nos Ficheiros ou no iCloud para não os perderes.", { n: games });
@@ -3686,13 +3844,14 @@
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
+          ${syncCardHtml()}
           <div class="row" style="gap:8px; margin-bottom:6px;">
             <button class="btn btn-ghost grow" id="export-profiles-btn">${I("download")} ${tr("Exportar")}</button>
             <button class="btn btn-ghost grow" id="import-profiles-btn">${I("upload")} ${tr("Importar")}</button>
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
           <button class="btn btn-ghost btn-block" id="merge-btn" style="margin-bottom:6px">${I("merge")} ${tr("Juntar com outro telemóvel")}</button>
-          <div class="backup-note">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
+          <div class="backup-note ${Cloud.status().code ? "hidden" : ""}">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
           ${profiles.length ? `
           <div class="seg" role="tablist">
@@ -3720,6 +3879,7 @@
     appEl.appendChild(s);
     s.querySelector("#export-profiles-btn").addEventListener("click", () => saveBackup().then((ok) => ok && render()));
     s.querySelector("#merge-btn").addEventListener("click", () => openMergeMenu(render));
+    bindSyncCard(s);
     const importInput = s.querySelector("#import-profiles-input");
     s.querySelector("#import-profiles-btn").addEventListener("click", () => importInput.click());
     importInput.addEventListener("change", () => {
@@ -4291,6 +4451,19 @@
   document.addEventListener("DOMContentLoaded", () => {
     render();
     setupServiceWorker();
+    // Sincronização na nuvem: atualiza o cartão de estado e, quando chegam
+    // mudanças de outro aparelho, redesenha os ecrãs de perfis (nunca o jogo)
+    let lastHandled = null;
+    Cloud.onStatus((st) => {
+      repaintSyncCard();
+      const r = st.lastResult;
+      if (!st.syncing && r && r !== lastHandled) {
+        lastHandled = r;
+        const changedHere = r.profiles || r.games || r.removed;
+        if (changedHere && ["profiles", "profile-detail", "player-detail", "menu"].includes(screen) && !document.querySelector(".modal-backdrop")) render();
+      }
+    });
+    Cloud.init();
     // Pede ao browser para não apagar os dados desta app quando o
     // aparelho fica com pouco espaço (no iPhone ajuda sobretudo com a
     // app instalada no ecrã principal).

@@ -18,20 +18,59 @@
     }
   }
 
+  // Quem quiser saber quando os perfis mudam (ex: a sincronização na nuvem).
+  // Durante a própria sincronização os avisos ficam desligados.
+  const listeners = [];
+  let quiet = 0;
+  function onChange(fn) { listeners.push(fn); }
+  function changed() {
+    if (quiet) return;
+    listeners.forEach((fn) => { try { fn(); } catch (e) { /* ok */ } });
+  }
+
   function persist(list) {
     try {
       localStorage.setItem(KEY, JSON.stringify(list));
     } catch (e) {
       console.warn("Não foi possível guardar os perfis:", e);
     }
+    changed();
+  }
+
+  // Registo do que foi apagado (perfis e jogos), para a sincronização não
+  // os voltar a trazer de outro aparelho. { profiles: {id: ts}, games: {id: ts} }
+  const DELETED_KEY = "mtg_lc_deleted_v1";
+  function deleted() {
+    try {
+      const d = JSON.parse(localStorage.getItem(DELETED_KEY)) || {};
+      return { profiles: d.profiles || {}, games: d.games || {} };
+    } catch (e) {
+      return { profiles: {}, games: {} };
+    }
+  }
+  function saveDeleted(d) {
+    try { localStorage.setItem(DELETED_KEY, JSON.stringify(d)); } catch (e) { /* ok */ }
+  }
+  function markDeleted(kind, ids, on) {
+    const d = deleted();
+    ids.forEach((id) => { if (!id) return; if (on) d[kind][id] = Date.now(); else delete d[kind][id]; });
+    saveDeleted(d);
   }
 
   function all() {
     return load().sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  /** Encontra um perfil pelo id ou por um id antigo (alcunha) — depois de
+   *  fundir ou sincronizar, um deck pode ter mudado de id e ainda haver
+   *  referências ao antigo (jogo em curso, "Repetir último jogo"...). */
+  function byAnyId(list, id) {
+    if (!id) return null;
+    return list.find((p) => p.id === id) || list.find((p) => Array.isArray(p.aliases) && p.aliases.includes(id)) || null;
+  }
+
   function get(id) {
-    return load().find((p) => p.id === id) || null;
+    return byAnyId(load(), id);
   }
 
   function create({ name, commander, playerName }) {
@@ -44,6 +83,7 @@
       stats: { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 },
       history: [],
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
     list.push(profile);
     persist(list);
@@ -52,22 +92,27 @@
 
   function update(id, patch) {
     const list = load();
-    const p = list.find((x) => x.id === id);
+    const p = byAnyId(list, id);
     if (!p) return null;
     Object.assign(p, patch);
+    p.updatedAt = Date.now(); // a edição mais recente ganha ao sincronizar
     persist(list);
     return p;
   }
 
   function remove(id) {
-    persist(load().filter((p) => p.id !== id));
+    const list = load();
+    const p = byAnyId(list, id);
+    if (!p) return;
+    markDeleted("profiles", [p.id].concat(p.aliases || []), true);
+    persist(list.filter((x) => x !== p));
   }
 
   /** Regista o resultado de um jogo terminado nas stats agregadas do perfil
    *  e acrescenta uma entrada ao histórico de jogos desse perfil. */
   function recordGameResult(id, { won, gameTimeMs, turnTimeMs, turnsTaken, mode, timed, opponents }) {
     const list = load();
-    const p = list.find((x) => x.id === id);
+    const p = byAnyId(list, id);
     if (!p) return null;
     if (!p.history) p.history = [];
     p.stats.games += 1;
@@ -103,12 +148,13 @@
    *  das stats agregadas do perfil. */
   function removeGame(id, gameId) {
     const list = load();
-    const p = list.find((x) => x.id === id);
+    const p = byAnyId(list, id);
     if (!p || !p.history) return null;
     const idx = p.history.findIndex((g) => g.id === gameId);
     if (idx === -1) return null;
     const g = p.history[idx];
     p.history.splice(idx, 1);
+    markDeleted("games", [gameId], true);
     p.stats.games = Math.max(0, p.stats.games - 1);
     if (g.won) p.stats.wins = Math.max(0, p.stats.wins - 1);
     p.stats.totalGameTimeMs = Math.max(0, p.stats.totalGameTimeMs - (g.gameTimeMs || 0));
@@ -121,6 +167,7 @@
   /** Repõe um perfil apagado (para o "Desfazer"), com o mesmo id. */
   function restore(profile) {
     if (!profile || !profile.id) return;
+    markDeleted("profiles", [profile.id].concat(profile.aliases || []), false);
     const list = load().filter((p) => p.id !== profile.id);
     list.push(profile);
     persist(list);
@@ -130,9 +177,10 @@
    *  somar o seu contributo às stats agregadas. */
   function restoreGame(id, g) {
     const list = load();
-    const p = list.find((x) => x.id === id);
+    const p = byAnyId(list, id);
     if (!p || !g) return null;
     if (!p.history) p.history = [];
+    markDeleted("games", [g.id], false);
     if (p.history.some((x) => x.id === g.id)) return p;
     p.history.push(g);
     p.stats.games += 1;
@@ -378,7 +426,7 @@
     const list = load();
     let n = 0;
     list.forEach((p) => {
-      if (norm(p.playerName) === from) { p.playerName = to; n++; }
+      if (norm(p.playerName) === from) { p.playerName = to; p.updatedAt = Date.now(); n++; }
       (p.history || []).forEach((g) => (g.opponents || []).forEach((o) => { if (o && norm(o.name) === from) o.name = to; }));
     });
     persist(list);
@@ -388,6 +436,122 @@
     delete al[norm(to)]; // o nome que fica nunca é alcunha de outro
     savePlayerAliases(al);
     return n;
+  }
+
+  // ---------------------------------------------------------
+  // Sincronização na nuvem (grupo partilhado)
+  // ---------------------------------------------------------
+  /** O que se envia para o grupo: perfis, apagados e alcunhas. */
+  function syncPayload() {
+    return { app: "mtg-life-counter", v: 1, profiles: load(), deleted: deleted(), playerAliases: playerAliases() };
+  }
+
+  const SYNC_META = ["name", "playerName", "commander", "colorIdx"];
+
+  /** Junta os dados do grupo com os deste aparelho, sem duplicar nada:
+   *  - apagados de um lado ficam apagados dos dois (perfis e jogos);
+   *  - perfis já ligados (mesmo id ou alcunha de id) juntam-se sozinhos e
+   *    recebem os jogos que faltam; o nome/commander mais recente ganha;
+   *  - perfis que este aparelho não conhece entram como novos.
+   *  Não sugere pares parecidos (isso só na primeira entrada no grupo).
+   *  Devolve { profiles, games, removed } com o que mudou cá. */
+  function syncMerge(remote) {
+    const res = { profiles: 0, games: 0, removed: 0 };
+    if (!remote || typeof remote !== "object") return res;
+    quiet++;
+    try {
+      // 1) apagados: união dos dois lados
+      const d = deleted();
+      const rd = remote.deleted || {};
+      ["profiles", "games"].forEach((k) => Object.keys(rd[k] || {}).forEach((id) => { if (!d[k][id]) d[k][id] = rd[k][id]; }));
+      saveDeleted(d);
+      addPlayerAliases(remote.playerAliases);
+
+      const list = load();
+      const isDeadProfile = (p) => idsOf(p).some((id) => d.profiles[id]);
+      const byId = new Map();
+      list.forEach((p) => idsOf(p).forEach((id) => byId.set(id, p)));
+      const remap = new Map();
+
+      // 2) perfis do grupo
+      (Array.isArray(remote.profiles) ? remote.profiles : []).forEach((rp) => {
+        if (!rp || !rp.id || isDeadProfile(rp)) return;
+        let lp = null;
+        for (const id of idsOf(rp)) if (byId.has(id)) { lp = byId.get(id); break; }
+        const hist = (Array.isArray(rp.history) ? rp.history : []).filter((g) => g && g.id && !d.games[g.id]);
+        if (!lp) {
+          let clone;
+          try { clone = JSON.parse(JSON.stringify(rp)); } catch (e) { return; }
+          // fica com o histórico todo: os jogos apagados saem no passo 3,
+          // que também os desconta nas stats
+          clone.history = (Array.isArray(clone.history) ? clone.history : []).filter((g) => g && g.id);
+          if (!clone.stats) clone.stats = { games: 0, wins: 0, totalGameTimeMs: 0, totalTurnTimeMs: 0, turnsTaken: 0 };
+          list.push(clone);
+          idsOf(clone).forEach((id) => byId.set(id, clone));
+          res.profiles++;
+          res.games += hist.length;
+          return;
+        }
+        if (!lp.history) lp.history = [];
+        const have = new Set(lp.history.map((g) => g.id));
+        hist.forEach((g) => {
+          if (have.has(g.id)) return;
+          have.add(g.id);
+          lp.history.push(JSON.parse(JSON.stringify(g)));
+          lp.stats.games += 1;
+          if (g.won) lp.stats.wins += 1;
+          lp.stats.totalGameTimeMs += g.gameTimeMs || 0;
+          lp.stats.totalTurnTimeMs += g.turnTimeMs || 0;
+          lp.stats.turnsTaken += g.turnsTaken || 0;
+          res.games++;
+        });
+        // nome/jogador/commander: ganha a edição mais recente; em empate (ex:
+        // perfis antigos sem data) ganha sempre o mesmo lado em todos os
+        // aparelhos, para todos ficarem iguais
+        const ru = rp.updatedAt || 0, lu = lp.updatedAt || 0;
+        const metaKey = (p) => JSON.stringify(SYNC_META.map((k) => (p[k] === undefined ? null : p[k])));
+        if (ru > lu || (ru === lu && metaKey(rp) > metaKey(lp))) {
+          SYNC_META.forEach((k) => { if (k in rp) lp[k] = rp[k]; else delete lp[k]; });
+          if (rp.updatedAt) lp.updatedAt = rp.updatedAt;
+        }
+        // o mesmo deck fica com o mesmo id em todos os aparelhos (o menor de
+        // todos os que já teve); os outros ficam como alcunhas. Sem isto cada
+        // aparelho guardava-o com o seu id e regravavam o grupo à vez.
+        // data de criação: fica a mais antiga (igual em todos os aparelhos)
+        if (rp.createdAt && (!lp.createdAt || rp.createdAt < lp.createdAt)) lp.createdAt = rp.createdAt;
+        const allIds = Array.from(new Set(idsOf(lp).concat(idsOf(rp)))).sort();
+        lp.id = allIds[0];
+        const rest = allIds.slice(1);
+        if (rest.length) lp.aliases = rest; else delete lp.aliases;
+        allIds.forEach((id) => byId.set(id, lp));
+      });
+      list.forEach((p) => idsOf(p).forEach((id) => remap.set(id, p.id)));
+
+      // 3) aplicar os apagados cá (perfis e jogos), descontando nas stats
+      let out = list.filter((p) => {
+        if (isDeadProfile(p)) { res.removed++; return false; }
+        return true;
+      });
+      out.forEach((p) => {
+        if (!p.history) return;
+        p.history = p.history.filter((g) => {
+          if (!d.games[g.id]) return true;
+          p.stats.games = Math.max(0, p.stats.games - 1);
+          if (g.won) p.stats.wins = Math.max(0, p.stats.wins - 1);
+          p.stats.totalGameTimeMs = Math.max(0, p.stats.totalGameTimeMs - (g.gameTimeMs || 0));
+          p.stats.totalTurnTimeMs = Math.max(0, p.stats.totalTurnTimeMs - (g.turnTimeMs || 0));
+          p.stats.turnsTaken = Math.max(0, p.stats.turnsTaken - (g.turnsTaken || 0));
+          res.removed++;
+          return false;
+        });
+        // adversários guardados nos jogos passam a apontar para os ids locais
+        p.history.forEach((g) => (g.opponents || []).forEach((o) => { if (o && o.profileId && remap.has(o.profileId)) o.profileId = remap.get(o.profileId); }));
+      });
+      persist(out);
+    } finally {
+      quiet--;
+    }
+    return res;
   }
 
   /** Cópia de tudo o que uma fusão pode mudar (para "Desfazer"). */
@@ -407,5 +571,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases };
+  global.MTG.Profiles = { all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases, onChange, deleted, syncPayload, syncMerge };
 })(window);

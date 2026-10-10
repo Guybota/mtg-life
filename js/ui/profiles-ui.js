@@ -650,7 +650,196 @@ function openEditProfileModal(profileId) {
 }
 
 // ===========================================================
-// DETALHE DE UM PERFIL — estatísticas, gráficos e histórico
+// BLOCOS PARTILHADOS PELOS DETALHES DE DECK E DE JOGADOR
+// ===========================================================
+// Os dois ecrãs têm a mesma estrutura: cabeçalho, números-resumo,
+// cartões (classificação, sequência e forma, evolução, decks/commanders,
+// modos, empréstimos, confrontos, duração) e o histórico de jogos.
+
+/** Médias de tempo a partir de uma lista de jogos (só os com tempo). */
+function timeStatsOf(games) {
+  const timed = games.filter((g) => g.timed !== false && g.gameTimeMs > 0);
+  const totalGame = timed.reduce((a, g) => a + g.gameTimeMs, 0);
+  const totalTurn = timed.reduce((a, g) => a + (g.turnTimeMs || 0), 0);
+  const turns = timed.reduce((a, g) => a + (g.turnsTaken || 0), 0);
+  return { timedGames: timed.length, avgGameTimeMs: timed.length ? totalGame / timed.length : 0, avgTurnTimeMs: turns ? totalTurn / turns : 0, turnsTaken: turns };
+}
+
+/** Jogos, vitórias (com barra) e médias de tempo. */
+function detailKpisHtml(games, wins, times) {
+  const pct = games ? Math.round((wins / games) * 100) : 0;
+  return `
+    <div class="kpi-row pd-kpis">
+      ${kpiHtml(tr("Jogos"), games)}
+      <div class="kpi">
+        <div class="kpi-label">${tr("Vitórias")}</div>
+        <div class="kpi-value">${wins} <small>${pct}%</small></div>
+        <div class="meter" data-tip="${pct}%" data-tip-label="${esc(tr("{w} de {g} vitórias", { w: wins, g: games }))}"><div class="meter-fill" style="width:${pct}%"></div></div>
+      </div>
+      ${kpiHtml(tr("Média por jogo"), times.timedGames ? formatDuration(times.avgGameTimeMs) : "—", times.timedGames ? tr("{n} jogo(s) com tempo", { n: times.timedGames }) : tr("sem jogos com tempo"))}
+      ${kpiHtml(tr("Média por turno"), times.turnsTaken ? formatDuration(times.avgTurnTimeMs) : "—", times.turnsTaken ? tr("{n} turno(s)", { n: times.turnsTaken }) : "")}
+    </div>`;
+}
+
+/** Sequência atual e melhor sequência de vitórias (chrono: antigo → recente). */
+function streakCardHtml(chrono) {
+  if (!chrono.length) return "";
+  const latest = chrono.slice().reverse();
+  const curWon = latest[0].won;
+  let curLen = 0;
+  for (const g of latest) { if (g.won === curWon) curLen++; else break; }
+  let best = 0, run = 0;
+  chrono.forEach((g) => { run = g.won ? run + 1 : 0; best = Math.max(best, run); });
+  return `
+    <div class="streak-card">
+      <span class="streak-icon ${curWon ? "win" : "loss"}">${I(curWon ? "trophy" : "repeat")}</span>
+      <span class="streak-text">
+        <span class="kpi-label">${tr("Sequência atual")}</span>
+        <span class="streak-value">${curWon
+          ? (curLen === 1 ? tr("1 vitória") : tr("{n} vitórias seguidas", { n: curLen }))
+          : (curLen === 1 ? tr("1 derrota") : tr("{n} derrotas seguidas", { n: curLen }))}</span>
+      </span>
+      <span class="streak-best"><span class="kpi-label">${tr("Melhor")}</span><strong>${best}</strong></span>
+    </div>`;
+}
+
+/** Últimos 10 resultados. tipLabel(g) = texto da dica de cada um. */
+function formCardHtml(chrono, tipLabel) {
+  const recent = chrono.slice(-10);
+  if (!recent.length) return "";
+  return `
+    <div class="chart-card">
+      <div class="chart-title">${tr("Forma recente")}</div>
+      <div class="chart-sub">${tr("Últimos {n} jogos, do mais antigo para o mais recente", { n: recent.length })}</div>
+      <div class="form-strip">${recent.map((g) => `
+        <span class="form-chip ${g.won ? "win" : "loss"}" data-tip="${g.won ? esc(tr("Vitória")) : esc(tr("Derrota"))}" data-tip-label="${esc(tipLabel(g))}">${g.won ? tr("V") : tr("D")}</span>`).join("")}
+      </div>
+    </div>`;
+}
+
+/** Evolução da taxa de vitórias acumulada. Devolve { html, points }. */
+function evoCard(chrono) {
+  if (chrono.length < 2) return { html: "", points: null };
+  let w = 0;
+  const points = chrono.map((g, i) => {
+    if (g.won) w++;
+    const rate = w / (i + 1);
+    return { y: rate, tip: `${Math.round(rate * 100)}%`, tipLabel: `${tr("Jogo {n}", { n: i + 1 })} · ${g.won ? tr("Vitória") : tr("Derrota")} · ${formatDateTime(g.date)}` };
+  });
+  return {
+    points,
+    html: `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Evolução da taxa de vitórias")}</div>
+        <div class="chart-sub">${tr("Percentagem de vitórias acumulada, jogo a jogo")}</div>
+        ${Charts.lineChart(points, { xLabel: (i) => tr("Jogo {n}", { n: i + 1 }), aria: tr("Evolução da taxa de vitórias") })}
+      </div>`,
+  };
+}
+
+/** Vitórias / derrotas por modo de jogo. */
+function modesCardHtml(chrono) {
+  if (!chrono.length) return "";
+  const byMode = new Map();
+  chrono.forEach((g) => {
+    const k = g.mode || "standard";
+    if (!byMode.has(k)) byMode.set(k, { label: modeLabel(k), a: 0, b: 0 });
+    const m = byMode.get(k);
+    if (g.won) m.a++; else m.b++;
+  });
+  return `
+    <div class="chart-card">
+      <div class="chart-title">${tr("Resultados por modo")}</div>
+      ${Charts.stackedBars(Array.from(byMode.values()).sort((x, y) => (y.a + y.b) - (x.a + x.b)), [tr("Vitórias"), tr("Derrotas")])}
+    </div>`;
+}
+
+/** Duração dos últimos 12 jogos com tempo. */
+function durationsCardHtml(chrono) {
+  const timedGames = chrono.filter((g) => g.timed !== false && g.gameTimeMs > 0).slice(-12);
+  if (timedGames.length < 2) return "";
+  const first = chrono.indexOf(timedGames[0]) + 1, lastN = chrono.indexOf(timedGames[timedGames.length - 1]) + 1;
+  return `
+    <div class="chart-card">
+      <div class="chart-title">${tr("Duração dos jogos")}</div>
+      <div class="chart-sub">${tr("Últimos {n} jogos com tempo contado, em minutos", { n: timedGames.length })}</div>
+      ${Charts.columns(timedGames.map((g) => ({
+        value: g.gameTimeMs / 60000,
+        tip: formatDuration(g.gameTimeMs),
+        tipLabel: `${g.won ? tr("Vitória") : tr("Derrota")} · ${g.deck ? g.deck + " · " : ""}${formatDateTime(g.date)}`,
+      })), {
+        tickFmt: (v) => `${Math.round(v)}m`,
+        xLabel: (i) => i === 0 ? tr("Jogo {n}", { n: first }) : tr("Jogo {n}", { n: lastN }),
+        aria: tr("Duração dos jogos"),
+      })}
+    </div>`;
+}
+
+/** Lista curta "nome — n jogos · v vitórias". rows = [{ name, games, wins }] */
+function lendCardHtml(title, sub, rows) {
+  if (!rows.length) return "";
+  return `
+    <div class="chart-card">
+      <div class="chart-title">${title}</div>
+      <div class="chart-sub">${sub}</div>
+      <div class="lend-list">${rows.sort((a, b) => b.games - a.games).map((r) => `
+        <div class="lend-row"><span class="lend-name">${r.name}</span><span class="lend-val">${tr("{g} jogos · {w} vitórias", { g: r.games, w: r.wins })}</span></div>`).join("")}</div>
+    </div>`;
+}
+
+/** Histórico de jogos (mais recente primeiro), compacto, com editar e
+ *  apagar. Mostra 10 e um botão para ver todos.
+ *  rows = [{ g, profileId, deck (nome, só no jogador), pilot, borrowed, altCmd }] */
+function historySectionHtml(rows, opts) {
+  return `
+    <div class="section-head"><span class="section-title">${tr("Histórico de jogos")}</span>${opts && opts.addBtn ? `<button type="button" class="btn btn-ghost btn-sm" id="pd-manual-btn">${I("plus")} ${tr("Registar jogo")}</button>` : ""}</div>
+    <div class="pd-history" id="history-list">${rows.map((r, i) => {
+      const g = r.g;
+      const meta = [
+        r.deck ? `<b>${esc(r.deck)}</b>` : "",
+        r.pilot ? `${I("user")}${esc(r.pilot)}${r.borrowed ? ` <small class="borrow-tag">${tr("emprestado")}</small>` : ""}` : "",
+        r.altCmd ? esc(tr("Com {name}", { name: g.commander })) : "",
+      ].filter(Boolean).join(" · ");
+      const time = g.timed === false ? tr("sem tempo")
+        : g.manual || !g.turnsTaken ? formatDuration(g.gameTimeMs)
+        : tr("{game} · {n} turno(s) de {turn}", { game: formatDuration(g.gameTimeMs), n: g.turnsTaken, turn: formatDuration(g.turnsTaken ? g.turnTimeMs / g.turnsTaken : 0) });
+      return `
+      <div class="hist-row ${i >= 10 ? "hidden more" : ""}" data-i="${i}">
+        <span class="form-chip sm ${g.won ? "win" : "loss"}">${g.won ? tr("V") : tr("D")}</span>
+        <div class="hist-main">
+          <div class="hist-top"><span class="hist-title">${g.won ? tr("Vitória") : tr("Derrota")} · ${esc(modeLabel(g.mode))}</span><span class="hist-date">${formatDateTime(g.date)}</span></div>
+          ${meta ? `<div class="hist-meta">${meta}</div>` : ""}
+          <div class="hist-meta dim">${I("hourglass")}${time}${g.manual ? ` · ${tr("registado à mão")}` : ""}</div>
+        </div>
+        <div class="hist-actions">
+          <button class="btn btn-icon" data-edit="${i}" title="${tr("Editar este jogo")}" aria-label="${tr("Editar este jogo")}">${I("pencil")}</button>
+          <button class="btn btn-icon" data-del="${i}" title="${tr("Apagar este jogo")}" aria-label="${tr("Apagar este jogo")}">${I("trash")}</button>
+        </div>
+      </div>`;
+    }).join("")}</div>
+    ${rows.length > 10 ? `<button type="button" class="btn btn-ghost btn-block" id="history-more">${tr("Ver todos os jogos ({n})", { n: rows.length })}</button>` : ""}`;
+}
+function bindHistorySection(root, rows) {
+  const list = root.querySelector("#history-list");
+  if (!list) return;
+  list.addEventListener("click", (e) => {
+    const ed = e.target.closest("[data-edit]");
+    if (ed) { const r = rows[+ed.dataset.edit]; openGameEditor(r.profileId, r.g.id); return; }
+    const del = e.target.closest("[data-del]");
+    if (del) {
+      const r = rows[+del.dataset.del];
+      const snapshot = JSON.parse(JSON.stringify(r.g));
+      Profiles.removeGame(r.profileId, r.g.id);
+      render();
+      undoToast(tr("Jogo apagado do histórico"), () => { Profiles.restoreGame(r.profileId, snapshot); render(); });
+    }
+  });
+  const more = root.querySelector("#history-more");
+  if (more) more.addEventListener("click", () => { list.querySelectorAll(".hist-row.more").forEach((x) => x.classList.remove("hidden")); more.remove(); });
+}
+
+// ===========================================================
+// DETALHE DE UM DECK — estatísticas, gráficos e histórico
 // ===========================================================
 function renderProfileDetail() {
   const profile = Profiles.get(screenParams.id);
@@ -665,113 +854,38 @@ function renderProfileDetail() {
         <h1>${esc(profile.name)}</h1>
         <button class="btn btn-icon" id="edit-profile-btn" title="${tr("Editar perfil")}" aria-label="${tr("Editar perfil")}">${I("pencil")}</button>
       </div>
-      <div class="scroll" id="pd-scroll"></div>
+      <div class="scroll pd-body" id="pd-scroll"></div>
     </div>
   `);
   appEl.appendChild(s);
   const body = s.querySelector("#pd-scroll");
+  const goBack = () => (screenParams.fromPlayer ? nav("player-detail", { key: screenParams.fromPlayer }) : nav("profiles"));
+  s.querySelector("#back-btn").addEventListener("click", goBack);
+  s.querySelector("#edit-profile-btn").addEventListener("click", () => openEditProfileModal(profile.id));
 
+  const mainName = profile.commander ? profile.commander.name : "";
+  const alts = profile.altCommanders || [];
   const head = `
-    <div class="pd-head">
-      <div class="commander-thumb" style="${seatThumbStyle(profile)}">${profile.commander && profile.commander.art ? "" : I("card")}</div>
-      <div class="pd-head-info">
-        <div class="profile-sub">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")} ${pipsHtml(colorIdentityOf(profile))}</div>
-        ${(profile.altCommanders || []).length ? `<div class="profile-sub">${tr("Alternativos: {list}", { list: profile.altCommanders.map((c) => esc(c.name)).join(", ") })}</div>` : ""}
-        ${profile.playerName ? `<div class="profile-sub">${I("user")} ${tr("Dono: {name}", { name: esc(profile.playerName) })}</div>` : ""}
+    <div class="pd-hero">
+      <div class="commander-thumb pd-hero-thumb" style="${seatThumbStyle(profile)}">${profile.commander && profile.commander.art ? "" : I("card")}</div>
+      <div class="pd-hero-info">
+        <div class="pd-hero-title">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")} ${pipsHtml(colorIdentityOf(profile))}</div>
+        ${alts.length ? `<div class="pd-hero-sub">${tr("Alternativos: {list}", { list: alts.map((c) => esc(c.name)).join(", ") })}</div>` : ""}
+        <div class="pd-hero-chips">
+          ${profile.playerName ? `<button type="button" class="pd-chip" id="pd-owner">${I("user")} ${tr("Dono: {name}", { name: esc(profile.playerName) })}</button>` : `<span class="pd-chip dim">${tr("Sem dono")}</span>`}
+        </div>
       </div>
     </div>`;
 
-  s.querySelector("#edit-profile-btn").addEventListener("click", () => openEditProfileModal(profile.id));
   if (!d.games) {
     body.innerHTML = head + `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos registados para este perfil.")}</div>
       <button type="button" class="btn btn-ghost btn-sm" id="pd-manual-btn" style="margin-top:10px">${I("plus")} ${tr("Registar jogo")}</button></div>`;
     body.querySelector("#pd-manual-btn").addEventListener("click", () => openManualGame({ profileId: profile.id }));
-    s.querySelector("#back-btn").addEventListener("click", () => (screenParams.fromPlayer ? nav("player-detail", { key: screenParams.fromPlayer }) : nav("profiles")));
+    bindOwnerChip(body, profile);
     return;
   }
 
-  const pct = Math.round(d.winRate * 100);
-  const kpis = `
-    <div class="kpi-row kpi-row-2">
-      ${kpiHtml(tr("Jogos"), d.games)}
-      <div class="kpi">
-        <div class="kpi-label">${tr("Vitórias")}</div>
-        <div class="kpi-value">${d.wins} <small>${pct}%</small></div>
-        <div class="meter" data-tip="${pct}%" data-tip-label="${esc(tr("{w} de {g} vitórias", { w: d.wins, g: d.games }))}"><div class="meter-fill" style="width:${pct}%"></div></div>
-      </div>
-      ${kpiHtml(tr("Média por jogo"), formatDuration(d.avgGameTimeMs))}
-      ${kpiHtml(tr("Média por turno"), d.turnsTaken ? formatDuration(d.avgTurnTimeMs) : "—")}
-    </div>`;
-
-  // sequências: a atual (vitórias ou derrotas seguidas, a contar do jogo
-  // mais recente) e a melhor sequência de vitórias de sempre
-  let curLen = 0;
-  const curWon = history.length ? history[0].won : false;
-  for (const g of history) { if (g.won === curWon) curLen++; else break; }
-  let best = 0, run = 0;
-  chrono.forEach((g) => { run = g.won ? run + 1 : 0; best = Math.max(best, run); });
-  const streak = `
-    <div class="streak-card">
-      <span class="streak-icon ${curWon ? "win" : "loss"}">${I(curWon ? "trophy" : "repeat")}</span>
-      <span class="streak-text">
-        <span class="kpi-label">${tr("Sequência atual")}</span>
-        <span class="streak-value">${curWon
-          ? (curLen === 1 ? tr("1 vitória") : tr("{n} vitórias seguidas", { n: curLen }))
-          : (curLen === 1 ? tr("1 derrota") : tr("{n} derrotas seguidas", { n: curLen }))}</span>
-      </span>
-      <span class="streak-best"><span class="kpi-label">${tr("Melhor")}</span><strong>${best}</strong></span>
-    </div>`;
-
-  // forma recente: últimos 10 resultados (mais antigo → mais recente)
-  const recent = chrono.slice(-10);
-  const form = `
-    <div class="chart-card">
-      <div class="chart-title">${tr("Forma recente")}</div>
-      <div class="chart-sub">${tr("Últimos {n} jogos, do mais antigo para o mais recente", { n: recent.length })}</div>
-      <div class="form-strip">${recent.map((g) => `
-        <span class="form-chip ${g.won ? "win" : "loss"}" data-tip="${g.won ? esc(tr("Vitória")) : esc(tr("Derrota"))}" data-tip-label="${esc(modeLabel(g.mode))} · ${esc(formatDateTime(g.date))}">${g.won ? tr("V") : tr("D")}</span>`).join("")}
-      </div>
-    </div>`;
-
-  // evolução da taxa de vitórias acumulada (precisa de 2+ jogos)
-  let evo = "";
-  let evoPoints = null;
-  if (chrono.length >= 2) {
-    let w = 0;
-    evoPoints = chrono.map((g, i) => {
-      if (g.won) w++;
-      const rate = w / (i + 1);
-      return { y: rate, tip: `${Math.round(rate * 100)}%`, tipLabel: `${tr("Jogo {n}", { n: i + 1 })} · ${g.won ? tr("Vitória") : tr("Derrota")} · ${formatDateTime(g.date)}` };
-    });
-    evo = `
-      <div class="chart-card">
-        <div class="chart-title">${tr("Evolução da taxa de vitórias")}</div>
-        <div class="chart-sub">${tr("Percentagem de vitórias acumulada, jogo a jogo")}</div>
-        ${Charts.lineChart(evoPoints, { xLabel: (i) => tr("Jogo {n}", { n: i + 1 }), aria: tr("Evolução da taxa de vitórias") })}
-      </div>`;
-  }
-
-  // vitórias / derrotas por modo
-  const byMode = new Map();
-  chrono.forEach((g) => {
-    const k = g.mode || "standard";
-    if (!byMode.has(k)) byMode.set(k, { label: modeLabel(k), a: 0, b: 0 });
-    const m = byMode.get(k);
-    if (g.won) m.a++; else m.b++;
-  });
-  const modes = `
-    <div class="chart-card">
-      <div class="chart-title">${tr("Resultados por modo")}</div>
-      ${Charts.stackedBars(Array.from(byMode.values()).sort((x, y) => (y.a + y.b) - (x.a + x.b)), [tr("Vitórias"), tr("Derrotas")])}
-    </div>`;
-
-  // confrontos diretos: só jogos registados com a lista de adversários.
-  // Cada adversário identifica-se pelo jogador do perfil dele (se tiver),
-  // senão pelo nome do lugar; "a – b" = vitórias deste perfil vs vitórias dele.
-  const h2hHtml = headToHeadHtml(chrono, tr("Jogos em que estiveram os dois à mesa: vitórias deste perfil – vitórias do adversário"), tr("Este perfil ganhou"));
-
   // resultados por commander (principal e alternativos)
-  const mainName = profile.commander ? profile.commander.name : "";
   const byCmd = new Map();
   chrono.forEach((g) => {
     const name = g.commander || mainName;
@@ -791,93 +905,55 @@ function renderProfileDetail() {
       })))}
     </div>` : "";
 
-  // empréstimos: quem jogou com este deck sem ser o dono
-  const lent = new Map();
+  // quem jogou com este deck (dono e empréstimos)
+  const byPilot = new Map();
   chrono.forEach((g) => {
-    if (!g.playedBy) return;
-    const k = normName(g.playedBy);
-    if (!lent.has(k)) lent.set(k, { name: g.playedBy, games: 0, wins: 0 });
-    const r = lent.get(k); r.games++; if (g.won) r.wins++;
+    const who = pilotOf(profile, g);
+    if (!who) return;
+    const k = normName(who);
+    if (!byPilot.has(k)) byPilot.set(k, { name: esc(who) + (g.playedBy && profile.playerName ? ` <small class="borrow-tag">${tr("emprestado")}</small>` : ""), games: 0, wins: 0 });
+    const r = byPilot.get(k); r.games++; if (g.won) r.wins++;
   });
-  const lentHtml = lent.size ? `
-    <div class="chart-card">
-      <div class="chart-title">${profile.playerName ? tr("Emprestado a outros") : tr("Quem jogou com este deck")}</div>
-      <div class="chart-sub">${tr("Estes jogos contam para o deck e para quem jogou")}</div>
-      <div class="lend-list">${Array.from(lent.values()).sort((a, b) => b.games - a.games).map((r) => `
-        <div class="lend-row"><span class="lend-name">${esc(r.name)}</span><span class="lend-val">${tr("{g} jogos · {w} vitórias", { g: r.games, w: r.wins })}</span></div>`).join("")}</div>
-    </div>` : "";
+  const pilotsHtml = byPilot.size > 1 || chrono.some((g) => g.playedBy)
+    ? lendCardHtml(tr("Quem jogou com este deck"), tr("Os jogos emprestados contam para o deck e para quem jogou"), Array.from(byPilot.values())) : "";
 
-  // duração dos últimos jogos com tempo contado
-  const timedGames = chrono.filter((g) => g.timed !== false && g.gameTimeMs > 0).slice(-12);
-  let durations = "";
-  if (timedGames.length >= 2) {
-    const first = chrono.indexOf(timedGames[0]) + 1, lastN = chrono.indexOf(timedGames[timedGames.length - 1]) + 1;
-    durations = `
-      <div class="chart-card">
-        <div class="chart-title">${tr("Duração dos jogos")}</div>
-        <div class="chart-sub">${tr("Últimos {n} jogos com tempo contado, em minutos", { n: timedGames.length })}</div>
-        ${Charts.columns(timedGames.map((g) => ({
-          value: g.gameTimeMs / 60000,
-          tip: formatDuration(g.gameTimeMs),
-          tipLabel: `${g.won ? tr("Vitória") : tr("Derrota")} · ${formatDateTime(g.date)}`,
-        })), {
-          tickFmt: (v) => `${Math.round(v)}m`,
-          xLabel: (i) => i === 0 ? tr("Jogo {n}", { n: first }) : tr("Jogo {n}", { n: lastN }),
-          aria: tr("Duração dos jogos"),
-        })}
-      </div>`;
-  }
-
+  const evo = evoCard(chrono);
   const eloAll = MTG.Elo.compute(Profiles.all());
   const eloRec = eloAll.decks.find((r) => r.key === profile.id || (profile.aliases || []).includes(r.key));
-  body.classList.add("pd-body");
-  body.innerHTML = head + kpis + `<div class="pd-cards">` + eloCardHtml(eloRec, eloAll.decks.length) + `<div class="pd-stack">` + streak + form + `</div>` + evo + cmdHtml + modes + lentHtml + h2hHtml + durations + `</div>
-    <div class="section-head"><span class="section-title">${tr("Histórico de jogos")}</span><button type="button" class="btn btn-ghost btn-sm" id="pd-manual-btn">${I("plus")} ${tr("Registar jogo")}</button></div>
-    <div class="col pd-history" id="history-list"></div>
-    <button class="btn btn-ghost btn-block merge-entry" id="merge-deck-btn">${I("merge")} ${tr("Fundir com outro deck")}</button>`;
+  const rows = history.map((g) => ({
+    g, profileId: profile.id,
+    pilot: pilotOf(profile, g), borrowed: !!(g.playedBy && profile.playerName),
+    altCmd: !!(g.commander && normName(g.commander) !== normName(mainName)),
+  }));
+
+  body.innerHTML = head
+    + detailKpisHtml(d.games, d.wins, { timedGames: d.timedGames, avgGameTimeMs: d.avgGameTimeMs, avgTurnTimeMs: d.avgTurnTimeMs, turnsTaken: d.turnsTaken })
+    + `<div class="pd-cards">`
+    + eloCardHtml(eloRec, eloAll.decks.length)
+    + `<div class="pd-stack">` + streakCardHtml(chrono) + formCardHtml(chrono, (g) => `${pilotOf(profile, g) ? pilotOf(profile, g) + " · " : ""}${modeLabel(g.mode)} · ${formatDateTime(g.date)}`) + `</div>`
+    + evo.html + cmdHtml + modesCardHtml(chrono) + pilotsHtml
+    + headToHeadHtml(chrono, tr("Jogos em que estiveram os dois à mesa: vitórias deste perfil – vitórias do adversário"), tr("Este perfil ganhou"))
+    + durationsCardHtml(chrono)
+    + `</div>`
+    + historySectionHtml(rows, { addBtn: true })
+    + `<button class="btn btn-ghost btn-block merge-entry" id="merge-deck-btn">${I("merge")} ${tr("Fundir com outro deck")}</button>`;
   body.querySelector("#merge-deck-btn").addEventListener("click", () => openMergeDeckSheet(profile.id));
   body.querySelector("#pd-manual-btn").addEventListener("click", () => openManualGame({ profileId: profile.id }));
-
-  // histórico (também serve de "vista de tabela" dos gráficos)
-  const list = body.querySelector("#history-list");
-  history.forEach((g) => {
-    const row = el(`
-      <div class="cd-list-item" style="align-items:flex-start;">
-        <span class="form-chip sm ${g.won ? "win" : "loss"}">${g.won ? tr("V") : tr("D")}</span>
-        <div style="flex:1; min-width:0;">
-          <div class="nm">${g.won ? tr("Vitória") : tr("Derrota")} — ${esc(modeLabel(g.mode))}</div>
-          <div class="commander-name" style="margin-top:3px;">${formatDateTime(g.date)}</div>
-          ${pilotOf(profile, g) ? `<div class="history-who">${I("user")}<span>${esc(pilotOf(profile, g))}</span>${g.playedBy && profile.playerName ? `<small class="borrow-tag">${tr("emprestado")}</small>` : ""}</div>` : ""}
-          ${g.commander && normName(g.commander) !== normName(mainName) ? `<div class="history-meta">${tr("Com {name}", { name: esc(g.commander) })}</div>` : ""}
-          ${g.timed === false ? `<div class="history-meta">${tr("Jogo sem contagem de tempo/turnos")}</div>`
-            : g.manual || !g.turnsTaken ? `<div class="history-meta">${tr("Jogo: {game}", { game: formatDuration(g.gameTimeMs) })}</div>`
-            : `<div class="history-meta">${tr("Jogo: {game} · Nos teus turnos: {turns} ({n} turno(s))", { game: formatDuration(g.gameTimeMs), turns: formatDuration(g.turnTimeMs), n: g.turnsTaken })}</div>`}
-          ${g.manual ? `<div class="history-meta">${tr("Registado à mão")}</div>` : ""}
-        </div>
-        <div class="history-actions">
-          <button class="btn btn-icon" data-edit="${g.id}" title="${tr("Editar este jogo")}" aria-label="${tr("Editar este jogo")}">${I("pencil")}</button>
-          <button class="btn btn-icon" data-gid="${g.id}" title="${tr("Apagar este jogo")}" aria-label="${tr("Apagar este jogo")}">${I("trash")}</button>
-        </div>
-      </div>
-    `);
-    row.querySelector("button[data-edit]").addEventListener("click", () => openGameEditor(profile.id, g.id));
-    row.querySelector("button[data-gid]").addEventListener("click", () => {
-      const snapshot = JSON.parse(JSON.stringify(g));
-      Profiles.removeGame(profile.id, g.id);
-      render();
-      undoToast(tr("Jogo apagado do histórico"), () => { Profiles.restoreGame(profile.id, snapshot); render(); });
-    });
-    list.appendChild(row);
-  });
-
+  bindHistorySection(body, rows);
+  bindOwnerChip(body, profile);
   Charts.bindTips(body);
-  if (evoPoints) Charts.bindLine(body, evoPoints);
+  if (evo.points) Charts.bindLine(body, evo.points);
   bindEloCard(body, eloRec);
-  s.querySelector("#back-btn").addEventListener("click", () => (screenParams.fromPlayer ? nav("player-detail", { key: screenParams.fromPlayer }) : nav("profiles")));
+}
+
+/** O chip "Dono" abre o perfil desse jogador. */
+function bindOwnerChip(root, profile) {
+  const chip = root.querySelector("#pd-owner");
+  if (chip) chip.addEventListener("click", () => nav("player-detail", { key: playerDetailKey(profile.playerName) }));
 }
 
 // ===========================================================
-// DETALHE DE UM JOGADOR — todos os seus decks juntos
+// DETALHE DE UM JOGADOR — todos os jogos que fez, com qualquer deck
 // ===========================================================
 function renderPlayerDetail() {
   const pl = playersFromProfiles(Profiles.all()).find((x) => x.key === screenParams.key);
@@ -889,13 +965,14 @@ function renderPlayerDetail() {
         <h1>${esc(pl.name)}</h1>
         <div style="width:40px"></div>
       </div>
-      <div class="scroll" id="pl-scroll"></div>
+      <div class="scroll pd-body" id="pl-scroll"></div>
     </div>
   `);
   appEl.appendChild(s);
   const body = s.querySelector("#pl-scroll");
-  const pct = Math.round(pl.winRate * 100);
-  const recent = pl.history.slice(-10);
+  s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));
+  const chrono = pl.history; // já vem do mais antigo para o mais recente
+
   // resultados de ESTE jogador com cada deck (os seus e os emprestados);
   // jogos dos seus decks jogados por outras pessoas não entram aqui
   const deckStats = new Map();
@@ -903,7 +980,7 @@ function renderPlayerDetail() {
     const hist = p.history || [];
     deckStats.set(p.id, { p, borrowed: false, games: Math.max(0, p.stats.games - hist.length), wins: Math.max(0, p.stats.wins - hist.filter((g) => g.won).length) });
   });
-  pl.history.forEach((g) => {
+  chrono.forEach((g) => {
     if (!deckStats.has(g.deckId)) {
       const p = Profiles.get(g.deckId);
       if (!p) return;
@@ -912,84 +989,77 @@ function renderPlayerDetail() {
     const r = deckStats.get(g.deckId); r.games++; if (g.won) r.wins++;
   });
   const decks = Array.from(deckStats.values()).map((r) => Object.assign(r, { d: { games: r.games, wins: r.wins, winRate: r.games ? r.wins / r.games : 0 } }))
-    .sort((a, b) => (a.borrowed - b.borrowed) || (b.d.winRate - a.d.winRate) || (b.d.games - a.d.games));
+    .sort((a, b) => (a.borrowed - b.borrowed) || (b.d.games - a.d.games) || (b.d.winRate - a.d.winRate));
   const ownDecks = decks.filter((x) => !x.borrowed);
   const borrowedDecks = decks.filter((x) => x.borrowed);
+  const top = topDeckByPlayer([pl]).get(pl.key);
+
   // os decks deste jogador que outras pessoas usaram
-  const lentOut = [];
-  pl.profiles.forEach((p) => (p.history || []).forEach((g) => { if (g.playedBy) lentOut.push({ deck: p.name, who: g.playedBy, won: g.won }); }));
-  const plEloAll = MTG.Elo.compute(Profiles.all());
-  const normKey = (x) => String(x || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const plElo = plEloAll.players.find((r) => r.key === normKey(pl.name));
-  body.classList.add("pd-body");
+  const lentOut = {};
+  pl.profiles.forEach((p) => (p.history || []).forEach((g) => {
+    if (!g.playedBy) return;
+    const k = p.id + "|" + normName(g.playedBy);
+    const r = lentOut[k] = lentOut[k] || { name: `${esc(p.name)} → ${esc(g.playedBy)}`, games: 0, wins: 0 };
+    r.games++; if (g.won) r.wins++;
+  }));
+
+  const eloAll = MTG.Elo.compute(Profiles.all());
+  const elo = eloAll.players.find((r) => r.key === normName(pl.name));
+  const evo = evoCard(chrono);
+  const rows = chrono.slice().reverse().map((g) => {
+    const p = Profiles.get(g.deckId);
+    const main = p && p.commander ? p.commander.name : "";
+    return { g, profileId: g.deckId, deck: g.deck, borrowed: !!g.borrowedFrom, altCmd: !!(g.commander && normName(g.commander) !== normName(main)) };
+  });
+  const deckCard = (x) => `
+    <div class="profile-card" data-id="${x.p.id}" role="button" tabindex="0">
+      <div class="commander-thumb" style="${seatThumbStyle(x.p)}">${x.p.commander && x.p.commander.art ? "" : I("card")}</div>
+      <div class="profile-info">
+        <div class="profile-name">${esc(x.p.name)} ${pipsHtml(colorIdentityOf(x.p))}</div>
+        ${x.borrowed ? `<div class="profile-sub">${x.p.playerName ? tr("Deck de {name}", { name: esc(x.p.playerName) }) : tr("Sem dono")}</div>` : ""}
+        <div class="profile-summary">${x.d.games ? tr("{g} jogos · {w} vitórias", { g: x.d.games, w: x.d.wins }) + ` (${Math.round(x.d.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
+      </div>
+      <span class="profile-chevron">${I("chevron-right")}</span>
+    </div>`;
+
   body.innerHTML = `
-    <div class="pd-head">
-      ${initialsAvatar(pl.name, 0, topDeckByPlayer([pl]).get(pl.key)).replace("player-avatar", "player-avatar lg")}
-      <div class="pd-head-info"><div class="profile-sub">${tr("{n} deck(s)", { n: pl.profiles.length })}</div></div>
-    </div>
-    <div class="kpi-row kpi-row-2">
-      ${kpiHtml(tr("Jogos"), pl.games)}
-      <div class="kpi">
-        <div class="kpi-label">${tr("Vitórias")}</div>
-        <div class="kpi-value">${pl.wins} <small>${pct}%</small></div>
-        <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
+    <div class="pd-hero">
+      ${initialsAvatar(pl.name, 0, top).replace("player-avatar", "player-avatar lg pd-hero-thumb")}
+      <div class="pd-hero-info">
+        <div class="pd-hero-title">${esc(pl.name)}</div>
+        <div class="pd-hero-sub">${tr("{n} deck(s)", { n: pl.profiles.length })}${borrowedDecks.length ? " · " + tr("{n} emprestado(s)", { n: borrowedDecks.length }) : ""}</div>
+        ${top ? `<div class="pd-hero-chips"><button type="button" class="pd-chip" data-id="${top.id}">${I("star")} ${tr("Joga mais com {name}", { name: esc(top.name) })}</button></div>` : ""}
       </div>
     </div>
+    ${detailKpisHtml(pl.games, pl.wins, timeStatsOf(chrono))}
     <div class="pd-cards">
-    ${eloCardHtml(plElo, plEloAll.players.length)}
-    ${recent.length ? `
-    <div class="chart-card">
-      <div class="chart-title">${tr("Forma recente")}</div>
-      <div class="chart-sub">${tr("Últimos {n} jogos, do mais antigo para o mais recente", { n: recent.length })}</div>
-      <div class="form-strip">${recent.map((g) => `
-        <span class="form-chip ${g.won ? "win" : "loss"}" data-tip="${g.won ? esc(tr("Vitória")) : esc(tr("Derrota"))}" data-tip-label="${esc(g.deck)} · ${esc(modeLabel(g.mode))} · ${esc(formatDateTime(g.date))}">${g.won ? tr("V") : tr("D")}</span>`).join("")}
-      </div>
-    </div>` : ""}
-    <div class="chart-card">
-      <div class="chart-title">${tr("Decks de {name}", { name: esc(pl.name) })}</div>
-      <div class="chart-sub">${tr("Taxa de vitórias de cada deck")}</div>
-      ${Charts.hbars(decks.map(({ p, d, borrowed }) => ({
-        label: p.name, labelHtml: `${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}${borrowed ? ` <small class="borrow-tag">${tr("emprestado")}</small>` : ""}`,
-        value: d.winRate, valueLabel: `${Math.round(d.winRate * 100)}% · ${tr("{n} jogo(s)", { n: d.games })}`,
-        tip: `${Math.round(d.winRate * 100)}%`, tipLabel: `${p.name} · ${tr("{w} de {g} vitórias", { w: d.wins, g: d.games })}`,
-        muted: !d.games,
-      })))}
+      ${eloCardHtml(elo, eloAll.players.length)}
+      <div class="pd-stack">${streakCardHtml(chrono)}${formCardHtml(chrono, (g) => `${g.deck} · ${modeLabel(g.mode)} · ${formatDateTime(g.date)}`)}</div>
+      ${evo.html}
+      ${decks.length ? `
+      <div class="chart-card">
+        <div class="chart-title">${tr("Decks de {name}", { name: esc(pl.name) })}</div>
+        <div class="chart-sub">${tr("Taxa de vitórias com cada deck")}</div>
+        ${Charts.hbars(decks.map(({ p, d, borrowed }) => ({
+          label: p.name, labelHtml: `${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}${borrowed ? ` <small class="borrow-tag">${tr("emprestado")}</small>` : ""}`,
+          value: d.winRate, valueLabel: `${Math.round(d.winRate * 100)}% · ${tr("{n} jogo(s)", { n: d.games })}`,
+          tip: `${Math.round(d.winRate * 100)}%`, tipLabel: `${p.name} · ${tr("{w} de {g} vitórias", { w: d.wins, g: d.games })}`,
+          muted: !d.games,
+        })))}
+      </div>` : ""}
+      ${modesCardHtml(chrono)}
+      ${lendCardHtml(tr("Decks emprestados a outros"), tr("Jogos com os decks de {name} jogados por outras pessoas (contam para quem jogou)", { name: esc(pl.name) }), Object.values(lentOut))}
+      ${headToHeadHtml(chrono, tr("Jogos em que estiveram os dois à mesa, com qualquer deck: vitórias de {name} – vitórias do adversário", { name: esc(pl.name) }), tr("{name} ganhou", { name: esc(pl.name) }), [pl.name])}
+      ${durationsCardHtml(chrono)}
     </div>
-    ${headToHeadHtml(pl.history, tr("Jogos em que estiveram os dois à mesa, com qualquer deck: vitórias de {name} – vitórias do adversário", { name: esc(pl.name) }), tr("{name} ganhou", { name: esc(pl.name) }), [pl.name])}
-    ${lentOut.length ? `
-    <div class="chart-card">
-      <div class="chart-title">${tr("Decks emprestados a outros")}</div>
-      <div class="chart-sub">${tr("Jogos com os decks de {name} jogados por outras pessoas (contam para quem jogou)", { name: esc(pl.name) })}</div>
-      <div class="lend-list">${Object.values(lentOut.reduce((acc, x) => { const k = x.deck + "|" + normName(x.who); (acc[k] = acc[k] || { deck: x.deck, who: x.who, g: 0, w: 0 }).g++; if (x.won) acc[k].w++; return acc; }, {})).sort((a, b) => b.g - a.g).map((r) => `
-        <div class="lend-row"><span class="lend-name">${esc(r.deck)} → ${esc(r.who)}</span><span class="lend-val">${tr("{g} jogos · {w} vitórias", { g: r.g, w: r.w })}</span></div>`).join("")}</div>
-    </div>` : ""}
-    </div>
-    <div class="section-title">${tr("Decks")}</div>
-    <div class="pf-grid">${ownDecks.map(({ p, d }) => `
-      <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
-        <div class="commander-thumb" style="${seatThumbStyle(p)}">${p.commander && p.commander.art ? "" : I("card")}</div>
-        <div class="profile-info">
-          <div class="profile-name">${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}</div>
-          <div class="profile-summary">${d.games ? tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins }) + ` (${Math.round(d.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
-        </div>
-        <span class="profile-chevron">${I("chevron-right")}</span>
-      </div>`).join("")}</div>
-    ${borrowedDecks.length ? `
-    <div class="section-title">${tr("Decks de outros com que jogou")}</div>
-    <div class="pf-grid">${borrowedDecks.map(({ p, d }) => `
-      <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
-        <div class="commander-thumb" style="${seatThumbStyle(p)}">${p.commander && p.commander.art ? "" : I("card")}</div>
-        <div class="profile-info">
-          <div class="profile-name">${esc(p.name)} ${pipsHtml(colorIdentityOf(p))}</div>
-          <div class="profile-sub">${p.playerName ? tr("Deck de {name}", { name: esc(p.playerName) }) : tr("Sem dono")}</div>
-          <div class="profile-summary">${tr("{g} jogos · {w} vitórias", { g: d.games, w: d.wins })} (${Math.round(d.winRate * 100)}%)</div>
-        </div>
-        <span class="profile-chevron">${I("chevron-right")}</span>
-      </div>`).join("")}</div>` : ""}`;
-  body.insertAdjacentHTML("beforeend", `<button class="btn btn-ghost btn-block merge-entry" id="merge-player-btn">${I("merge")} ${tr("Fundir com outro jogador")}</button>`);
+    ${ownDecks.length ? `<div class="section-title">${tr("Decks")}</div><div class="pf-grid">${ownDecks.map(deckCard).join("")}</div>` : ""}
+    ${borrowedDecks.length ? `<div class="section-title">${tr("Decks de outros com que jogou")}</div><div class="pf-grid">${borrowedDecks.map(deckCard).join("")}</div>` : ""}
+    ${rows.length ? historySectionHtml(rows) : ""}
+    <button class="btn btn-ghost btn-block merge-entry" id="merge-player-btn">${I("merge")} ${tr("Fundir com outro jogador")}</button>`;
   body.querySelector("#merge-player-btn").addEventListener("click", () => openMergePlayerSheet(pl.key));
-  body.querySelectorAll(".profile-card[data-id]").forEach((c) => c.addEventListener("click", () => nav("profile-detail", { id: c.dataset.id, fromPlayer: pl.key })));
-  bindEloCard(body, plElo);
+  body.querySelectorAll(".profile-card[data-id], .pd-chip[data-id]").forEach((c) => c.addEventListener("click", () => nav("profile-detail", { id: c.dataset.id, fromPlayer: pl.key })));
+  bindHistorySection(body, rows);
   Charts.bindTips(body);
-  s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));
+  if (evo.points) Charts.bindLine(body, evo.points);
+  bindEloCard(body, elo);
 }

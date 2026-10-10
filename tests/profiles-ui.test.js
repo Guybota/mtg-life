@@ -22,7 +22,7 @@ module.exports = [
         await page.click("#back-btn");
         await page.click('.seg-btn[data-tab="decks"]');
         await page.click("#decks-view .profile-card >> nth=0");
-        await page.waitForSelector("#history-list .cd-list-item");
+        await page.waitForSelector("#history-list .hist-row");
         // nada sai da largura do ecrã
         t.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${w}px: sem scroll lateral`);
       }
@@ -64,3 +64,26 @@ module.exports = [
     },
   },
 ];
+
+module.exports.push({
+  name: "perfil do jogador com os mesmos números do deck",
+  async run(t) {
+    const page = await t.page();
+    await openWith(t, page, seedProfiles());
+    await goProfiles(page, "players");
+    await page.click('.player-card:has-text("Ana")');
+    await page.waitForSelector(".pd-kpis");
+    const kpis = await page.$$eval(".pd-kpis .kpi", (x) => x.map((e) => e.querySelector(".kpi-label").textContent + "=" + e.querySelector(".kpi-value").textContent.trim()));
+    t.eq(kpis, ["Jogos=18", "Vitórias=9 50%", "Média por jogo=50:00", "Média por turno=01:00"], "números-resumo");
+    const titles = await page.$$eval(".chart-title", (x) => x.map((e) => e.textContent));
+    for (const want of ["Classificação ELO", "Forma recente", "Evolução da taxa de vitórias", "Decks de Ana", "Resultados por modo", "Confrontos diretos", "Duração dos jogos"]) t.ok(titles.includes(want), "falta o cartão " + want);
+    t.ok(await page.isVisible(".streak-card"), "sequência");
+    t.eq(await page.$$eval("#history-list .hist-row:not(.hidden)", (x) => x.length), 10, "mostra 10 jogos");
+    await page.click("#history-more");
+    t.eq(await page.$$eval("#history-list .hist-row:not(.hidden)", (x) => x.length), 18, "ver todos");
+    t.ok((await page.$eval("#history-list .hist-row", (e) => e.textContent)).match(/Atraxa|Meren/), "cada jogo diz o deck");
+    // a forma recente cabe numa linha no telemóvel
+    const rowsUsed = await page.$$eval(".form-strip .form-chip", (x) => new Set(x.map((e) => Math.round(e.getBoundingClientRect().top))).size);
+    t.eq(rowsUsed, 1, "forma recente numa linha");
+  },
+});

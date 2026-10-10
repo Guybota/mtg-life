@@ -43,8 +43,8 @@ module.exports = [
       await page.click('.seg-btn[data-tab="decks"]');
       await page.click('#decks-view .profile-card:has-text("Atraxa")');
       const titles = await page.$$eval(".chart-title", (x) => x.map((e) => e.textContent));
-      t.ok(titles.includes("Por commander") && titles.includes("Emprestado a outros"), "cartões do deck: " + titles.join(", "));
-      const first = await page.$eval("#history-list .cd-list-item", (e) => e.textContent.replace(/\s+/g, " "));
+      t.ok(titles.includes("Por commander") && titles.includes("Quem jogou com este deck"), "cartões do deck: " + titles.join(", "));
+      const first = await page.$eval("#history-list .hist-row", (e) => e.textContent.replace(/\s+/g, " "));
       t.ok(first.includes("Rui") && first.includes("emprestado") && first.includes("Com Tymna"), "histórico mostra quem jogou: " + first);
     },
   },

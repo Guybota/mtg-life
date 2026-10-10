@@ -30,10 +30,9 @@ function renderSetupStandard() {
           </div>
         </div>
         ${moreOptionsHtml(
-          [preset.cmdDmgToggle ? "Commander damage" : "", tr("Tempo e turnos"), tr("Veneno")].filter(Boolean).join(" · "),
+          [preset.cmdDmgToggle ? "Commander damage" : "", tr("Tempo e turnos")].filter(Boolean).join(" · "),
           (preset.cmdDmgToggle ? switchFieldHtml("cfg-cmddmg", "Commander damage", tr("Contador de dano de commander por oponente (21 elimina)."), draft.cmdDmgEnabled) : "") +
-          trackTurnsFieldHtml(draft.trackTurns !== false) +
-          switchFieldHtml("cfg-poison", tr("Contadores de veneno"), tr("Mostra um contador de veneno em cada jogador (10 elimina)."), !!draft.poisonEnabled)
+          trackTurnsFieldHtml(draft.trackTurns !== false)
         )}
         ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
         <div class="mesa-card">
@@ -154,7 +153,6 @@ function renderSetupStandard() {
     s.querySelector("#cfg-cmddmg").addEventListener("change", (e) => { draft.cmdDmgEnabled = e.target.checked; });
   }
   s.querySelector("#cfg-track").addEventListener("change", (e) => { draft.trackTurns = e.target.checked; });
-  s.querySelector("#cfg-poison").addEventListener("change", (e) => { draft.poisonEnabled = e.target.checked; });
   s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
   s.querySelector("#shuffle-btn").addEventListener("click", () => {
     shuffleInPlace(draft.players);
@@ -351,7 +349,6 @@ function buildStandardPanel(p, rotated, currentPlayer) {
       <div class="player-header">
           <div class="player-name">${esc(p.name)}</div>
           <div class="header-badges">
-            ${game.standard.poisonEnabled ? `<div class="poison-badge ${(p.poison || 0) >= 10 ? "lethal" : ""}" data-action="poison" title="${tr("Veneno")}">${I("flask")}<span>${p.poison || 0}</span></div>` : ""}
             <div class="tax-badge" data-action="tax" title="Commander tax">${taxBadgeText(p)}</div>
           </div>
         </div>
@@ -409,8 +406,6 @@ function buildStandardPanel(p, rotated, currentPlayer) {
     ev.stopPropagation();
     openPlayerSheet(p.id);
   }));
-  const poisonBadge = panel.querySelector('[data-action="poison"]');
-  if (poisonBadge) poisonBadge.addEventListener("click", (ev) => { ev.stopPropagation(); openPoisonModal(p.id); });
   panel.querySelector('[data-action="tax"]').addEventListener("click", (ev) => {
     ev.stopPropagation();
     openCommanderTaxModal("standard", p.id);
@@ -438,35 +433,6 @@ function taxBadgeText(p) {
   return main + "/+" + (p.partnerCmdTax || 0) * 2;
 }
 
-/** Contador de veneno de um jogador (modo standard). */
-function openPoisonModal(playerId) {
-  const p = game.standard.players.find((x) => x.id === playerId);
-  if (!p) return;
-  closeAnyModal();
-  const backdrop = el(`
-    <div class="modal-backdrop center">
-      <div class="modal-sheet">
-        <h2>${tr("Veneno — {name}", { name: esc(p.name) })}</h2>
-        <div class="footer-note">${tr("Com 10 ou mais contadores de veneno o jogador é eliminado.")}</div>
-        <div class="cd-stepper">
-          <button class="btn btn-icon cd-round-btn" data-d="-1" aria-label="${tr("Menos um")}">${I("minus")}</button>
-          <div class="cd-value" id="poison-val">${p.poison || 0}</div>
-          <button class="btn btn-icon cd-round-btn" data-d="1" aria-label="${tr("Mais um")}">${I("plus")}</button>
-        </div>
-        <button class="btn btn-ghost btn-block" id="poison-close">${tr("Fechar")}</button>
-      </div>
-    </div>
-  `);
-  document.body.appendChild(backdrop);
-  backdrop.querySelectorAll("[data-d]").forEach((b) => b.addEventListener("click", () => {
-    State.stdAdjustPoison(game, playerId, parseInt(b.dataset.d, 10));
-    backdrop.querySelector("#poison-val").textContent = p.poison || 0;
-    backdrop.querySelector("#poison-val").classList.toggle("lethal", (p.poison || 0) >= 10);
-    updateStandardPanel(playerId);
-  }));
-  backdrop.querySelector("#poison-close").addEventListener("click", () => backdrop.remove());
-  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
-}
 
 function openCommanderTaxModal(mode, playerId) {
   const p = mode === "teams" ? State.teamsFindPlayer(game, playerId).player : game.standard.players.find((x) => x.id === playerId);
@@ -645,8 +611,6 @@ function updateStandardPanel(pid) {
   panel.classList.toggle("eliminated", p.eliminated);
   setLifeAnimated(panel.querySelector(".life-total"), p.life);
   syncEliminationBadges(panel, p);
-  const pb = panel.querySelector(".poison-badge");
-  if (pb) { pb.querySelector("span").textContent = p.poison || 0; pb.classList.toggle("lethal", (p.poison || 0) >= 10); }
   panel.querySelectorAll(".cmd-badge").forEach((b) => {
     const oppId = b.dataset.oppId;
     const source = b.dataset.source || "main";
@@ -666,6 +630,7 @@ function updateStandardPanel(pid) {
 // jogador, virado para ele).
 // ===========================================================
 const COUNTER_META = {
+  poison: { icon: "flask", label: () => tr("Veneno"), lethal: 10 }, // guardado em p.poison (10 elimina)
   energy: { icon: "zap", label: () => tr("Energia") },
   experience: { icon: "star", label: () => tr("Experiência") },
   treasure: { icon: "coins", label: () => tr("Tesouros") },
@@ -679,10 +644,15 @@ function statusChipsHtml(p) {
   if (std.initiativeId === p.id) out += `<span class="st-chip initiative" title="${tr("Iniciativa")}">${I("door")}</span>`;
   if (p.blessing) out += `<span class="st-chip blessing" title="${tr("City's Blessing")}">${I("shield")}</span>`;
   Object.keys(COUNTER_META).forEach((k) => {
-    const v = p.counters && p.counters[k];
-    if (v) out += `<span class="st-chip" title="${esc(COUNTER_META[k].label())}">${I(COUNTER_META[k].icon)}<b>${v}</b></span>`;
+    const v = counterValue(p, k);
+    const lethal = COUNTER_META[k].lethal && v >= COUNTER_META[k].lethal;
+    if (v) out += `<span class="st-chip ${k}${lethal ? " lethal" : ""}" title="${esc(COUNTER_META[k].label())}">${I(COUNTER_META[k].icon)}<b>${v}</b></span>`;
   });
   return out;
+}
+/** Valor de um contador do jogador (o veneno está à parte, em p.poison). */
+function counterValue(p, k) {
+  return k === "poison" ? p.poison || 0 : (p.counters && p.counters[k]) || 0;
 }
 function refreshAllStandardPanels() {
   game.standard.players.forEach((p) => updateStandardPanel(p.id));
@@ -738,10 +708,10 @@ function openPlayerSheet(playerId) {
 
         <div class="section-title">${tr("Contadores")}</div>
         <div class="ps-counters">${Object.keys(COUNTER_META).map((k) => `
-          <div class="ps-counter" data-key="${k}">
+          <div class="ps-counter ${k}" data-key="${k}">
             <span class="ps-c-label">${I(COUNTER_META[k].icon)} ${esc(COUNTER_META[k].label())}</span>
             <button class="ps-c-btn" data-c="-1" aria-label="${tr("Menos")}">${I("minus")}</button>
-            <b data-c-val>${(p.counters && p.counters[k]) || 0}</b>
+            <b data-c-val>${counterValue(p, k)}</b>
             <button class="ps-c-btn" data-c="1" aria-label="${tr("Mais")}">${I("plus")}</button>
           </div>`).join("")}
         </div>
@@ -761,7 +731,11 @@ function openPlayerSheet(playerId) {
     backdrop.querySelector("[data-life]").textContent = p.life;
     backdrop.querySelectorAll("[data-n-txt]").forEach((x) => { x.textContent = n; });
     backdrop.querySelector("[data-n-val]").textContent = n;
-    backdrop.querySelectorAll(".ps-counter").forEach((row) => { row.querySelector("[data-c-val]").textContent = (p.counters && p.counters[row.dataset.key]) || 0; });
+    backdrop.querySelectorAll(".ps-counter").forEach((row) => {
+      const k = row.dataset.key, v = counterValue(p, k);
+      row.querySelector("[data-c-val]").textContent = v;
+      row.classList.toggle("lethal", !!(COUNTER_META[k].lethal && v >= COUNTER_META[k].lethal));
+    });
     backdrop.querySelector('[data-toggle="monarch"]').setAttribute("aria-pressed", String(std.monarchId === p.id));
     backdrop.querySelector('[data-toggle="initiative"]').setAttribute("aria-pressed", String(std.initiativeId === p.id));
     backdrop.querySelector('[data-toggle="blessing"]').setAttribute("aria-pressed", String(!!p.blessing));
@@ -787,7 +761,9 @@ function openPlayerSheet(playerId) {
     toast(msg);
   }));
   backdrop.querySelectorAll(".ps-counter").forEach((row) => row.querySelectorAll("[data-c]").forEach((b) => bindPressRepeat(b, () => {
-    State.stdAdjustCounter(game, p.id, row.dataset.key, parseInt(b.dataset.c, 10));
+    const k = row.dataset.key, d = parseInt(b.dataset.c, 10);
+    if (k === "poison") State.stdAdjustPoison(game, p.id, d); // 10 venenos eliminam
+    else State.stdAdjustCounter(game, p.id, k, d);
     done();
   })));
   backdrop.querySelectorAll("[data-toggle]").forEach((b) => b.addEventListener("click", () => {

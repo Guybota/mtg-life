@@ -2542,3 +2542,7 @@ html.duel-portrait .board-toolbar > #end-game-btn{ flex:1.4 1 0; min-width:0; pa
 html.compact-board .life-total{ font-size: clamp(2.2rem, min(50cqh, 26cqw), 6.5rem); letter-spacing:-3px; }
 html.compact-board .life-tap .tap-circle{ width:2.75rem; height:2.75rem; }
 html.compact-board .life-tap .tap-circle .ic{ width:1.3rem; height:1.3rem; }
+/* veneno junto dos contadores: insígnia verde-escura, vermelha aos 10 */
+.st-chip.poison{ background: color-mix(in srgb, var(--mint) 70%, var(--surface)); color: var(--mint-ink); }
+.st-chip.poison.lethal, .ps-counter.lethal b{ background: var(--rose); color: var(--minus-ink); }
+.ps-counter.lethal{ box-shadow: inset 0 0 0 1.5px var(--minus-ink); }

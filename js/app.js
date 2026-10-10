@@ -1920,7 +1920,6 @@
         ${panelBgHtml(p)}
         <div class="mini-actions"><button class="mini-btn" data-action="edit">${I("pencil")}</button></div>
         <div class="content">
-          ${isActive ? `<div class="turn-badge">${tr("A jogar")}</div>` : ""}
         <div class="player-header">
             <div class="player-name">${esc(p.name)}</div>
             <div class="header-badges">
@@ -3123,7 +3122,6 @@
       <div class="player-panel team-panel ${rotated ? "rot180" : ""} ${hasArt(team.players) ? "has-art" : ""} ${team.eliminated ? "eliminated" : ""} ${isActive ? "active-turn" : ""}" data-team-id="${team.id}">
         ${teamBgHtml(team)}
         <div class="content">
-          ${isActive ? `<div class="turn-badge">${tr("A jogar")}</div>` : ""}
           <div class="player-header">
             <div class="player-name">${esc(team.name)}</div>
           </div>

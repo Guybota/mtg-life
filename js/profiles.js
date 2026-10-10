@@ -393,8 +393,8 @@
    *  partir de uma delas: os decks adversários guardados nesse jogo e,
    *  no histórico de cada um, o registo do mesmo modo a segundos deste.
    *  Devolve [{ profile, game }] (o próprio primeiro) ou []. */
-  function gameGroup(profileId, gameId) {
-    const list = load();
+  function gameGroup(profileId, gameId, listArg) {
+    const list = listArg || load();
     const self = byAnyId(list, profileId);
     const g = self && (self.history || []).find((x) => x.id === gameId);
     if (!g) return [];
@@ -444,6 +444,83 @@
     });
     persist(list);
     return seats.length;
+  }
+
+  const cmdLabelOf = (p) => (p && p.commander && p.commander.name ? p.commander.name + (p.partnerCommander && p.partnerCommander.name ? " + " + p.partnerCommander.name : "") : undefined);
+
+  /** Todos os jogos, juntando os registos de cada deck que esteve à mesa
+   *  (mesmo modo, a segundos uns dos outros). Mais recente primeiro.
+   *  Cada jogo: { date, mode, seats: [{ profile, game }], guests: [{ name, won }] }
+   *  — guests são os lugares sem deck registado (só um nome). */
+  function gamesList() {
+    const list = load();
+    const entries = [];
+    list.forEach((p) => (p.history || []).forEach((g) => { if (g && g.id) entries.push({ profile: p, game: g }); }));
+    entries.sort((a, b) => (a.game.date || 0) - (b.game.date || 0));
+    const games = [];
+    let cur = null;
+    entries.forEach((e) => {
+      const mode = e.game.mode || "standard";
+      const fits = cur && cur.mode === mode && (e.game.date || 0) - cur.start <= 15000 && !cur.seats.some((x) => x.profile.id === e.profile.id);
+      if (!fits) { cur = { date: e.game.date, start: e.game.date, mode, seats: [] }; games.push(cur); }
+      cur.seats.push(e);
+    });
+    games.forEach((G) => {
+      const ids = new Set(G.seats.map((x) => x.profile.id));
+      const first = G.seats[0].game;
+      G.guests = (first.opponents || []).filter((o) => o && !(o.profileId && ids.has(o.profileId))).map((o) => {
+        const op = o.profileId ? byAnyId(list, o.profileId) : null;
+        return { name: (o.pilot || o.name || (op && (op.playerName || op.name)) || "").trim(), won: !!o.won };
+      }).filter((x) => x.name);
+    });
+    return games.reverse();
+  }
+
+  /** Liga o lugar de um convidado (sem deck) de um jogo a um deck — novo ou
+   *  já existente: o jogo passa a constar também do histórico desse deck e
+   *  os outros decks do jogo passam a apontar para ele como adversário.
+   *  Devolve { ok } ou { error: "same" | "missing" }. */
+  function attachGuest(refProfileId, refGameId, guestName, targetId) {
+    const list = load();
+    const group = gameGroup(refProfileId, refGameId, list);
+    const target = byAnyId(list, targetId);
+    if (!group.length || !target) return { error: "missing" };
+    if (group.some((x) => x.profile.id === target.id)) return { error: "same" };
+    const base = group[0].game;
+    const isGuest = (o) => o && !(o.profileId && group.some((x) => x.profile.id === o.profileId)) && norm(o.pilot || o.name) === norm(guestName);
+    const guest = (base.opponents || []).find(isGuest);
+    if (!guest) return { error: "missing" };
+    const pilot = (x) => (x.game.playedBy || x.profile.playerName || x.profile.name || "").trim();
+    const timed = base.timed !== false;
+    const who = canonicalPlayer(guestName.trim());
+    const entry = {
+      id: uid(),
+      date: (base.date || Date.now()) + 1,
+      won: !!guest.won,
+      mode: base.mode || "standard",
+      gameTimeMs: timed ? base.gameTimeMs || 0 : 0,
+      turnTimeMs: 0,
+      turnsTaken: 0,
+      timed,
+      manual: base.manual ? true : undefined,
+      playedBy: norm(who) !== norm(target.playerName) ? who : undefined,
+      commander: cmdLabelOf(target),
+      opponents: group.map((x) => ({ profileId: x.profile.id, name: pilot(x), pilot: pilot(x), won: !!x.game.won }))
+        .concat((base.opponents || []).filter((o) => o !== guest && !(o.profileId && group.some((x) => x.profile.id === o.profileId)))),
+    };
+    if (!target.history) target.history = [];
+    target.history.push(entry);
+    target.stats.games += 1;
+    if (entry.won) target.stats.wins += 1;
+    target.stats.totalGameTimeMs += entry.gameTimeMs;
+    // nos outros decks do jogo, o adversário passa a ser este deck
+    const now = Date.now();
+    group.forEach((x) => {
+      (x.game.opponents || []).forEach((o) => { if (isGuest(o)) { o.profileId = target.id; o.pilot = o.pilot || who; } });
+      x.game.editedAt = now;
+    });
+    persist(list);
+    return { ok: true };
   }
 
   /** Regista à mão um jogo que não foi jogado no contador.
@@ -722,5 +799,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { gameGroup, editGame, recordManualGame, all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases, onChange, deleted, syncPayload, syncMerge };
+  global.MTG.Profiles = { gamesList, attachGuest, gameGroup, editGame, recordManualGame, all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases, onChange, deleted, syncPayload, syncMerge };
 })(window);

@@ -33,11 +33,13 @@ function renderProfilesScreen() {
         <div class="pf-main">
         ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
         ${profiles.length ? `
-        <div class="seg seg-3" role="tablist">
+        <div class="seg seg-4" role="tablist">
           <button type="button" class="seg-btn" role="tab" data-tab="decks" aria-selected="${profileTab === "decks"}">${tr("Decks")}</button>
           <button type="button" class="seg-btn" role="tab" data-tab="players" aria-selected="${profileTab === "players"}">${tr("Jogadores")}</button>
           <button type="button" class="seg-btn" role="tab" data-tab="ranking" aria-selected="${profileTab === "ranking"}">${tr("Classificação")}</button>
+          <button type="button" class="seg-btn" role="tab" data-tab="games" aria-selected="${profileTab === "games"}">${tr("Jogos")}</button>
         </div>` : ""}
+        <div id="games-view" class="${profileTab === "games" ? "" : "hidden"}"></div>
         <div id="players-view" class="${profileTab === "players" ? "" : "hidden"}"></div>
         <div id="ranking-view" class="${profileTab === "ranking" ? "" : "hidden"}"></div>
         <div id="decks-view" class="${profileTab === "decks" ? "" : "hidden"}">
@@ -173,8 +175,10 @@ function renderProfilesScreen() {
     s.querySelector("#players-view").classList.toggle("hidden", profileTab !== "players");
     s.querySelector("#decks-view").classList.toggle("hidden", profileTab !== "decks");
     s.querySelector("#ranking-view").classList.toggle("hidden", profileTab !== "ranking");
+    s.querySelector("#games-view").classList.toggle("hidden", profileTab !== "games");
   }));
   renderRankingView(s.querySelector("#ranking-view"));
+  renderGamesView(s.querySelector("#games-view"));
   Charts.bindTips(s);
   s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
 }

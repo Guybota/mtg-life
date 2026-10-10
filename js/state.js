@@ -234,6 +234,63 @@
     return state;
   }
 
+  // ---------------------------------------------------------
+  // Contadores extra e estado da mesa (só aparecem quando usados)
+  // ---------------------------------------------------------
+  /** Contadores simples por jogador (não eliminam): energia, experiência,
+   *  tesouros, rad. */
+  const PLAYER_COUNTERS = ["energy", "experience", "treasure", "rad"];
+  function stdAdjustCounter(state, playerId, key, delta) {
+    const p = state.standard.players.find((x) => x.id === playerId);
+    if (!p || !PLAYER_COUNTERS.includes(key)) return state;
+    if (!p.counters) p.counters = {};
+    p.counters[key] = Math.max(0, (p.counters[key] || 0) + delta);
+    if (!p.counters[key]) delete p.counters[key];
+    save(state);
+    return state;
+  }
+  function stdToggleBlessing(state, playerId) {
+    const p = state.standard.players.find((x) => x.id === playerId);
+    if (!p) return state;
+    p.blessing = !p.blessing;
+    save(state);
+    return state;
+  }
+  /** Monarca / iniciativa: só um jogador de cada vez (null = ninguém). */
+  function stdSetMonarch(state, playerId) {
+    state.standard.monarchId = playerId || null;
+    save(state);
+    return state;
+  }
+  function stdSetInitiative(state, playerId) {
+    state.standard.initiativeId = playerId || null;
+    save(state);
+    return state;
+  }
+  /** Dia/noite: null (ainda não começou), "day" ou "night". */
+  function stdSetDayNight(state, value) {
+    state.standard.dayNight = value === "day" || value === "night" ? value : null;
+    save(state);
+    return state;
+  }
+
+  /** Mudar a vida de vários jogadores de uma vez (fica no histórico como
+   *  alterações normais). Eliminados ficam de fora.
+   *  - "opponents": cada adversário perde n;
+   *  - "all": toda a mesa perde n (incluindo quem usa);
+   *  - "drain": cada adversário perde n e quem usa ganha o total perdido.
+   *  Devolve quantos jogadores foram afetados. */
+  function stdGroupLife(state, sourceId, mode, n) {
+    const std = state.standard;
+    const amount = Math.max(0, Math.round(n || 0));
+    if (!amount) return 0;
+    const alive = std.players.filter((p) => !p.eliminated);
+    const targets = mode === "all" ? alive : alive.filter((p) => p.id !== sourceId);
+    targets.forEach((p) => stdAdjustLife(state, p.id, -amount));
+    if (mode === "drain" && targets.length) stdAdjustLife(state, sourceId, amount * targets.length);
+    return targets.length;
+  }
+
   /** Commander tax: cada vez que o jogador conjura o commander (principal ou
    *  parceiro) da zona de comando, o custo sobe {2}. source: "main"|"partner". */
   function stdAdjustCmdTax(state, playerId, delta, source) {
@@ -518,7 +575,12 @@
       p.protected = false;
       p.turnTimeMs = 0;
       p.turnsTaken = 0;
+      p.counters = {};
+      p.blessing = false;
     });
+    state.standard.monarchId = null;
+    state.standard.initiativeId = null;
+    state.standard.dayNight = null;
     state.standard.currentTurnIndex = 0;
     state.standard.roundStartIndex = 0;
     state.standard.roundNumber = 1;
@@ -1220,6 +1282,13 @@
     stdAdjustCmdDamage,
     stdAdjustCmdTax,
     stdAdjustPoison,
+    PLAYER_COUNTERS,
+    stdAdjustCounter,
+    stdToggleBlessing,
+    stdSetMonarch,
+    stdSetInitiative,
+    stdSetDayNight,
+    stdGroupLife,
     stdToggleEliminated,
     stdSetCommander,
     stdSetPartnerCommander,

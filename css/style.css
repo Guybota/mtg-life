@@ -674,7 +674,7 @@ input.switch:checked::after{ transform: translateX(18px); }
 }
 .player-header{
   display:flex; align-items:center; justify-content:space-between;
-  padding: 10px 46px 6px 12px;
+  padding: 10px 80px 6px 12px; /* à direita: os dois mini-botões */
   gap:6px;
 }
 .player-name{
@@ -851,6 +851,28 @@ input.switch:checked::after{ transform: translateX(18px); }
 .mini-btn .ic{ width:14px; height:14px; }
 .mini-btn:active{ transform: scale(.88); }
 
+/* insígnias de monarca/iniciativa/blessing e contadores extra: só quando
+   estão em uso, pequenas, por baixo do nome */
+.status-chips{
+  position:absolute; top:42px; left:10px; z-index:4;
+  display:flex; flex-wrap:wrap; gap:4px; max-width:70%;
+  cursor:pointer;
+}
+.status-chips:empty{ display:none; }
+.st-chip{
+  display:inline-flex; align-items:center; gap:3px;
+  height:24px; padding:0 7px; border-radius:999px;
+  background: var(--chip-bg); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  color: var(--chip-ink); font-size:.72rem; font-weight:700; font-variant-numeric: tabular-nums;
+  animation: fadeIn .25s ease both;
+}
+.st-chip .ic{ width:13px; height:13px; }
+.st-chip.monarch{ background: var(--butter); color: var(--butter-ink); }
+.st-chip.initiative{ background: var(--lavender); color: var(--lavender-ink); }
+.st-chip.blessing{ background: var(--mint); color: var(--mint-ink); }
+.player-panel.picked-flash{ animation: pickedFlash 1.1s ease; }
+@keyframes pickedFlash{ 0%,100%{ box-shadow:none; } 25%,65%{ box-shadow: 0 0 0 4px var(--text) inset; } }
+
 .eliminated-badge, .protected-badge{
   position:absolute; top:50%; left:50%;
   transform:translate(-50%,-50%) rotate(-6deg);
@@ -961,7 +983,12 @@ html.compact-board .br-chip{ padding:5px 9px; font-size:.7rem; }
 html.compact-board .board{ padding-top:2px; }
 html.compact-board .board-toolbar{ padding: 4px 10px 6px; }
 html.compact-board .board-toolbar .btn{ min-height:38px; height:38px; }
-html.compact-board .player-header{ padding: 6px 40px 0 10px; }
+html.compact-board .player-header{ padding: 6px 72px 0 10px; }
+/* no tabuleiro compacto as insígnias têm uma linha própria (só quando
+   existem), para não ficarem por cima dos botões +/− */
+html.compact-board .status-chips{ position:static; padding: 3px 10px 0; max-width:none; flex-wrap:nowrap; overflow:hidden; }
+html.compact-board .st-chip{ height:20px; padding:0 6px; font-size:.66rem; }
+html.compact-board .st-chip .ic{ width:11px; height:11px; }
 html.compact-board .player-name{ font-size:.82rem; }
 html.compact-board .mini-actions{ top:4px; right:4px; }
 html.compact-board .commander-badges{
@@ -1625,6 +1652,9 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .seg{ display:grid; grid-template-columns:1fr 1fr; gap:4px; background: var(--surface-3); border-radius:14px; padding:4px; margin-bottom:12px; }
 .seg-btn{ height:38px; border:none; border-radius:10px; background:transparent; font: 600 .9rem var(--font); color: var(--text-dim); }
 .seg-btn[aria-selected="true"]{ background: var(--surface); color: var(--text); font-weight:700; box-shadow: var(--shadow-sm); }
+#tt-dn{ grid-template-columns: repeat(3, 1fr); }
+#tt-dn .seg-btn{ display:flex; align-items:center; justify-content:center; gap:6px; }
+#tt-dn .seg-btn .ic{ width:15px; height:15px; }
 .player-avatar{
   width:52px; height:52px; border-radius:50%; flex-shrink:0;
   display:flex; align-items:center; justify-content:center;
@@ -1925,6 +1955,67 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .backup-card .btn-primary{ height:38px; padding:0 14px; flex-shrink:0; }
 .backup-card .btn-icon{ width:38px; height:38px; flex-shrink:0; background:transparent; }
 .backup-note{ font-size:.78rem; color: var(--text-dim); text-align:center; margin: 0 0 14px; }
+
+/* ---------- Painel do jogador e ferramentas da mesa ---------- */
+/* janela aberta a partir de um jogador de cima: fica virada para ele */
+.modal-backdrop.flip .modal-sheet{ transform: rotate(180deg); animation:none; }
+.ps-sheet, .tt-sheet{ max-width:460px; }
+.ps-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.ps-head h2{ margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ps-life{ display:flex; align-items:center; gap:6px; font-variant-numeric: tabular-nums; }
+.ps-life .ic{ width:18px; height:18px; color: var(--rose-ink); }
+.ps-life b{ font-size:1.6rem; font-weight:800; display:inline-block; }
+.ps-quick{ display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; }
+.ps-q{
+  height:48px; border:none; border-radius:14px; cursor:pointer;
+  font: 800 1.05rem var(--font); font-variant-numeric: tabular-nums;
+  background: var(--surface-2); color: var(--text);
+}
+.ps-q.minus{ color: var(--minus-ink); }
+.ps-q.plus{ color: var(--plus-ink); }
+.ps-group{ display:flex; gap:10px; align-items:stretch; }
+.ps-n{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; background: var(--surface-2); border-radius:14px; padding:4px; min-width:58px; }
+.ps-n b{ font-size:1.4rem; font-weight:800; font-variant-numeric: tabular-nums; }
+.ps-n-btn, .ps-c-btn{
+  width:34px; height:30px; border:none; border-radius:10px; cursor:pointer;
+  background: var(--surface); color: var(--text); display:flex; align-items:center; justify-content:center;
+  touch-action: manipulation;
+}
+.ps-n-btn .ic, .ps-c-btn .ic{ width:16px; height:16px; }
+.ps-group-btns{ flex:1; display:flex; flex-direction:column; gap:6px; }
+.ps-group-btns .btn{ justify-content:flex-start; }
+.ps-counters{ display:grid; grid-template-columns: 1fr 1fr; gap:6px; }
+.ps-counter{ display:flex; align-items:center; gap:6px; background: var(--surface-2); border-radius:14px; padding:6px 8px; }
+.ps-c-label{ flex:1; min-width:0; display:flex; align-items:center; gap:5px; font-size:.8rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ps-c-label .ic{ width:14px; height:14px; color: var(--text-dim); flex-shrink:0; }
+.ps-counter b{ min-width:22px; text-align:center; font-variant-numeric: tabular-nums; font-size:1rem; }
+.ps-counter .ps-c-btn{ width:30px; height:30px; }
+.ps-toggles{ display:flex; flex-wrap:wrap; gap:6px; }
+.ps-toggle, .tt-pick{
+  display:inline-flex; align-items:center; gap:6px; height:38px; padding:0 12px;
+  border-radius:999px; border:1px solid var(--line); background: var(--surface); color: var(--text);
+  font: 600 .84rem var(--font); cursor:pointer;
+}
+.ps-toggle .ic{ width:15px; height:15px; }
+.ps-toggle[aria-pressed="true"], .tt-pick[aria-pressed="true"]{ background: var(--text); border-color: var(--text); color: var(--on-primary); }
+.tt-result{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  background: var(--surface-2); border-radius:18px; padding:14px 10px; margin-bottom:10px; min-height:104px;
+}
+.tt-value{ font-size:2.6rem; font-weight:800; line-height:1.05; font-variant-numeric: tabular-nums; text-align:center; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; }
+.tt-value.rolling{ opacity:.55; }
+.tt-label{ font-size:.78rem; color: var(--text-dim); }
+.tt-dice{ display:grid; grid-template-columns: repeat(6, 1fr); gap:6px; }
+.tt-die{
+  height:44px; border:none; border-radius:12px; cursor:pointer;
+  background: var(--lavender); color: var(--lavender-ink); font: 800 .92rem var(--font);
+}
+.tt-die.wide{ grid-column: span 3; background: var(--surface-2); color: var(--text); }
+.tt-history{ min-height:18px; margin-top:8px; font-size:.74rem; color: var(--text-dim); text-align:center; }
+.tt-picks{ display:flex; flex-wrap:wrap; gap:6px; }
+.section-title .ic{ width:13px; height:13px; vertical-align:-2px; }
+.br-chip.daynight.day, .fs-chip.daynight.day{ color: var(--butter-ink); }
+.br-chip.daynight.night, .fs-chip.daynight.night{ color: var(--lavender-ink); }
 
 /* ---------- Sincronização na nuvem ---------- */
 .sync-card{

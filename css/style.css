@@ -2521,3 +2521,24 @@ html.compact-board .lh-turn{ padding:5px 2px 2px; }
 .gl-win{ color: var(--butter-ink); display:flex; }
 .gl-win .ic{ width:15px; height:15px; }
 .gl-attach{ height:28px; padding:0 8px; font-size:.74rem; flex-shrink:0; }
+
+/* ---------- 1v1 ao alto no telemóvel ----------
+   Cada painel ocupa metade do ecrã: o + fica na metade de cima e o − na de
+   baixo (de cada jogador — o painel de cima está rodado para o adversário).
+   A linha de estado e a barra de botões encolhem para caber na largura. */
+html.duel-portrait .life-tap{ width:100%; height:50%; left:0; right:0; justify-content:center; padding:0; }
+html.duel-portrait .life-tap.plus{ top:0; bottom:auto; align-items:flex-start; padding-top:3%; }
+html.duel-portrait .life-tap.minus{ bottom:0; top:auto; align-items:flex-end; padding-bottom:3%; }
+html.duel-portrait .life-tap .tap-circle{ width:3rem; height:3rem; }
+html.duel-portrait .life-total{ font-size: clamp(3rem, min(34cqh, 40cqw), 8rem); }
+html.duel-portrait .br-status-row{ flex-wrap:nowrap; overflow:hidden; gap:6px; }
+html.duel-portrait .br-status-row .br-chip{ flex-shrink:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:.78rem; padding-left:8px; padding-right:8px; }
+html.duel-portrait .br-status-row .br-chip:has(#chip-turn-time){ display:none; } /* o tempo do turno já está no botão de passar */
+html.duel-portrait .board-toolbar{ gap:6px; }
+html.duel-portrait .board-toolbar > .btn-icon{ flex:1 1 0; min-width:0; width:auto !important; padding:0; }
+html.duel-portrait .board-toolbar > #end-game-btn{ flex:1.4 1 0; min-width:0; padding:0 6px; }
+
+/* ---------- Contador deitado num telemóvel: vida mais legível ---------- */
+html.compact-board .life-total{ font-size: clamp(2.2rem, min(50cqh, 26cqw), 6.5rem); letter-spacing:-3px; }
+html.compact-board .life-tap .tap-circle{ width:2.75rem; height:2.75rem; }
+html.compact-board .life-tap .tap-circle .ic{ width:1.3rem; height:1.3rem; }

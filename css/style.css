@@ -884,6 +884,10 @@ input.switch:checked::after{ transform: translateX(18px); }
   background: var(--bg);
 }
 .board-toolbar .btn{ flex:1; }
+/* com os botões todos na fila de baixo: em larguras pequenas o "Terminar"
+   fica só com a bandeira */
+.board-toolbar{ container-type: inline-size; }
+@container (max-width: 560px){ .board-toolbar .end-label{ display:none; } }
 .board-toolbar .btn-icon{
   flex: 0 0 auto;
   width:46px; height:46px;
@@ -942,18 +946,17 @@ html.force-landscape body{
   transform-origin: top left;
   transform: translateX(var(--app-w, 100vw)) rotate(90deg);
 }
+/* Contador sem barra de topo: a linha de estado (ou o tabuleiro, em jogos
+   sem turnos) é a primeira coisa do ecrã e precisa de margem em cima */
+.screen > .br-status-row:first-child{ padding-top: 8px; }
+.screen > .board:first-child{ padding-top: 6px; }
+
 /* ---------- Tabuleiro compacto (ecrãs baixos: iPhone deitado/rodado) ----------
    Os chips de vez/ronda/tempo passam para a barra de topo (no lugar do
    título), as barras ficam mais baixas e, nos cartões, os ícones de dano de
    commander e o "Passar turno" vão para os cantos de baixo em vez de
    ocuparem linhas próprias. */
-html.compact-board .screen{ position:relative; }
-html.compact-board .topbar{ padding: 6px 10px; }
-html.compact-board .topbar h1{ visibility:hidden; }
-html.compact-board .br-status-row{
-  position:absolute; top:6px; left:58px; right:104px; height:40px;
-  padding:0; align-items:center; justify-content:center; z-index:2;
-}
+html.compact-board .br-status-row{ padding: 4px 10px 4px; }
 html.compact-board .br-chip{ padding:5px 9px; font-size:.7rem; }
 html.compact-board .board{ padding-top:2px; }
 html.compact-board .board-toolbar{ padding: 4px 10px 6px; }

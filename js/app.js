@@ -1800,14 +1800,6 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        <div class="topbar">
-          <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
-          <h1>${esc(PRESETS[game.presetName] ? PRESETS[game.presetName].label : tr("Jogo"))}</h1>
-          <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
-            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
-          </div>
-        </div>
         ${timed ? `<div class="br-status-row">${turnChipsHtml(currentPlayer ? currentPlayer.name : "-", game.standard.roundNumber, paused)}</div>` : ""}
         <div class="board">
           <div class="board-row" id="row-top"></div>
@@ -1815,10 +1807,13 @@
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
+          <button class="btn btn-icon" id="menu-btn" title="${tr("Menu")}" aria-label="${tr("Menu")}">${I("menu")}</button>
           ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
           <button class="btn btn-icon" id="history-btn" title="${tr("Histórico de vida")}">${I("history")}</button>
           <button class="btn btn-icon" id="reorder-btn" title="${tr("Trocar posições")}">${I("reorder")}</button>
-          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} ${tr("Terminar")}</button>
+          <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
+          <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
+          <button class="btn btn-ghost grow" id="end-game-btn" title="${tr("Terminar")}" aria-label="${tr("Terminar")}">${I("flag")} <span class="end-label">${tr("Terminar")}</span></button>
         </div>
       </div>
     `);
@@ -3252,14 +3247,6 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        <div class="topbar">
-          <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
-          <h1>${tr("Equipas")}</h1>
-          <div class="row" style="gap:6px; flex-shrink:0;">
-            <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
-            <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
-          </div>
-        </div>
         ${timed ? `<div class="br-status-row">${turnChipsHtml(currentTeam ? currentTeam.name : "-", game.teams.roundNumber, paused)}</div>` : ""}
         <div class="board">
           <div class="board-row" id="row-top"></div>
@@ -3267,10 +3254,13 @@
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
+          <button class="btn btn-icon" id="menu-btn" title="${tr("Menu")}" aria-label="${tr("Menu")}">${I("menu")}</button>
           ${timed ? `<button class="btn btn-icon" id="pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
           <button class="btn btn-icon" id="history-btn" title="${tr("Histórico de vida")}">${I("history")}</button>
           <button class="btn btn-icon" id="reorder-btn" title="${tr("Trocar posições")}">${I("reorder")}</button>
-          <button class="btn btn-ghost grow" id="end-game-btn">${I("flag")} ${tr("Terminar")}</button>
+          <button class="btn btn-icon" id="reset-btn" title="${tr("Reiniciar")}">${I("rotate")}</button>
+          <button class="btn btn-icon" id="fullscreen-btn" title="${boardFullscreen ? tr("Sair de ecrã inteiro") : tr("Ecrã inteiro")}">${I(boardFullscreen ? "minimize" : "maximize")}</button>
+          <button class="btn btn-ghost grow" id="end-game-btn" title="${tr("Terminar")}" aria-label="${tr("Terminar")}">${I("flag")} <span class="end-label">${tr("Terminar")}</span></button>
         </div>
       </div>
     `);

@@ -281,7 +281,7 @@
   // nos botões redondos/pequenos, onde uma onda quase não se veria. Um só
   // listener global, por isso apanha também elementos criados mais tarde.
   const RIPPLE_SEL = ".btn:not(.btn-icon), .mode-card, .loot-card, .search-result-item, .profile-card, .panel-pass-turn-btn, .switch-field, .cd-list-item[data-pid], .modal-sheet label.row";
-  const POP_SEL = ".btn-icon, .update-btn, .mini-btn, .cmd-badge, .poison-badge, .tax-badge, .tax-badge-sm, .commander-thumb, .fullscreen-toggle-btn, .eliminated-badge, .protected-badge";
+  const POP_SEL = ".btn-icon, .update-btn, .mini-btn, .cmd-badge, .poison-badge, .tax-badge, .tax-badge-sm, .commander-thumb, .fs-exit, .eliminated-badge, .protected-badge";
   document.addEventListener("pointerdown", (e) => {
     if (e.button > 0) return;
     const pop = e.target.closest(POP_SEL);
@@ -311,16 +311,36 @@
       ${paused ? `<div class="br-chip paused">${I("pause")} ${tr("Pausado")}</div>` : ""}`;
   }
 
-  /** Relógio ao vivo (turno/total) dos chips acima. modeState: game.standard /
+  /** Ecrã inteiro: faixa fina entre as duas filas de cartões, com a ronda,
+   *  o tempo de jogo e o botão de sair — no centro, mas sem tapar cartões. */
+  function fsHubHtml(modeState, timed, paused) {
+    return `
+      <div class="fs-hub-row">
+        <div class="fs-hub">
+          ${timed ? `
+            <span class="fs-chip">${I("repeat")}${tr("Ronda {n}", { n: modeState.roundNumber || 1 })}</span>
+            <span class="fs-chip">${I("hourglass")}<span data-fs-total>00:00</span></span>
+            ${paused ? `<span class="fs-chip paused">${I("pause")}${tr("Pausado")}</span>` : ""}` : ""}
+          <button class="fs-exit" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}" aria-label="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>
+        </div>
+      </div>`;
+  }
+
+  /** Relógio ao vivo: chips de turno/total, a faixa do ecrã inteiro e o
+   *  tempo no cartão de quem está a jogar. modeState: game.standard /
    *  game.br / game.teams. */
   function startLiveClock(scope, modeState) {
     function tick() {
+      if (!scope.isConnected) { clearInterval(liveTimer); return; }
+      const now = modeState.paused ? modeState.pausedAt : Date.now();
+      const turn = formatDuration(now - modeState.turnStartedAt);
+      const total = formatDuration(now - modeState.gameStartedAt);
       const chipTurn = scope.querySelector("#chip-turn-time");
       const chipTotal = scope.querySelector("#chip-total-time");
-      if (!chipTurn || !chipTotal) { clearInterval(liveTimer); return; }
-      const now = modeState.paused ? modeState.pausedAt : Date.now();
-      chipTurn.textContent = tr("Turno {time}", { time: formatDuration(now - modeState.turnStartedAt) });
-      chipTotal.textContent = tr("Total {time}", { time: formatDuration(now - modeState.gameStartedAt) });
+      if (chipTurn) chipTurn.textContent = tr("Turno {time}", { time: turn });
+      if (chipTotal) chipTotal.textContent = tr("Total {time}", { time: total });
+      scope.querySelectorAll("[data-fs-total]").forEach((x) => { x.textContent = total; });
+      scope.querySelectorAll("[data-turn-time]").forEach((x) => { x.textContent = turn; });
     }
     tick();
     liveTimer = setInterval(tick, 1000);
@@ -1739,7 +1759,6 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>` : ""}
         <div class="topbar">
           <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
           <h1>${esc(PRESETS[game.presetName] ? PRESETS[game.presetName].label : tr("Jogo"))}</h1>
@@ -1751,6 +1770,7 @@
         ${timed ? `<div class="br-status-row">${turnChipsHtml(currentPlayer ? currentPlayer.name : "-", game.standard.roundNumber, paused)}</div>` : ""}
         <div class="board">
           <div class="board-row" id="row-top"></div>
+          ${boardFullscreen ? fsHubHtml(game.standard, timed, paused) : ""}
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">
@@ -1880,7 +1900,7 @@
             <div class="life-total">${p.life}</div>
           </div>
           ${cmdEnabled ? `<div class="commander-badges">${cmdBadgeList.join("")}</div>` : ""}
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}</button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.standard.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}<span class="pass-time" data-turn-time>00:00</span></button>` : ""}
         </div>
       </div>
     `);
@@ -3078,7 +3098,7 @@
             <div class="life-delta-fixed"></div>
             <div class="life-total">${team.life}</div>
           </div>
-          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}</button>` : ""}
+          ${isActive ? `<button class="panel-pass-turn-btn" data-action="pass-turn" ${game.teams.paused ? "disabled" : ""}>${I("skip")} ${tr("Passar turno")}<span class="pass-time" data-turn-time>00:00</span></button>` : ""}
           <div class="team-roster">${team.players.map((p) => teamRosterRowHtml(p, isActive)).join("")}</div>
         </div>
       </div>
@@ -3194,7 +3214,6 @@
 
     const s = el(`
       <div class="screen ${boardFullscreen ? "board-fullscreen" : ""}">
-        ${boardFullscreen ? `<button class="fullscreen-toggle-btn" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>` : ""}
         <div class="topbar">
           <button class="btn btn-icon" id="menu-btn">${I("menu")}</button>
           <h1>${tr("Equipas")}</h1>
@@ -3206,6 +3225,7 @@
         ${timed ? `<div class="br-status-row">${turnChipsHtml(currentTeam ? currentTeam.name : "-", game.teams.roundNumber, paused)}</div>` : ""}
         <div class="board">
           <div class="board-row" id="row-top"></div>
+          ${boardFullscreen ? fsHubHtml(game.teams, timed, paused) : ""}
           <div class="board-row" id="row-bottom"></div>
         </div>
         <div class="board-toolbar">

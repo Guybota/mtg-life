@@ -2300,3 +2300,23 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
   background-size: cover; background-position: center 30%;
   box-shadow: inset 0 0 0 1.5px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.12);
 }
+
+/* ---------- Teclado aberto (iPhone/iPad) ----------
+   As janelas ocupam só a área visível acima do teclado. No contador
+   deitado (página rodada) fica como está. */
+html.kb-open:not(.force-landscape) .modal-backdrop{
+  top: var(--vv-top, 0); bottom: auto; height: var(--vv-h, 100%);
+}
+html.kb-open:not(.force-landscape) .modal-sheet{
+  max-height: calc(var(--vv-h, 100vh) - 10px);
+  padding-bottom: 12px;
+  animation: none;
+}
+html.kb-open:not(.force-landscape) .modal-backdrop.center{ align-items:flex-end; padding: 8px; }
+/* pesquisa de cartas: campo em cima, resultados logo abaixo a ocupar o
+   espaço que sobra; os botões de baixo escondem-se enquanto se escreve */
+.search-sheet .search-results{ flex: 0 1 auto; min-height: 0; }
+html.kb-open .search-sheet{ overflow: hidden; }
+html.kb-open .search-sheet .search-results{ flex: 1 1 auto; overflow-y: auto; }
+html.kb-open .search-sheet .sheet-foot{ display: none; }
+html.kb-open .search-sheet h2{ margin-bottom: 6px; }

@@ -4273,6 +4273,30 @@
     gold: () => tr("Ouro"), platinum: () => tr("Platina"), diamond: () => tr("Diamante"),
   };
   const tierChip = (t) => `<span class="tier-chip tier-${t}">${TIER_LABEL[t] ? TIER_LABEL[t]() : t}</span>`;
+  const ROMAN = ["", "I", "II", "III"];
+  /** "Ouro II" (ou "Em calibração") */
+  function leagueName(league, division) {
+    const base = TIER_LABEL[league] ? TIER_LABEL[league]() : league;
+    return division ? base + " " + ROMAN[division] : base;
+  }
+  /** divisão seguinte à de um registo: "Ouro I", "Platina III", … (null no topo) */
+  function nextLeagueName(rec) {
+    if (rec.league === "provisional" || rec.next == null) return null;
+    if (rec.division > 1) return leagueName(rec.league, rec.division - 1);
+    const order = MTG.Elo.LEAGUE_ORDER;
+    const nxt = order[order.indexOf(rec.league) + 1];
+    return nxt ? leagueName(nxt, 3) : null;
+  }
+  const leagueBadge = (rec, size) => MTG.Badges.svg(rec.league, rec.division, size, leagueName(rec.league, rec.division));
+  /** tabela de todas as ligas e divisões, com os pontos mínimos */
+  function leagueLegendHtml() {
+    const D = MTG.Elo.DIVISIONS;
+    return `<div class="league-legend">${MTG.Elo.LEAGUE_ORDER.slice().reverse().map((l) => `
+      <div class="ll-row">
+        <span class="ll-name">${leagueName(l)}</span>
+        ${[3, 2, 1].map((d) => `<span class="ll-div">${MTG.Badges.svg(l, d, 28, leagueName(l, d))}<small>${ROMAN[d]}<br>${isFinite(D[l][3 - d]) ? D[l][3 - d] + "+" : "&lt;" + D[l][1]}</small></span>`).join("")}
+      </div>`).join("")}</div>`;
+  }
   const deltaHtml = (d) => (d ? `<small class="elo-delta ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : "−"}${Math.abs(d)}</small>` : "");
   /** chave do ecrã de detalhe do jogador (igual à usada em playersFromProfiles) */
   function playerDetailKey(name) { return String(name || "").trim().toLowerCase(); }
@@ -4294,9 +4318,9 @@
           ${avatar}
           <span class="rank-info">
             <span class="rank-name">${esc(r.name)}</span>
-            <span class="rank-sub">${sub}${tr("{w} V · {g} jogos", { w: r.wins, g: r.games })}</span>
+            <span class="rank-sub"><b class="rank-league league-${r.league}">${leagueName(r.league, r.division)}</b> · ${sub}${tr("{w} V · {g} jogos", { w: r.wins, g: r.games })}</span>
           </span>
-          ${tierChip(r.tier)}
+          <span class="rank-badge">${leagueBadge(r, 34)}</span>
           <span class="rank-score"><b>${r.rating}</b>${deltaHtml(r.delta)}</span>
         </div>`;
     }).join("");
@@ -4309,7 +4333,8 @@
       <details class="rank-help">
         <summary>${tr("Como funciona")}</summary>
         <p>${tr("Todos começam com 1500 pontos. Em cada jogo, quem ganha \"vence\" cada adversário: ganhar a quem tem mais pontos dá mais, perder com quem tem menos tira mais. Jogos sem vencedor não contam.")}</p>
-        <p>${tr("Ligas: Bronze até 1440, Prata 1440, Ouro 1490, Platina 1540, Diamante 1600. Com menos de {n} jogos fica em calibração.", { n: MTG.Elo.PROVISIONAL })}</p>
+        <p>${tr("Há 5 ligas, cada uma com 3 divisões: começa-se na III e sobe-se até à I antes de passar à liga seguinte. Com menos de {n} jogos fica em calibração.", { n: MTG.Elo.PROVISIONAL })}</p>
+        ${leagueLegendHtml()}
         <p>${tr("{n} jogo(s) contados.", { n: data.games })}</p>
       </details>`;
     view.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { rankKind = b.dataset.kind; renderRankingView(view); }));
@@ -4330,10 +4355,17 @@
     return `
       <div class="chart-card elo-card">
         <div class="elo-head">
-          <span class="elo-rank">${rec.tier === "provisional" ? "–" : "#" + rec.rank}<small>/${total}</small></span>
-          <span class="elo-main"><b>${rec.rating}</b> ${deltaHtml(rec.delta)}</span>
-          ${tierChip(rec.tier)}
+          <span class="elo-badge">${leagueBadge(rec, 60)}</span>
+          <span class="elo-league">
+            <span class="elo-league-name league-${rec.league}">${leagueName(rec.league, rec.division)}</span>
+            <span class="elo-main"><b>${rec.rating}</b> ${deltaHtml(rec.delta)}</span>
+          </span>
+          <span class="elo-rank">${rec.league === "provisional" ? "–" : "#" + rec.rank}<small>/${total}</small></span>
         </div>
+        <div class="elo-progress league-${rec.league}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(rec.progress * 100)}"><span style="width:${Math.round(rec.progress * 100)}%"></span></div>
+        <div class="elo-next">${rec.league === "provisional"
+          ? tr("Faltam {n} jogo(s) para entrar numa liga", { n: Math.max(0, MTG.Elo.PROVISIONAL - rec.games) })
+          : nextLeagueName(rec) ? tr("Faltam {n} pontos para {l}", { n: rec.next, l: "<b>" + nextLeagueName(rec) + "</b>" }) : tr("Divisão mais alta!")}</div>
         <div class="chart-title">${tr("Classificação ELO")}</div>
         <div class="chart-sub">${tr("Pontos depois de cada jogo")}</div>
         ${values.length >= 3 ? Charts.multiLine([{ name: tr("Pontos"), values }], { xLabel: (i) => (i === 0 ? tr("Início") : tr("Jogo {n}", { n: i })), aria: tr("Evolução da classificação") }) : `<div class="footer-note">${tr("Joga mais uns jogos para ver a evolução.")}</div>`}

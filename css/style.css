@@ -2587,3 +2587,21 @@ html.compact-board .std-game:not(.board-fullscreen) > .board-toolbar .btn{
 }
 html.compact-board .std-game:not(.board-fullscreen) > .board-toolbar #end-game-btn{ max-height:none; flex:1.6 1 0; }
 html.compact-board .std-game:not(.board-fullscreen) > .board-toolbar .end-label{ display:none; }
+
+/* ---------- Menu do ecrã inteiro ---------- */
+.board-menu{ max-width:340px; gap:6px; }
+.bm-item{
+  display:flex; align-items:center; gap:12px; width:100%;
+  height:48px; padding:0 14px; border-radius:14px; border:1px solid var(--line);
+  background: var(--surface-2); color: var(--text); font: 600 .95rem var(--font); text-align:left;
+}
+.bm-item .ic{ width:20px; height:20px; color: var(--text-dim); }
+.bm-item.primary{ background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.bm-item.primary .ic{ color: inherit; }
+html.compact-board .bm-item{ height:40px; font-size:.88rem; }
+/* coluna da esquerda sem espaço morto: os chips dividem a altura toda */
+html.compact-board .std-game:not(.board-fullscreen) > .br-status-row{ justify-content:stretch; width:80px; }
+html.compact-board .std-game:not(.board-fullscreen) > .br-status-row .br-chip{
+  flex:1 1 0; min-height:0; max-height:110px; font-size:.72rem; font-weight:700; gap:4px;
+}
+html.compact-board .std-game:not(.board-fullscreen) > .br-status-row .br-chip .ic{ width:18px; height:18px; }

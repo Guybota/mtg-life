@@ -1,5 +1,5 @@
 /* Histórico de vida do jogo em curso: tabela por turnos e lista. */
-const { openWith } = require("./helpers");
+const { openWith, boardAction } = require("./helpers");
 
 const game = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("mtg_lc_game_v2")).standard);
 
@@ -22,7 +22,7 @@ module.exports = [
       await page.click(".panel-pass-turn-btn");
       // commander damage como o ecrã de dano o aplica (estado do jogo em memória)
       await page.evaluate(([a, b]) => { MTG.State.stdAdjustCmdDamage(game, b, a, 7); render(); }, [ids[0], ids[2]]);
-      await page.click("#history-btn");
+      await boardAction(page, "history-btn");
       await page.waitForSelector(".lh-table");
       const heads = await page.$$eval(".lh-table thead .lh-col-life", (x) => x.map((e) => +e.textContent));
       t.eq(heads, [40, 37, 33, 40], "vida atual no topo de cada coluna");

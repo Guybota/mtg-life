@@ -1,5 +1,5 @@
 /* Contador: jogo rápido, vida, ecrã inteiro, fim de jogo e outros modos. */
-const { seedProfiles, openWith, stored, pickProfile, startGame, endGame } = require("./helpers");
+const { seedProfiles, openWith, stored, pickProfile, startGame, endGame, exitFullscreen } = require("./helpers");
 
 const lifeOf = (page, i) => page.evaluate((i) => JSON.parse(localStorage.getItem("mtg_lc_game_v2")).standard.players[i].life, i);
 
@@ -17,7 +17,7 @@ module.exports = [
       const before = await lifeOf(page, 0);
       await (await (await page.$$(".player-panel"))[0].$(".life-tap.minus")).click();
       t.eq(await lifeOf(page, 0), before - 1, "toque no − tira 1 vida");
-      await page.click("#fullscreen-btn");
+      // ecrã inteiro é o padrão
       await page.waitForSelector(".fs-hub");
       const chips = await page.$$eval(".fs-hub > *", (x) => x.filter((e) => getComputedStyle(e).display !== "none" && !e.textContent.trim() && !e.querySelector("svg")).length);
       t.eq(chips, 0, "nenhum chip vazio na barra do ecrã inteiro");
@@ -86,6 +86,7 @@ module.exports.push({
     // o painel de baixo (não rodado): + em cima, − em baixo
     const bottom = await page.$eval(".player-panel:not(.rot180)", (p) => p.querySelector(".life-tap.plus").getBoundingClientRect().top < p.querySelector(".life-tap.minus").getBoundingClientRect().top);
     t.ok(bottom, "+ acima do −");
+    await exitFullscreen(page);
     t.ok(await page.evaluate(() => document.querySelector(".board-toolbar").scrollWidth <= document.querySelector(".board-toolbar").clientWidth + 1), "barra de botões cabe na largura");
     // com 4 jogadores continua deitado
     await page.goto(t.url);
@@ -132,11 +133,33 @@ module.exports.push({
     await page.click("#qs-go");
     await page.waitForSelector(".player-panel");
     await page.evaluate(() => { MTG.State.stdAdjustCounter(game, game.standard.players[3].id, "rad", 2); MTG.State.stdAdjustPoison(game, game.standard.players[3].id, 3); render(); });
+    await exitFullscreen(page);
     const box = (sel) => page.$eval(sel, (e) => ({ x: e.offsetLeft, w: e.offsetWidth, h: e.offsetHeight }));
     const [st, board, bar] = [await box(".br-status-row"), await box(".board"), await box(".board-toolbar")];
     t.ok(st.x === 0 && board.x >= st.w && bar.x >= board.x + board.w - 1, "estado | tabuleiro | botões lado a lado");
     t.ok(bar.w >= 44 && bar.h > 300, "coluna de botões com tamanho: " + JSON.stringify(bar));
     const chips = await page.$$eval(".player-panel .st-chip", (x) => x.map((e) => e.offsetHeight >= 20 && e.offsetWidth >= 30));
     t.ok(chips.length === 2 && chips.every(Boolean), "insígnias com tamanho visível");
+  },
+});
+
+module.exports.push({
+  name: "ecrã inteiro por defeito, com menu para as outras ações",
+  async run(t) {
+    const page = await t.page({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+    await openWith(t, page, null);
+    await page.click(".mode-card.commander");
+    await page.click("#qs-go");
+    await page.waitForSelector(".player-panel");
+    t.ok(await page.isVisible(".fs-hub") && !(await page.isVisible(".board-toolbar")), "começa em ecrã inteiro");
+    await page.click("#fs-more-btn");
+    const items = await page.$$eval(".bm-item", (x) => x.map((e) => e.dataset.target));
+    t.eq(items, ["history-btn", "reorder-btn", "reset-btn", "end-game-btn", "fullscreen-exit-btn", "menu-btn"], "ações do menu");
+    await page.click('.bm-item[data-target="history-btn"]');
+    await page.waitForSelector(".lh-sheet");
+    await page.click("#lh-x, #close-lh-btn >> visible=true");
+    await page.click("#fs-more-btn");
+    await page.click('.bm-item[data-target="fullscreen-exit-btn"]');
+    t.ok(await page.isVisible(".board-toolbar"), "mostrar barras sai do ecrã inteiro");
   },
 });

@@ -18,7 +18,7 @@ let game = null; // estado do jogo atual (espelha o State guardado)
 let draft = null; // rascunho usado nos ecrãs de setup
 let liveTimer = null; // interval do relógio ao vivo (turno/total) no tabuleiro
 let wakeLock = null; // Screen Wake Lock ativo enquanto se está no contador de vida
-let boardFullscreen = false; // esconde as barras de cima/baixo no contador de vida (persiste entre re-renders do mesmo jogo)
+let boardFullscreen = true; // ecrã inteiro (por defeito): esconde as barras do contador de vida; cada jogo novo começa assim
 
 // Impede o ecrã de bloquear enquanto se está a jogar (Commander/Duelo/Livre/BR).
 // A Wake Lock API só funciona em contexto seguro (https ou localhost) e nem
@@ -321,6 +321,35 @@ function turnChipsHtml(turnName, roundNumber, paused) {
     ${paused ? `<div class="br-chip paused">${I("pause")} ${tr("Pausado")}</div>` : ""}`;
 }
 
+/** Menu do ecrã inteiro (botão ≡ do hub): as ações da barra de botões, que
+ *  está escondida — carrega no botão escondido correspondente. */
+function openBoardMenu(scope) {
+  closeAnyModal();
+  const items = [
+    ["history-btn", "history", tr("Histórico de vida")],
+    ["reorder-btn", "reorder", tr("Trocar posições")],
+    ["reset-btn", "rotate", tr("Reiniciar jogo")],
+    ["end-game-btn", "flag", tr("Terminar jogo")],
+    ["fullscreen-exit-btn", "maximize", tr("Mostrar barras")],
+    ["menu-btn", "menu", tr("Menu principal")],
+  ].filter(([id]) => scope.querySelector("#" + id));
+  const backdrop = el(`
+    <div class="modal-backdrop center">
+      <div class="modal-sheet board-menu">
+        ${items.map(([id, icon, label]) => `<button type="button" class="bm-item ${id === "end-game-btn" ? "primary" : ""}" data-target="${id}">${I(icon)}<span>${esc(label)}</span></button>`).join("")}
+        <button type="button" class="btn btn-ghost" id="bm-close">${tr("Fechar")}</button>
+      </div>
+    </div>`);
+  document.body.appendChild(backdrop);
+  backdrop.querySelectorAll("[data-target]").forEach((b) => b.addEventListener("click", () => {
+    backdrop.remove();
+    const btn = scope.querySelector("#" + b.dataset.target);
+    if (btn) btn.click();
+  }));
+  backdrop.querySelector("#bm-close").addEventListener("click", () => backdrop.remove());
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
+}
+
 /** Ecrã inteiro: faixa fina entre as duas filas de cartões, com a ronda,
  *  o tempo de jogo e o botão de sair — no centro, mas sem tapar cartões. */
 function fsHubHtml(modeState, timed, paused) {
@@ -334,6 +363,7 @@ function fsHubHtml(modeState, timed, paused) {
         ${modeState === game.standard ? dayNightChipHtml("fs-chip") : ""}
         <button class="fs-exit" id="fs-tools-btn" title="${tr("Ferramentas da mesa")}" aria-label="${tr("Ferramentas da mesa")}">${I("dice")}</button>
         ${timed ? `<button class="fs-exit fs-pause" id="fs-pause-btn" title="${paused ? tr("Retomar") : tr("Pausar")}" aria-label="${paused ? tr("Retomar") : tr("Pausar")}">${I(paused ? "play" : "pause")}</button>` : ""}
+        <button class="fs-exit" id="fs-more-btn" title="${tr("Mais opções")}" aria-label="${tr("Mais opções")}">${I("menu")}</button>
         <button class="fs-exit" id="fullscreen-exit-btn" title="${tr("Sair de ecrã inteiro")}" aria-label="${tr("Sair de ecrã inteiro")}">${I("minimize")}</button>
       </div>
     </div>`;

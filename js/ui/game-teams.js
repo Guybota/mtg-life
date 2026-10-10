@@ -196,6 +196,7 @@ function renderSetupTeams() {
 }
 
 function startTeamsFromDraft(d) {
+  boardFullscreen = true; // cada jogo novo começa em ecrã inteiro
   rememberSetup("teams", d);
   const st = State.createTeamsGame({ numTeams: d.numTeams, playersPerTeam: d.playersPerTeam, startLife: d.startLife, trackTurns: d.trackTurns !== false });
   st.teams.teams.forEach((team, t) => {
@@ -445,5 +446,7 @@ function renderGameTeams() {
   });
   const fsExitBtn = s.querySelector("#fullscreen-exit-btn");
   if (fsExitBtn) fsExitBtn.addEventListener("click", () => { boardFullscreen = !boardFullscreen; render(); });
+  const fsMore = s.querySelector("#fs-more-btn");
+  if (fsMore) fsMore.addEventListener("click", () => openBoardMenu(s));
   s.querySelector("#end-game-btn").addEventListener("click", () => openEndGameTeamsModal());
 }

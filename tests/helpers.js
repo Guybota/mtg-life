@@ -64,12 +64,24 @@ async function startGame(page) {
   await page.waitForSelector(".player-panel");
 }
 
+/** Ação da barra de botões: em ecrã inteiro (o padrão) vai pelo menu ≡. */
+async function boardAction(page, id) {
+  if (await page.isVisible("#" + id)) { await page.click("#" + id); return; }
+  await page.click("#fs-more-btn");
+  await page.click(`.bm-item[data-target="${id}"]`);
+}
+/** Sai do ecrã inteiro (mostra as barras), se estiver nele. */
+async function exitFullscreen(page) {
+  if (await page.isVisible("#fullscreen-exit-btn")) await page.click("#fullscreen-exit-btn");
+  await page.waitForSelector(".board-toolbar", { state: "visible" });
+}
+
 /** Termina o jogo em curso com este vencedor (nome do lugar). */
 async function endGame(page, winnerName) {
-  await page.click("#end-game-btn");
+  await boardAction(page, "end-game-btn");
   await page.click(`#winner-list label.row:has-text("${winnerName}")`);
   await page.click("#eg-confirm");
   await page.waitForTimeout(500);
 }
 
-module.exports = { seedProfiles, openWith, stored, goProfiles, pickProfile, startGame, endGame };
+module.exports = { seedProfiles, openWith, stored, goProfiles, pickProfile, startGame, endGame, boardAction, exitFullscreen };

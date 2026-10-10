@@ -927,15 +927,33 @@ input.switch:checked::after{ transform: translateX(18px); }
 .screen.board-fullscreen .br-status-row,
 .screen.board-fullscreen .board-toolbar{ display:none; }
 .screen.board-fullscreen .board{ padding-top:6px; }
-.fullscreen-toggle-btn{
-  position:fixed; top:50%; left:50%; transform: translate(-50%, -50%);
-  z-index:80;
-  width:38px; height:38px; border-radius:50%;
-  background: var(--surface); color: var(--text);
-  box-shadow: var(--shadow);
+/* faixa central (entre as filas) com ronda, tempo de jogo e sair */
+.fs-hub-row{ flex:0 0 auto; display:flex; justify-content:center; align-items:center; height:34px; margin: -2px 0; }
+.fs-hub{
+  display:inline-flex; align-items:center; gap:2px;
+  height:34px; padding:2px 2px 2px 8px; border-radius:999px;
+  background: var(--surface); border:1px solid var(--line); box-shadow: var(--shadow);
+  font-size:.78rem; font-weight:600; color: var(--text); font-variant-numeric: tabular-nums;
+  animation: fadeIn .3s ease both;
+}
+.fs-chip{ display:inline-flex; align-items:center; gap:5px; padding:0 8px; white-space:nowrap; }
+.fs-chip .ic{ width:14px; height:14px; color: var(--text-dim); }
+.fs-chip + .fs-chip{ border-left:1px solid var(--line); }
+.fs-chip.paused{ color: var(--rose-ink); }
+.fs-chip.paused .ic{ color: var(--rose-ink); }
+.fs-exit{
+  width:28px; height:28px; border-radius:50%; border:none; margin-left:2px; flex-shrink:0;
+  background: var(--surface-2); color: var(--text); cursor:pointer;
   display:flex; align-items:center; justify-content:center;
 }
-.fullscreen-toggle-btn .ic{ width:16px; height:16px; }
+.fs-exit .ic{ width:14px; height:14px; }
+/* tempo do turno atual dentro do botão "Passar turno" do cartão de quem joga */
+.panel-pass-turn-btn{ white-space:nowrap; max-width: calc(100% - 16px); }
+.pass-time{ margin-left:4px; padding-left:8px; border-left:1px solid currentColor; font-variant-numeric: tabular-nums; font-weight:600; opacity:.85; }
+/* cartões estreitos (telemóvel com 4+ jogadores): botão mais compacto */
+@media (max-width: 480px){
+  .board-fullscreen .panel-pass-turn-btn{ padding: 8px 12px; font-size:.74rem; gap:5px; }
+}
 
 /* ===========================================================
    COMMANDER DAMAGE / TAX / LISTAS EM MODAIS

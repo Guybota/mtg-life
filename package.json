@@ -1,0 +1,11 @@
+{
+  "name": "mtg-life-counter",
+  "private": true,
+  "description": "Contador de vida para Magic: The Gathering (PWA, sem build).",
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

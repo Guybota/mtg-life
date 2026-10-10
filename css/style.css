@@ -2295,3 +2295,8 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .history-who{ display:flex; align-items:center; gap:5px; margin-top:4px; font-size:.8rem; font-weight:600; color: var(--text); }
 .history-who .ic{ width:13px; height:13px; color: var(--text-dim); }
 .history-who .borrow-tag{ margin-left:2px; }
+/* avatar do jogador com a arte do deck com que mais joga */
+.player-avatar.has-art{
+  background-size: cover; background-position: center 30%;
+  box-shadow: inset 0 0 0 1.5px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.12);
+}

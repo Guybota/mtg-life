@@ -4306,6 +4306,7 @@
     const playersView = s.querySelector("#players-view");
     const players = playersFromProfiles(profiles).sort((a, b) => b.games - a.games || a.name.localeCompare(b.name));
     const noPlayer = profiles.filter((p) => !(p.playerName || "").trim()).length;
+    const topDecks = topDeckByPlayer(players);
     playersView.innerHTML = (players.length ? `
       <div class="chart-card">
         <div class="chart-title">${tr("Taxa de vitórias por jogador")}</div>
@@ -4317,7 +4318,7 @@
       </div>
       <div class="pf-grid">${players.map((pl, i) => `
         <div class="profile-card player-card" data-player="${esc(pl.key)}" role="button" tabindex="0">
-          ${initialsAvatar(pl.name, i)}
+          ${initialsAvatar(pl.name, i, topDecks.get(pl.key))}
           <div class="profile-info">
             <div class="profile-name">${esc(pl.name)}</div>
             <div class="profile-sub">${tr("{n} deck(s)", { n: pl.profiles.length })} · ${pl.games ? tr("{g} jogos · {w} vitórias", { g: pl.games, w: pl.wins }) + ` (${Math.round(pl.winRate * 100)}%)` : tr("Ainda sem jogos")}</div>
@@ -4387,10 +4388,11 @@
     const data = MTG.Elo.compute(Profiles.all());
     const list = rankKind === "players" ? data.players : data.decks;
     const profilesById = new Map(Profiles.all().map((p) => [p.id, p]));
+    const topDecks = rankKind === "players" ? topDeckByPlayer() : new Map();
     const rows = list.map((r) => {
       const prof = rankKind === "decks" ? profilesById.get(r.key) : null;
       const avatar = rankKind === "players"
-        ? initialsAvatar(r.name, r.rank - 1).replace("player-avatar", "player-avatar sm")
+        ? initialsAvatar(r.name, r.rank - 1, topDecks.get(playerDetailKey(r.name))).replace("player-avatar", "player-avatar sm")
         : `<div class="commander-thumb sm" style="${prof ? seatThumbStyle(prof) : ""}">${prof && prof.commander && prof.commander.art ? "" : I("card")}</div>`;
       const sub = rankKind === "decks" && prof && prof.playerName ? esc(prof.playerName) + " · " : "";
       return `
@@ -4608,9 +4610,37 @@
     }).filter((pl) => pl.profiles.length || pl.history.length);
   }
 
-  function initialsAvatar(name, i) {
+  /** Deck com que cada jogador jogou mais vezes (os seus ou emprestados;
+   *  em empate, o usado mais recentemente). Chave = nome em minúsculas. */
+  function topDeckByPlayer(players) {
+    const map = new Map();
+    (players || playersFromProfiles(Profiles.all())).forEach((pl) => {
+      const count = new Map();
+      pl.history.forEach((g) => {
+        const c = count.get(g.deckId) || { n: 0, last: 0 };
+        c.n++; c.last = Math.max(c.last, g.date || 0);
+        count.set(g.deckId, c);
+      });
+      let best = null, bc = null;
+      count.forEach((c, id) => { if (!bc || c.n > bc.n || (c.n === bc.n && c.last > bc.last)) { best = id; bc = c; } });
+      let prof = best ? Profiles.get(best) : null;
+      // sem jogos no histórico: o deck próprio com mais jogos registados
+      if (!prof && pl.profiles.length) prof = pl.profiles.slice().sort((a, b) => b.stats.games - a.stats.games)[0];
+      if (prof) map.set(pl.key, prof);
+    });
+    return map;
+  }
+
+  /** Avatar de um jogador: a arte do commander do deck com que mais joga,
+   *  ou a cor desse deck, ou as iniciais numa cor pastel. */
+  function initialsAvatar(name, i, deck) {
     const pal = State.FALLBACK_PALETTE;
-    return `<span class="player-avatar" style="background:${pal[i % pal.length][0]}">${esc(name.trim().slice(0, 2).toUpperCase())}</span>`;
+    const initials = esc(name.trim().slice(0, 2).toUpperCase());
+    if (deck && deck.commander && deck.commander.art) {
+      return `<span class="player-avatar has-art" style="${commanderThumbStyle(deck.commander)}" title="${esc(deck.name)}" aria-label="${esc(name)}"></span>`;
+    }
+    const style = deck ? seatThumbStyle(deck) : "";
+    return `<span class="player-avatar" style="${style || "background:" + pal[i % pal.length][0]}">${initials}</span>`;
   }
 
   function kpiHtml(label, value, sub) {
@@ -5035,7 +5065,7 @@
     body.classList.add("pd-body");
     body.innerHTML = `
       <div class="pd-head">
-        ${initialsAvatar(pl.name, 0).replace("player-avatar", "player-avatar lg")}
+        ${initialsAvatar(pl.name, 0, topDeckByPlayer([pl]).get(pl.key)).replace("player-avatar", "player-avatar lg")}
         <div class="pd-head-info"><div class="profile-sub">${tr("{n} deck(s)", { n: pl.profiles.length })}</div></div>
       </div>
       <div class="kpi-row kpi-row-2">

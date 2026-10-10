@@ -4106,21 +4106,25 @@
   function renderProfilesScreen() {
     const profiles = Profiles.all();
     const s = el(`
-      <div class="screen">
+      <div class="screen profiles-screen">
         <div class="topbar">
           <button class="btn btn-icon" id="back-btn">${I("arrow-left")}</button>
           <h1>${tr("Perfis")}</h1>
           <div style="width:40px"></div>
         </div>
         <div class="scroll">
+          <div class="pf-layout">
+          <aside class="pf-side">
           ${syncCardHtml()}
-          <div class="row" style="gap:8px; margin-bottom:6px;">
-            <button class="btn btn-ghost grow" id="export-profiles-btn">${I("download")} ${tr("Exportar")}</button>
-            <button class="btn btn-ghost grow" id="import-profiles-btn">${I("upload")} ${tr("Importar")}</button>
+          <div class="pf-actions">
+            <button class="btn btn-ghost" id="export-profiles-btn">${I("download")}<span>${tr("Exportar")}</span></button>
+            <button class="btn btn-ghost" id="import-profiles-btn">${I("upload")}<span>${tr("Importar")}</span></button>
+            <button class="btn btn-ghost" id="merge-btn" title="${tr("Juntar com outro telemóvel")}" aria-label="${tr("Juntar com outro telemóvel")}">${I("merge")}<span>${tr("Juntar")}</span></button>
             <input type="file" id="import-profiles-input" accept="application/json,.json" style="display:none">
           </div>
-          <button class="btn btn-ghost btn-block" id="merge-btn" style="margin-bottom:6px">${I("merge")} ${tr("Juntar com outro telemóvel")}</button>
           <div class="backup-note ${Cloud.status().code ? "hidden" : ""}">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
+          </aside>
+          <div class="pf-main">
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
           ${profiles.length ? `
           <div class="seg seg-3" role="tablist">
@@ -4142,7 +4146,9 @@
             </div>
           </div>
           <div class="footer-note hidden" id="profiles-empty">${tr("Nenhum perfil corresponde à pesquisa.")}</div>` : ""}
-          <div class="col" id="profiles-list"></div>
+          <div class="pf-grid" id="profiles-list"></div>
+          </div>
+          </div>
           </div>
         </div>
       </div>
@@ -4236,7 +4242,7 @@
           tip: `${Math.round(pl.winRate * 100)}%`, tipLabel: `${pl.name} · ${tr("{w} de {g} vitórias", { w: pl.wins, g: pl.games })}`,
         })).sort((a, b) => b.value - a.value))}
       </div>
-      <div class="col">${players.map((pl, i) => `
+      <div class="pf-grid">${players.map((pl, i) => `
         <div class="profile-card player-card" data-player="${esc(pl.key)}" role="button" tabindex="0">
           ${initialsAvatar(pl.name, i)}
           <div class="profile-info">
@@ -4301,6 +4307,8 @@
   /** chave do ecrã de detalhe do jogador (igual à usada em playersFromProfiles) */
   function playerDetailKey(name) { return String(name || "").trim().toLowerCase(); }
 
+  /** ecrã largo (iPad deitado / computador): perfis em duas colunas */
+  const wideLayout = () => window.matchMedia("(min-width: 1000px)").matches;
   function renderRankingView(view) {
     if (!view) return;
     const data = MTG.Elo.compute(Profiles.all());
@@ -4329,14 +4337,16 @@
         <button type="button" class="sort-chip" data-kind="players" aria-pressed="${rankKind === "players"}">${tr("Jogadores")}</button>
         <button type="button" class="sort-chip" data-kind="decks" aria-pressed="${rankKind === "decks"}">${tr("Decks")}</button>
       </div>
+      <div class="rank-layout">
       ${list.length ? `<div class="rank-list">${rows}</div>` : `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos para a classificação. Contam os jogos com vencedor entre dois ou mais perfis.")}</div></div>`}
-      <details class="rank-help">
+      <details class="rank-help"${wideLayout() ? " open" : ""}>
         <summary>${tr("Como funciona")}</summary>
         <p>${tr("Todos começam com 1500 pontos. Em cada jogo, quem ganha \"vence\" cada adversário: ganhar a quem tem mais pontos dá mais, perder com quem tem menos tira mais. Jogos sem vencedor não contam.")}</p>
         <p>${tr("Há 5 ligas, cada uma com 3 divisões: começa-se na III e sobe-se até à I antes de passar à liga seguinte. Com menos de {n} jogos fica em calibração.", { n: MTG.Elo.PROVISIONAL })}</p>
         ${leagueLegendHtml()}
         <p>${tr("{n} jogo(s) contados.", { n: data.games })}</p>
-      </details>`;
+      </details>
+      </div>`;
     view.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { rankKind = b.dataset.kind; renderRankingView(view); }));
     view.querySelectorAll(".rank-row").forEach((row) => {
       const open = () => rankKind === "players"
@@ -4396,6 +4406,7 @@
         tipLabel: `${p.name} · ${tr("{w} de {g} vitórias", { w: d.wins, g: d.games })}`,
       }));
     return `
+      <div class="pf-overview">
       <div class="kpi-row">
         ${kpiHtml(tr("Perfis"), profiles.length)}
         ${kpiHtml(tr("Jogos registados"), totalGames)}
@@ -4404,6 +4415,7 @@
       <div class="chart-card">
         <div class="chart-title">${tr("Taxa de vitórias por perfil")}</div>
         ${Charts.hbars(rows)}
+      </div>
       </div>
       ${winRateByColorHtml(profiles)}`;
   }
@@ -4731,9 +4743,10 @@
 
     const eloAll = MTG.Elo.compute(Profiles.all());
     const eloRec = eloAll.decks.find((r) => r.key === profile.id || (profile.aliases || []).includes(r.key));
-    body.innerHTML = head + kpis + eloCardHtml(eloRec, eloAll.decks.length) + streak + form + evo + modes + h2hHtml + durations + `
+    body.classList.add("pd-body");
+    body.innerHTML = head + kpis + `<div class="pd-cards">` + eloCardHtml(eloRec, eloAll.decks.length) + `<div class="pd-stack">` + streak + form + `</div>` + evo + modes + h2hHtml + durations + `</div>
       <div class="section-title">${tr("Histórico de jogos")}</div>
-      <div class="col" id="history-list"></div>
+      <div class="col pd-history" id="history-list"></div>
       <button class="btn btn-ghost btn-block merge-entry" id="merge-deck-btn">${I("merge")} ${tr("Fundir com outro deck")}</button>`;
     body.querySelector("#merge-deck-btn").addEventListener("click", () => openMergeDeckSheet(profile.id));
 
@@ -4790,6 +4803,7 @@
     const plEloAll = MTG.Elo.compute(Profiles.all());
     const normKey = (x) => String(x || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     const plElo = plEloAll.players.find((r) => r.key === normKey(pl.name));
+    body.classList.add("pd-body");
     body.innerHTML = `
       <div class="pd-head">
         ${initialsAvatar(pl.name, 0).replace("player-avatar", "player-avatar lg")}
@@ -4803,6 +4817,7 @@
           <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
         </div>
       </div>
+      <div class="pd-cards">
       ${eloCardHtml(plElo, plEloAll.players.length)}
       ${recent.length ? `
       <div class="chart-card">
@@ -4823,8 +4838,9 @@
         })))}
       </div>
       ${headToHeadHtml(pl.history, tr("Jogos em que estiveram os dois à mesa, com qualquer deck: vitórias de {name} – vitórias do adversário", { name: esc(pl.name) }), tr("{name} ganhou", { name: esc(pl.name) }), [pl.name])}
+      </div>
       <div class="section-title">${tr("Decks")}</div>
-      <div class="col">${decks.map(({ p, d }) => `
+      <div class="pf-grid">${decks.map(({ p, d }) => `
         <div class="profile-card" data-id="${p.id}" role="button" tabindex="0">
           <div class="commander-thumb" style="${seatThumbStyle(p)}">${p.commander && p.commander.art ? "" : I("card")}</div>
           <div class="profile-info">

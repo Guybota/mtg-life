@@ -2216,3 +2216,62 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .ll-name{ font-weight:700; color: var(--text); font-size:.8rem; }
 .ll-div{ display:flex; align-items:center; gap:5px; }
 .ll-div small{ font-size:.66rem; line-height:1.2; font-variant-numeric: tabular-nums; }
+
+/* ===========================================================
+   PERFIS — layout que se adapta ao ecrã (telemóvel → iPad)
+   =========================================================== */
+.pf-actions{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin-bottom:6px; }
+.pf-actions .btn{ font-size:.86rem; padding:10px 6px; gap:6px; min-width:0; }
+.pf-actions .btn span{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+@media (max-width: 350px){
+  .pf-actions .btn{ flex-direction:column; gap:2px; font-size:.76rem; }
+}
+.pf-grid{ display:flex; flex-direction:column; }
+
+@media (min-width: 700px){
+  .pf-layout{ max-width: 880px; margin: 0 auto; }
+  .pf-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:10px; }
+  .pf-grid > .profile-card{ margin:0; }
+  .profiles-tools{ flex-direction:row; align-items:center; gap:12px; }
+  .profiles-tools .search-field{ flex:1; min-width:0; }
+  .profiles-screen .backup-note{ margin-bottom:16px; }
+
+  /* detalhe de deck / jogador: conteúdo centrado e cartões em 2 colunas */
+  .pd-body > *{ max-width: 1100px; margin-left:auto; margin-right:auto; }
+  .pd-body .kpi-row{ grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .pd-cards{ columns: 2; column-gap: 12px; }
+  .pd-cards > *{ break-inside: avoid; display:block; }
+  .pd-cards > .streak-card{ display:flex; }
+  .pd-stack > .streak-card{ display:flex; }
+  .pd-history{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+  .pd-history > *{ margin:0; }
+  .pd-body > .pf-grid{ display:grid; }
+}
+
+@media (min-width: 1000px){
+  .pf-layout{
+    max-width: 1240px;
+    display:grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items:start;
+  }
+  .pf-side{ position: sticky; top: 0; }
+  .pf-side .pf-actions{ grid-template-columns: 1fr; }
+  .pf-side .pf-actions .btn{ justify-content:flex-start; padding:12px 14px; font-size:.9rem; }
+  .pf-side .sync-card{ flex-wrap: wrap; }
+  .pf-side .backup-note{ text-align:left; padding: 0 4px; }
+  .rank-layout{ display:grid; grid-template-columns: minmax(0, 1fr) 330px; gap:16px; align-items:start; }
+  .rank-layout .rank-help{
+    margin-top:0; background: var(--surface); border:1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 14px;
+  }
+  .rank-layout .rank-help summary{ font-weight:700; color: var(--text); }
+}
+@media (min-width: 700px){
+  .pf-overview{ display:grid; grid-template-columns: 210px minmax(0, 1fr); gap:10px; margin-bottom:10px; }
+  .pf-overview .kpi-row{ grid-template-columns: 1fr; align-content:start; margin:0; }
+  .pf-overview .chart-card{ margin:0; }
+}
+/* legenda das ligas num cartão estreito: nome por cima, divisões por baixo */
+@media (min-width: 1000px){
+  .rank-layout .ll-row{ grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap:4px; }
+  .rank-layout .ll-name{ grid-column: 1 / -1; }
+}

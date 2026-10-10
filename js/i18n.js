@@ -322,6 +322,7 @@
     "Faltam {n} jogo(s) para entrar numa liga": "{n} more game(s) to enter a league",
     "Faltam {n} pontos para {l}": "{n} points to {l}",
     "Divisão mais alta!": "Top division!",
+    "Juntar": "Merge",
     "{n} jogo(s) contados.": "{n} game(s) counted.",
     "Classificação ELO": "ELO ranking",
     "Pontos depois de cada jogo": "Points after each game",

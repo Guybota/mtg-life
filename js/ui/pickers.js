@@ -329,8 +329,9 @@ function openVersionPicker(baseCard, onSelect, parentBackdrop) {
 // ===========================================================
 // PROFILE PICKER (modal reutilizável) — ligar/criar perfil de commander
 // ===========================================================
-function openProfilePicker({ commander, currentProfileId, playerName, onSelect }) {
+function openProfilePicker({ commander, partner, currentProfileId, playerName, onSelect }) {
   let newCommander = commander || null; // commander do perfil novo (pode pesquisar-se aqui)
+  let newPartner = partner || null;     // e o parceiro, se tiver
   // (sem closeAnyModal aqui de propósito: pode abrir por cima do modal de editar jogador)
   const profiles = Profiles.all();
   const backdrop = el(`
@@ -350,7 +351,8 @@ function openProfilePicker({ commander, currentProfileId, playerName, onSelect }
             <span class="pp-new-cmd-name" id="pp-new-cmd-name"></span>
             <button type="button" class="btn btn-ghost btn-sm" id="pp-new-cmd-btn">${I("search")} ${tr("Procurar commander")}</button>
           </div>
-          <input type="text" id="pp-new-name" placeholder="${tr("Nome do perfil")}" value="${commander ? esc(commander.name) : ""}">
+          <button type="button" class="btn btn-ghost btn-sm pp-new-partner" id="pp-new-partner"></button>
+          <input type="text" id="pp-new-name" placeholder="${tr("Nome do perfil")}" value="${commander ? esc(cmdLabel(commander, partner || null)) : ""}">
           <label for="pp-new-owner">${tr("Dono do deck")}</label>
           <input type="text" id="pp-new-owner" placeholder="${tr("Nome de quem é este deck")}" value="${esc(playerName && !/^\s*$/.test(playerName) ? playerName : "")}">
           ${ownerChipsHtml("pp-owners")}
@@ -390,7 +392,10 @@ function openProfilePicker({ commander, currentProfileId, playerName, onSelect }
     const thumb = backdrop.querySelector("#pp-new-thumb");
     thumb.style.cssText = commanderThumbStyle(newCommander);
     thumb.innerHTML = newCommander && newCommander.art ? "" : I("card");
-    backdrop.querySelector("#pp-new-cmd-name").textContent = newCommander ? newCommander.name : tr("Sem commander");
+    backdrop.querySelector("#pp-new-cmd-name").textContent = newCommander ? cmdLabel(newCommander, newPartner) : tr("Sem commander");
+    const pBtn = backdrop.querySelector("#pp-new-partner");
+    pBtn.classList.toggle("hidden", !newCommander);
+    pBtn.innerHTML = newPartner ? `${I("x")} ${tr("Tirar parceiro")}` : `${I("plus")} ${tr("Adicionar parceiro")}`;
     backdrop.querySelector("#pp-new-cmd-btn").lastChild.textContent = " " + (newCommander ? tr("Trocar") : tr("Procurar commander"));
   }
   function searchCommander() {
@@ -404,6 +409,17 @@ function openProfilePicker({ commander, currentProfileId, playerName, onSelect }
   }
   paintNewCommander();
   backdrop.querySelector("#pp-new-cmd-btn").addEventListener("click", searchCommander);
+  backdrop.querySelector("#pp-new-partner").addEventListener("click", () => {
+    if (newPartner) { newPartner = null; paintNewCommander(); return; }
+    openCommanderPicker((c) => {
+      if (!c) return;
+      const before = newCommander ? newCommander.name : "";
+      newPartner = c;
+      // o nome sugerido passa a ser o par, se ainda era só o commander
+      if (nameEl.value.trim() === before) nameEl.value = cmdLabel(newCommander, newPartner);
+      paintNewCommander();
+    }, tr("Escolher commander parceiro"));
+  });
   bindOwnerChips(backdrop, "pp-owners", backdrop.querySelector("#pp-new-owner"));
   backdrop.querySelector("#pp-cancel").addEventListener("click", () => backdrop.remove());
   const clearBtn = backdrop.querySelector("#pp-clear");
@@ -423,7 +439,7 @@ function openProfilePicker({ commander, currentProfileId, playerName, onSelect }
   backdrop.querySelector("#pp-new-confirm").addEventListener("click", () => {
     const name = nameEl.value.trim();
     if (!name && !newCommander) { toast(tr("Dá um nome ao perfil ou escolhe um commander.")); return; }
-    const profile = Profiles.create({ name, commander: newCommander, playerName: backdrop.querySelector("#pp-new-owner").value.trim() });
+    const profile = Profiles.create({ name, commander: newCommander, partnerCommander: newCommander ? newPartner : null, playerName: backdrop.querySelector("#pp-new-owner").value.trim() });
     onSelect(profile.id);
     backdrop.remove();
   });
@@ -534,9 +550,32 @@ function seatNameAfterProfile(curName, prevProfileId, prof) {
   if (!cur || (prev && normName(prev.playerName) === normName(cur))) return prof.playerName;
   return curName;
 }
-/** Commanders que um deck pode usar: o principal e os alternativos. */
+/** Nome de um commander com o parceiro: "Tymna + Thrasios". */
+function cmdLabel(c, partner) {
+  if (!c || !c.name) return "";
+  const p = partner !== undefined ? partner : c.partner;
+  return c.name + (p && p.name ? " + " + p.name : "");
+}
+/** Carta sem o campo `partner` (usado só dentro dos alternativos do deck). */
+function bareCard(c) {
+  if (!c) return null;
+  const out = Object.assign({}, c);
+  delete out.partner;
+  return out;
+}
+/** Commanders que um deck pode usar: o principal (com o parceiro do deck)
+ *  e os alternativos (cada um com o seu parceiro, se tiver). Cada opção é
+ *  { commander, partner, name/label: "A + B", art }. */
 function deckCommanders(prof) {
-  return prof ? [prof.commander].concat(prof.altCommanders || []).filter((c) => c && c.name) : [];
+  if (!prof) return [];
+  const opt = (c, p) => (c && c.name ? { commander: bareCard(c), partner: p && p.name ? bareCard(p) : null, name: cmdLabel(c, p || null), label: cmdLabel(c, p || null), art: c.art } : null);
+  return [opt(prof.commander, prof.partnerCommander)].concat((prof.altCommanders || []).map((a) => opt(a, a && a.partner))).filter(Boolean);
+}
+/** Aplica a um lugar do setup o commander (e parceiro) de uma opção do deck. */
+function applyCommanderOption(seat, opt, hasPartnerField) {
+  if (!seat || !opt) return;
+  seat.commander = opt.commander;
+  if (hasPartnerField !== false) seat.partnerCommander = opt.partner || null;
 }
 /** O dono do deck é outra pessoa que não quem está sentado? */
 function isBorrowed(name, prof) {
@@ -546,10 +585,10 @@ function isBorrowed(name, prof) {
 }
 /** Aviso de deck emprestado + escolha do commander (principal ou
  *  alternativo) para este jogo. Os botões têm data-alt="índice". */
-function seatDeckExtrasHtml(name, commander, prof) {
+function seatDeckExtrasHtml(name, commander, prof, partner) {
   if (!prof) return "";
   const cmds = deckCommanders(prof);
-  const cur = commander ? normName(commander.name) : "";
+  const cur = commander ? normName(cmdLabel(commander, partner || null)) : "";
   return `
     ${isBorrowed(name, prof) ? `<div class="seat-borrow">${I("user")}<span>${tr("Deck emprestado por {name}", { name: esc(prof.playerName.trim()) })}</span></div>` : ""}
     ${cmds.length > 1 ? `<div class="seat-alt" role="group" aria-label="${tr("Commander deste jogo")}">${cmds.map((c, k) => `
@@ -567,7 +606,7 @@ function seatExtrasHtml(p, idx, seats) {
   const palette = State.FALLBACK_PALETTE;
   const prof = p.profileId ? Profiles.get(p.profileId) : null;
   return `
-    ${seatDeckExtrasHtml(p.name, p.commander, prof)}
+    ${seatDeckExtrasHtml(p.name, p.commander, prof, p.partnerCommander)}
     ${recents.length ? `<div class="seat-recents" role="group" aria-label="${tr("Perfis recentes")}">${recents.map((pr) => `
       <button type="button" class="recent-chip" data-recent="${pr.id}" title="${tr("Usar o perfil {name}", { name: esc(pr.name) })}">
         <span class="recent-avatar" style="${pr.commander && pr.commander.art ? commanderThumbStyle(pr.commander) : ""}">${pr.commander && pr.commander.art ? "" : esc(pr.name.slice(0, 2).toUpperCase())}</span>
@@ -587,7 +626,7 @@ function bindSeatExtras(card, getSeat, rerender) {
       if (!pr || !seat) return;
       seat.name = seatNameAfterProfile(seat.name, seat.profileId, pr);
       seat.profileId = pr.id;
-      if (pr.commander) seat.commander = pr.commander;
+      if (pr.commander) { seat.commander = pr.commander; seat.partnerCommander = pr.partnerCommander || null; }
       if (typeof pr.colorIdx === "number") seat.colorIdx = pr.colorIdx;
       rerender();
       return;
@@ -597,7 +636,7 @@ function bindSeatExtras(card, getSeat, rerender) {
       const seat = getSeat();
       const pr = seat && seat.profileId ? Profiles.get(seat.profileId) : null;
       const c = deckCommanders(pr)[parseInt(ab.dataset.alt, 10)];
-      if (c) { seat.commander = c; rerender(); }
+      if (c) { applyCommanderOption(seat, c); rerender(); }
       return;
     }
     const cb = e.target.closest("[data-color]");

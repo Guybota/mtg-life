@@ -58,7 +58,7 @@ function renderSetupBR() {
       if (!ab) return;
       const prof = draft.profileIds[i] ? Profiles.get(draft.profileIds[i]) : null;
       const c = deckCommanders(prof)[parseInt(ab.dataset.alt, 10)];
-      if (c) { draft.commanders[i] = c; paintCmd(); paintExtras(); }
+      if (c) { draft.commanders[i] = c.commander; paintCmd(); paintExtras(); }
     });
     card.querySelector(".commander-thumb").addEventListener("click", () => {
       openCommanderPicker((c) => {

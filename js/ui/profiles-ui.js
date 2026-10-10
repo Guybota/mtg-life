@@ -336,7 +336,10 @@ const MANA_NAMES = { W: "Branco", U: "Azul", B: "Preto", R: "Vermelho", G: "Verd
 function colorIdentityOf(profile) {
   const c = profile && profile.commander;
   if (!c || !Array.isArray(c.colorIdentity)) return null;
-  return c.colorIdentity.length ? MANA.filter((m) => c.colorIdentity.includes(m)) : ["C"];
+  // com parceiro, a identidade de cor é a dos dois juntos
+  const p = profile.partnerCommander;
+  const ids = c.colorIdentity.concat(p && Array.isArray(p.colorIdentity) ? p.colorIdentity : []);
+  return ids.length ? MANA.filter((m) => ids.includes(m)) : ["C"];
 }
 function pipsHtml(ids) {
   if (!ids || !ids.length) return "";
@@ -512,7 +515,8 @@ function openEditProfileModal(profileId) {
   const profile = Profiles.get(profileId);
   if (!profile) return;
   let pendingCommander = profile.commander || null;
-  let pendingAlts = (profile.altCommanders || []).slice();
+  let pendingPartner = profile.partnerCommander || null;
+  let pendingAlts = (profile.altCommanders || []).map((c) => Object.assign({}, c));
   let pendingColor = typeof profile.colorIdx === "number" ? profile.colorIdx : null;
   closeAnyModal();
   const backdrop = el(`
@@ -526,6 +530,7 @@ function openEditProfileModal(profileId) {
             <div class="row" style="gap:6px;flex-wrap:wrap">
               <button class="btn btn-ghost btn-sm" id="epf-change">${tr("Trocar commander")}</button>
               <button class="btn btn-ghost btn-sm" id="epf-art">${tr("Outra arte")}</button>
+              <button class="btn btn-ghost btn-sm" id="epf-partner"></button>
             </div>
           </div>
         </div>
@@ -536,7 +541,7 @@ function openEditProfileModal(profileId) {
           <input type="text" id="epf-player" value="${esc(profile.playerName || "")}" placeholder="${tr("Nome de quem é este deck")}">
           ${ownerChipsHtml("epf-owners")}
           <label>${tr("Commanders alternativos")}</label>
-          <div class="footer-note">${tr("Outros commanders que este deck pode usar. No setup escolhes com qual vais jogar e as estatísticas ficam todas neste deck.")}</div>
+          <div class="footer-note">${tr("Outros commanders que este deck pode usar (cada um pode ter um parceiro). No setup escolhes com qual vais jogar e as estatísticas ficam todas neste deck.")}</div>
           <div class="alt-list" id="epf-alts"></div>
           <button type="button" class="btn btn-ghost btn-sm" id="epf-alt-add">${I("plus")} ${tr("Adicionar commander alternativo")}</button>
           <div id="epf-colors-wrap">
@@ -558,14 +563,18 @@ function openEditProfileModal(profileId) {
     const thumb = backdrop.querySelector("#epf-thumb");
     thumb.style.cssText = seatThumbStyle(fake);
     thumb.innerHTML = pendingCommander && pendingCommander.art ? "" : I("card");
-    backdrop.querySelector("#epf-cmd-name").textContent = pendingCommander ? pendingCommander.name : tr("Sem commander");
+    backdrop.querySelector("#epf-cmd-name").textContent = pendingCommander ? cmdLabel(pendingCommander, pendingPartner) : tr("Sem commander");
+    const pBtn = backdrop.querySelector("#epf-partner");
+    pBtn.classList.toggle("hidden", !pendingCommander);
+    pBtn.innerHTML = pendingPartner ? `${I("x")} ${tr("Tirar parceiro")}` : `${I("plus")} ${tr("Parceiro")}`;
     backdrop.querySelector("#epf-art").classList.toggle("hidden", !(pendingCommander && pendingCommander.printsUri));
     backdrop.querySelector("#epf-colors-wrap").classList.toggle("hidden", !!(pendingCommander && pendingCommander.art));
     backdrop.querySelectorAll("#epf-colors .color-dot").forEach((b) => b.setAttribute("aria-pressed", String(parseInt(b.dataset.color, 10) === pendingColor)));
     backdrop.querySelector("#epf-alts").innerHTML = pendingAlts.map((c, k) => `
       <div class="alt-row">
         <span class="commander-thumb sm" style="${commanderThumbStyle(c)}">${c.art ? "" : I("card")}</span>
-        <span class="alt-name">${esc(c.name)}</span>
+        <span class="alt-name">${esc(cmdLabel(c))}</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-alt-partner="${k}" title="${c.partner ? tr("Tirar parceiro") : tr("Adicionar parceiro")}">${c.partner ? I("x") : I("plus")} ${tr("Parceiro")}</button>
         <button type="button" class="btn btn-ghost btn-sm" data-alt-main="${k}">${tr("Tornar principal")}</button>
         <button type="button" class="btn btn-icon" data-alt-del="${k}" title="${tr("Remover")}" aria-label="${tr("Remover")}">${I("x")}</button>
       </div>`).join("");
@@ -575,7 +584,7 @@ function openEditProfileModal(profileId) {
   backdrop.querySelector("#epf-alt-add").addEventListener("click", () => {
     openCommanderPicker((c) => {
       if (!c) return;
-      const names = [pendingCommander].concat(pendingAlts).filter(Boolean).map((x) => normName(x.name));
+      const names = [cmdLabel(pendingCommander, pendingPartner)].concat(pendingAlts.map((x) => cmdLabel(x))).filter(Boolean).map(normName);
       if (names.includes(normName(c.name))) { toast(tr("Esse commander já está neste deck")); return; }
       if (!pendingCommander) pendingCommander = c; else pendingAlts.push(c);
       paint();
@@ -584,15 +593,29 @@ function openEditProfileModal(profileId) {
   backdrop.querySelector("#epf-alts").addEventListener("click", (e) => {
     const del = e.target.closest("[data-alt-del]");
     if (del) { pendingAlts.splice(parseInt(del.dataset.altDel, 10), 1); paint(); return; }
+    const pa = e.target.closest("[data-alt-partner]");
+    if (pa) {
+      const alt = pendingAlts[parseInt(pa.dataset.altPartner, 10)];
+      if (alt.partner) { delete alt.partner; paint(); return; }
+      openCommanderPicker((c) => { if (c) { alt.partner = bareCard(c); paint(); } }, tr("Escolher commander parceiro"));
+      return;
+    }
     const mk = e.target.closest("[data-alt-main]");
     if (mk) {
+      // troca o par principal (commander + parceiro) com o alternativo
       const k = parseInt(mk.dataset.altMain, 10);
       const next = pendingAlts[k];
-      pendingAlts.splice(k, 1, pendingCommander);
+      const oldMain = pendingCommander ? Object.assign(bareCard(pendingCommander), pendingPartner ? { partner: pendingPartner } : {}) : null;
+      pendingAlts.splice(k, 1, oldMain);
       pendingAlts = pendingAlts.filter(Boolean);
-      pendingCommander = next;
+      pendingCommander = bareCard(next);
+      pendingPartner = next.partner || null;
       paint();
     }
+  });
+  backdrop.querySelector("#epf-partner").addEventListener("click", () => {
+    if (pendingPartner) { pendingPartner = null; paint(); return; }
+    openCommanderPicker((c) => { if (c) { pendingPartner = bareCard(c); paint(); } }, tr("Escolher commander parceiro"));
   });
   backdrop.querySelector("#epf-change").addEventListener("click", () => {
     openCommanderPicker((c) => { pendingCommander = c; paint(); });
@@ -612,6 +635,7 @@ function openEditProfileModal(profileId) {
       name: backdrop.querySelector("#epf-name").value.trim() || profile.name,
       playerName: Profiles.canonicalPlayer(backdrop.querySelector("#epf-player").value.trim()),
       commander: pendingCommander,
+      partnerCommander: pendingCommander ? pendingPartner || undefined : undefined,
       altCommanders: pendingAlts,
       colorIdx: pendingColor,
     };
@@ -619,8 +643,8 @@ function openEditProfileModal(profileId) {
     // para não mudar quando se troca o dono ou o commander principal.
     // editedAt faz a correção chegar aos outros aparelhos do grupo.
     const now = Date.now();
-    const oldMain = profile.commander && profile.commander.name;
-    const mainChanged = oldMain && (!pendingCommander || normName(pendingCommander.name) !== normName(oldMain));
+    const oldMain = profile.commander ? cmdLabel(profile.commander, profile.partnerCommander || null) : "";
+    const mainChanged = oldMain && (!pendingCommander || normName(cmdLabel(pendingCommander, pendingPartner)) !== normName(oldMain));
     const oldOwner = (profile.playerName || "").trim();
     const newOwner = patch.playerName.trim();
     const ownerChanged = normName(oldOwner) !== normName(newOwner);
@@ -863,14 +887,14 @@ function renderProfileDetail() {
   s.querySelector("#back-btn").addEventListener("click", goBack);
   s.querySelector("#edit-profile-btn").addEventListener("click", () => openEditProfileModal(profile.id));
 
-  const mainName = profile.commander ? profile.commander.name : "";
+  const mainName = profile.commander ? cmdLabel(profile.commander, profile.partnerCommander || null) : "";
   const alts = profile.altCommanders || [];
   const head = `
     <div class="pd-hero">
       <div class="commander-thumb pd-hero-thumb" style="${seatThumbStyle(profile)}">${profile.commander && profile.commander.art ? "" : I("card")}</div>
       <div class="pd-hero-info">
-        <div class="pd-hero-title">${profile.commander ? esc(profile.commander.name) : tr("Sem commander")} ${pipsHtml(colorIdentityOf(profile))}</div>
-        ${alts.length ? `<div class="pd-hero-sub">${tr("Alternativos: {list}", { list: alts.map((c) => esc(c.name)).join(", ") })}</div>` : ""}
+        <div class="pd-hero-title">${profile.commander ? esc(mainName) : tr("Sem commander")} ${pipsHtml(colorIdentityOf(profile))}</div>
+        ${alts.length ? `<div class="pd-hero-sub">${tr("Alternativos: {list}", { list: alts.map((c) => esc(cmdLabel(c))).join(", ") })}</div>` : ""}
         <div class="pd-hero-chips">
           ${profile.playerName ? `<button type="button" class="pd-chip" id="pd-owner">${I("user")} ${tr("Dono: {name}", { name: esc(profile.playerName) })}</button>` : `<span class="pd-chip dim">${tr("Sem dono")}</span>`}
         </div>
@@ -1008,7 +1032,7 @@ function renderPlayerDetail() {
   const evo = evoCard(chrono);
   const rows = chrono.slice().reverse().map((g) => {
     const p = Profiles.get(g.deckId);
-    const main = p && p.commander ? p.commander.name : "";
+    const main = p && p.commander ? cmdLabel(p.commander, p.partnerCommander || null) : "";
     return { g, profileId: g.deckId, deck: g.deck, borrowed: !!g.borrowedFrom, altCmd: !!(g.commander && normName(g.commander) !== normName(main)) };
   });
   const deckCard = (x) => `

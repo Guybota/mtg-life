@@ -181,7 +181,7 @@ input, textarea, [contenteditable="true"]{
   to{ opacity:1; transform:none; }
 }
 
-.hidden{ display:none !important; }
+.hidden, [hidden]{ display:none !important; }
 
 /* ---------- Ícones SVG ---------- */
 .ic{

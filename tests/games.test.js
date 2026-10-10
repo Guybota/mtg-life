@@ -102,3 +102,35 @@ module.exports = [
     },
   },
 ];
+
+module.exports.push({
+  name: "criar um deck novo com pesquisa de commander no registo manual",
+  async run(t) {
+    const page = await t.page();
+    await page.route(/api\.scryfall\.com/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: [{ id: "c1", name: "Atraxa, Grand Unifier", type_line: "Legendary Creature", image_uris: { art_crop: "./icons/icon-192.png" }, color_identity: ["W", "U", "B", "G"] }] }) }));
+    await openWith(t, page, seedProfiles());
+    await goProfiles(page);
+    await page.click("#manual-game-btn");
+    t.ok(await page.$eval(".game-sheet", (e) => e.scrollWidth <= e.clientWidth), "sem scroll horizontal");
+    await page.click('.mg-seat[data-i="0"] [data-pick]');
+    await page.click("#pp-new");
+    // sem commander, a pesquisa abre sozinha
+    await page.waitForSelector("#cp-input");
+    await page.fill("#cp-input", "atra");
+    await page.click("#cp-results .search-result-item");
+    t.eq(await page.inputValue("#pp-new-name"), "Atraxa, Grand Unifier", "nome do perfil = commander");
+    t.eq(await page.textContent("#pp-new-cmd-name"), "Atraxa, Grand Unifier", "commander mostrado no formulário");
+    await page.fill("#pp-new-owner", "Pedro");
+    await page.click("#pp-new-confirm");
+    await page.waitForSelector("#pp-list", { state: "detached" });
+    t.eq(await page.$eval('.mg-seat[data-i="0"] .mg-deck-name', (e) => e.textContent), "Atraxa, Grand Unifier", "deck novo no lugar");
+    t.eq(await page.inputValue('.mg-seat[data-i="0"] .mg-who'), "Pedro", "quem jogou = dono do deck novo");
+    await page.click('.mg-seat[data-i="1"] [data-pick]');
+    await page.click('#pp-list .search-result-item:has(.name:text-is("Krenko"))');
+    await page.click('.mg-seat[data-i="0"] [data-win]');
+    await page.click("#mg-save");
+    await page.waitForSelector(".game-sheet", { state: "detached" });
+    const p = (await stored(page)).find((x) => x.name === "Atraxa, Grand Unifier");
+    t.eq([p.playerName, p.commander.name, p.stats.games, p.stats.wins], ["Pedro", "Atraxa, Grand Unifier", 1, 1], "perfil novo com o jogo");
+  },
+});

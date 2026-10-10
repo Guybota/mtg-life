@@ -330,6 +330,7 @@ function openVersionPicker(baseCard, onSelect, parentBackdrop) {
 // PROFILE PICKER (modal reutilizável) — ligar/criar perfil de commander
 // ===========================================================
 function openProfilePicker({ commander, currentProfileId, playerName, onSelect }) {
+  let newCommander = commander || null; // commander do perfil novo (pode pesquisar-se aqui)
   // (sem closeAnyModal aqui de propósito: pode abrir por cima do modal de editar jogador)
   const profiles = Profiles.all();
   const backdrop = el(`
@@ -337,12 +338,18 @@ function openProfilePicker({ commander, currentProfileId, playerName, onSelect }
       <div class="modal-sheet">
         <h2>${tr("Perfil do jogador")}</h2>
         <div class="footer-note" style="margin-bottom:10px">${tr("Os perfis guardam as estatísticas deste commander entre jogos (vitórias, tempo médio por turno/jogo, etc).")}</div>
+        ${profiles.length > 6 ? `<label class="search-field pp-search">${I("search")}<input type="search" id="pp-filter" placeholder="${tr("Procurar perfil, commander ou jogador")}" aria-label="${tr("Procurar perfis")}" autocomplete="off"></label>` : ""}
         <div class="col" id="pp-list" style="max-height:38vh;overflow-y:auto"></div>
         <div class="row" style="margin-top:10px">
           <button class="btn btn-ghost grow" id="pp-new">${I("plus")} ${tr("Criar novo perfil")}</button>
           ${currentProfileId ? `<button class="btn btn-ghost grow" id="pp-clear">${I("x")} ${tr("Remover perfil")}</button>` : ""}
         </div>
         <div id="pp-new-form" class="col hidden" style="margin-top:10px">
+          <div class="pp-new-cmd">
+            <span class="commander-thumb sm" id="pp-new-thumb"></span>
+            <span class="pp-new-cmd-name" id="pp-new-cmd-name"></span>
+            <button type="button" class="btn btn-ghost btn-sm" id="pp-new-cmd-btn">${I("search")} ${tr("Procurar commander")}</button>
+          </div>
           <input type="text" id="pp-new-name" placeholder="${tr("Nome do perfil")}" value="${commander ? esc(commander.name) : ""}">
           <label for="pp-new-owner">${tr("Dono do deck")}</label>
           <input type="text" id="pp-new-owner" placeholder="${tr("Nome de quem é este deck")}" value="${esc(playerName && !/^\s*$/.test(playerName) ? playerName : "")}">
@@ -370,19 +377,53 @@ function openProfilePicker({ commander, currentProfileId, playerName, onSelect }
       </div>
     `);
     item.addEventListener("click", () => { onSelect(p.id); backdrop.remove(); });
+    item._search = normName([p.name, p.playerName, p.commander && p.commander.name].join(" "));
     list.appendChild(item);
   });
+  const filter = backdrop.querySelector("#pp-filter");
+  if (filter) filter.addEventListener("input", () => {
+    const q = normName(filter.value);
+    Array.from(list.children).forEach((it) => it.classList.toggle("hidden", !!q && !(it._search || "").includes(q)));
+  });
+  const nameEl = backdrop.querySelector("#pp-new-name");
+  function paintNewCommander() {
+    const thumb = backdrop.querySelector("#pp-new-thumb");
+    thumb.style.cssText = commanderThumbStyle(newCommander);
+    thumb.innerHTML = newCommander && newCommander.art ? "" : I("card");
+    backdrop.querySelector("#pp-new-cmd-name").textContent = newCommander ? newCommander.name : tr("Sem commander");
+    backdrop.querySelector("#pp-new-cmd-btn").lastChild.textContent = " " + (newCommander ? tr("Trocar") : tr("Procurar commander"));
+  }
+  function searchCommander() {
+    openCommanderPicker((c) => {
+      // o nome do perfil acompanha o commander, a não ser que já se tenha escrito outro
+      if (!nameEl.value.trim() || (newCommander && nameEl.value.trim() === newCommander.name)) nameEl.value = c ? c.name : nameEl.value;
+      newCommander = c;
+      paintNewCommander();
+      if (!nameEl.value.trim()) nameEl.focus();
+    });
+  }
+  paintNewCommander();
+  backdrop.querySelector("#pp-new-cmd-btn").addEventListener("click", searchCommander);
   bindOwnerChips(backdrop, "pp-owners", backdrop.querySelector("#pp-new-owner"));
   backdrop.querySelector("#pp-cancel").addEventListener("click", () => backdrop.remove());
   const clearBtn = backdrop.querySelector("#pp-clear");
   if (clearBtn) clearBtn.addEventListener("click", () => { onSelect(null); backdrop.remove(); });
   backdrop.querySelector("#pp-new").addEventListener("click", () => {
-    if (!commander) { toast(tr("Escolhe primeiro um commander para este jogador.")); return; }
-    backdrop.querySelector("#pp-new-form").classList.toggle("hidden");
+    const form = backdrop.querySelector("#pp-new-form");
+    form.classList.toggle("hidden");
+    // a criar: a lista de perfis existentes esconde-se para dar espaço
+    const creating = !form.classList.contains("hidden");
+    list.classList.toggle("hidden", creating);
+    if (filter) filter.closest(".pp-search").classList.toggle("hidden", creating);
+    if (!creating) return;
+    form.scrollIntoView({ block: "nearest" });
+    // sem commander escolhido: abre logo a pesquisa
+    if (!newCommander) searchCommander();
   });
   backdrop.querySelector("#pp-new-confirm").addEventListener("click", () => {
-    const name = backdrop.querySelector("#pp-new-name").value.trim();
-    const profile = Profiles.create({ name, commander, playerName: backdrop.querySelector("#pp-new-owner").value.trim() });
+    const name = nameEl.value.trim();
+    if (!name && !newCommander) { toast(tr("Dá um nome ao perfil ou escolhe um commander.")); return; }
+    const profile = Profiles.create({ name, commander: newCommander, playerName: backdrop.querySelector("#pp-new-owner").value.trim() });
     onSelect(profile.id);
     backdrop.remove();
   });

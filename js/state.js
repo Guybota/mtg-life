@@ -476,15 +476,32 @@
     return state;
   }
 
-  /** Reordena a posição dos jogadores no tabuleiro (só a disposição visual —
-   *  `turnOrder` guarda ids, não índices, por isso a ordem dos turnos não é
-   *  afetada por isto). orderedIds deve conter todos os ids atuais. */
+  /** A ordem dos turnos segue sempre os lugares à mesa (sentido horário).
+   *  Ao trocar lugares, a ordem dos turnos passa a ser a nova ordem dos
+   *  lugares; quem está a jogar continua a jogar e a ronda continua a contar
+   *  a partir de quem a começou. */
+  function syncTurnOrderToSeats(modeState, ids) {
+    if (!modeState.turnOrder) return;
+    const curId = modeState.turnOrder[modeState.currentTurnIndex];
+    const startId = modeState.turnOrder[modeState.roundStartIndex || 0];
+    modeState.turnOrder = ids.slice();
+    const ci = modeState.turnOrder.indexOf(curId);
+    if (ci >= 0) modeState.currentTurnIndex = ci;
+    if (modeState.roundStartIndex != null) {
+      const si = modeState.turnOrder.indexOf(startId);
+      if (si >= 0) modeState.roundStartIndex = si;
+    }
+  }
+
+  /** Reordena os lugares dos jogadores no tabuleiro; a ordem dos turnos
+   *  passa a seguir os novos lugares. orderedIds deve ter todos os ids. */
   function stdReorderPlayers(state, orderedIds) {
     const std = state.standard;
     const byId = new Map(std.players.map((p) => [p.id, p]));
     const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
     std.players.forEach((p) => { if (!orderedIds.includes(p.id)) reordered.push(p); });
     std.players = reordered;
+    syncTurnOrderToSeats(std, reordered.map((p) => p.id));
     save(state);
     return state;
   }
@@ -627,15 +644,15 @@
     return state;
   }
 
-  /** Reordena a posição dos jogadores na lista (só a disposição visual —
-   *  `turnOrder` guarda ids, não índices, por isso a ordem dos turnos não é
-   *  afetada por isto). orderedIds deve conter todos os ids atuais. */
+  /** Reordena os jogadores na lista; a ordem dos turnos passa a seguir a
+   *  nova ordem. orderedIds deve conter todos os ids atuais. */
   function brReorderPlayers(state, orderedIds) {
     const br = state.br;
     const byId = new Map(br.players.map((p) => [p.id, p]));
     const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
     br.players.forEach((p) => { if (!orderedIds.includes(p.id)) reordered.push(p); });
     br.players = reordered;
+    syncTurnOrderToSeats(br, reordered.map((p) => p.id));
     save(state);
     return state;
   }
@@ -1043,15 +1060,15 @@
     return state;
   }
 
-  /** Reordena a posição das equipas no tabuleiro (só a disposição visual —
-   *  `turnOrder` guarda ids, não índices, por isso a ordem dos turnos não é
-   *  afetada por isto). orderedIds deve conter todos os ids atuais. */
+  /** Reordena os lugares das equipas no tabuleiro; a ordem dos turnos
+   *  passa a seguir os novos lugares. orderedIds deve ter todos os ids. */
   function teamsReorderTeams(state, orderedIds) {
     const t = state.teams;
     const byId = new Map(t.teams.map((tm) => [tm.id, tm]));
     const reordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
     t.teams.forEach((tm) => { if (!orderedIds.includes(tm.id)) reordered.push(tm); });
     t.teams = reordered;
+    syncTurnOrderToSeats(t, reordered.map((tm) => tm.id));
     save(state);
     return state;
   }

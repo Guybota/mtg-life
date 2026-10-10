@@ -782,6 +782,22 @@
     return res;
   }
 
+  /** Apaga TODOS os perfis, jogos, apagados e alcunhas deste aparelho,
+   *  para começar de novo (ex: importar de um ficheiro ou da nuvem).
+   *  Devolve uma cópia para "Desfazer" (restoreAll). */
+  function resetAll() {
+    const backup = {};
+    [KEY, DELETED_KEY, ALIAS_KEY].forEach((k) => { backup[k] = localStorage.getItem(k); });
+    quiet++;
+    try { [KEY, DELETED_KEY, ALIAS_KEY].forEach((k) => localStorage.removeItem(k)); } finally { quiet--; }
+    return backup;
+  }
+  function restoreAll(backup) {
+    if (!backup) return;
+    Object.keys(backup).forEach((k) => { if (backup[k] == null) localStorage.removeItem(k); else localStorage.setItem(k, backup[k]); });
+    changed();
+  }
+
   /** Cópia de tudo o que uma fusão pode mudar (para "Desfazer"). */
   function snapshot() { return { profiles: load(), aliases: playerAliases() }; }
   function replaceAll(snap) {
@@ -799,5 +815,5 @@
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Profiles = { gamesList, attachGuest, gameGroup, editGame, recordManualGame, all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases, onChange, deleted, syncPayload, syncMerge };
+  global.MTG.Profiles = { resetAll, restoreAll, gamesList, attachGuest, gameGroup, editGame, recordManualGame, all, get, create, update, remove, restore, recordGameResult, derived, historyOf, removeGame, restoreGame, exportAll, importList, gameCount, mergePreview, applyMerge, snapshot, replaceAll, mergeProfiles, mergePlayers, playerAliases, canonicalPlayer, addPlayerAliases, onChange, deleted, syncPayload, syncMerge };
 })(window);

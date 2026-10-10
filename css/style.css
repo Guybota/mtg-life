@@ -2605,3 +2605,10 @@ html.compact-board .std-game:not(.board-fullscreen) > .br-status-row .br-chip{
   flex:1 1 0; min-height:0; max-height:110px; font-size:.72rem; font-weight:700; gap:4px;
 }
 html.compact-board .std-game:not(.board-fullscreen) > .br-status-row .br-chip .ic{ width:18px; height:18px; }
+
+/* ---------- Apagar todos os dados ---------- */
+.pf-reset{ align-self:center; margin: 2px auto 8px; color: var(--minus-ink); background:transparent; border-color:transparent; display:flex; }
+.pf-reset .ic{ width:14px; height:14px; }
+.reset-sheet{ gap:8px; }
+.danger-btn{ background: var(--minus-ink); color:#fff; border-color: var(--minus-ink); }
+.danger-btn .ic{ color:#fff; }

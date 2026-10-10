@@ -4123,11 +4123,13 @@
           <div class="backup-note ${Cloud.status().code ? "hidden" : ""}">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
           ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
           ${profiles.length ? `
-          <div class="seg" role="tablist">
+          <div class="seg seg-3" role="tablist">
             <button type="button" class="seg-btn" role="tab" data-tab="decks" aria-selected="${profileTab === "decks"}">${tr("Decks")}</button>
             <button type="button" class="seg-btn" role="tab" data-tab="players" aria-selected="${profileTab === "players"}">${tr("Jogadores")}</button>
+            <button type="button" class="seg-btn" role="tab" data-tab="ranking" aria-selected="${profileTab === "ranking"}">${tr("Classificação")}</button>
           </div>` : ""}
           <div id="players-view" class="${profileTab === "players" ? "" : "hidden"}"></div>
+          <div id="ranking-view" class="${profileTab === "ranking" ? "" : "hidden"}"></div>
           <div id="decks-view" class="${profileTab === "decks" ? "" : "hidden"}">
           ${profilesOverviewHtml(profiles)}
           ${profiles.length ? `
@@ -4255,9 +4257,94 @@
       s.querySelectorAll(".seg-btn").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
       s.querySelector("#players-view").classList.toggle("hidden", profileTab !== "players");
       s.querySelector("#decks-view").classList.toggle("hidden", profileTab !== "decks");
+      s.querySelector("#ranking-view").classList.toggle("hidden", profileTab !== "ranking");
     }));
+    renderRankingView(s.querySelector("#ranking-view"));
     Charts.bindTips(s);
     s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
+  }
+
+  // ===========================================================
+  // CLASSIFICAÇÃO ELO (jogadores e decks)
+  // ===========================================================
+  let rankKind = "players"; // "players" | "decks"
+  const TIER_LABEL = {
+    provisional: () => tr("Em calibração"), bronze: () => tr("Bronze"), silver: () => tr("Prata"),
+    gold: () => tr("Ouro"), platinum: () => tr("Platina"), diamond: () => tr("Diamante"),
+  };
+  const tierChip = (t) => `<span class="tier-chip tier-${t}">${TIER_LABEL[t] ? TIER_LABEL[t]() : t}</span>`;
+  const deltaHtml = (d) => (d ? `<small class="elo-delta ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : "−"}${Math.abs(d)}</small>` : "");
+  /** chave do ecrã de detalhe do jogador (igual à usada em playersFromProfiles) */
+  function playerDetailKey(name) { return String(name || "").trim().toLowerCase(); }
+
+  function renderRankingView(view) {
+    if (!view) return;
+    const data = MTG.Elo.compute(Profiles.all());
+    const list = rankKind === "players" ? data.players : data.decks;
+    const profilesById = new Map(Profiles.all().map((p) => [p.id, p]));
+    const rows = list.map((r) => {
+      const prof = rankKind === "decks" ? profilesById.get(r.key) : null;
+      const avatar = rankKind === "players"
+        ? initialsAvatar(r.name, r.rank - 1).replace("player-avatar", "player-avatar sm")
+        : `<div class="commander-thumb sm" style="${prof ? seatThumbStyle(prof) : ""}">${prof && prof.commander && prof.commander.art ? "" : I("card")}</div>`;
+      const sub = rankKind === "decks" && prof && prof.playerName ? esc(prof.playerName) + " · " : "";
+      return `
+        <div class="rank-row ${r.rank <= 3 && r.tier !== "provisional" ? "top top-" + r.rank : ""}" role="button" tabindex="0" data-key="${esc(r.key)}" data-name="${esc(r.name)}">
+          <span class="rank-pos">${r.tier === "provisional" ? "–" : r.rank}</span>
+          ${avatar}
+          <span class="rank-info">
+            <span class="rank-name">${esc(r.name)}</span>
+            <span class="rank-sub">${sub}${tr("{w} V · {g} jogos", { w: r.wins, g: r.games })}</span>
+          </span>
+          ${tierChip(r.tier)}
+          <span class="rank-score"><b>${r.rating}</b>${deltaHtml(r.delta)}</span>
+        </div>`;
+    }).join("");
+    view.innerHTML = `
+      <div class="rank-kind" role="tablist">
+        <button type="button" class="sort-chip" data-kind="players" aria-pressed="${rankKind === "players"}">${tr("Jogadores")}</button>
+        <button type="button" class="sort-chip" data-kind="decks" aria-pressed="${rankKind === "decks"}">${tr("Decks")}</button>
+      </div>
+      ${list.length ? `<div class="rank-list">${rows}</div>` : `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos para a classificação. Contam os jogos com vencedor entre dois ou mais perfis.")}</div></div>`}
+      <details class="rank-help">
+        <summary>${tr("Como funciona")}</summary>
+        <p>${tr("Todos começam com 1500 pontos. Em cada jogo, quem ganha \"vence\" cada adversário: ganhar a quem tem mais pontos dá mais, perder com quem tem menos tira mais. Jogos sem vencedor não contam.")}</p>
+        <p>${tr("Ligas: Bronze até 1440, Prata 1440, Ouro 1490, Platina 1540, Diamante 1600. Com menos de {n} jogos fica em calibração.", { n: MTG.Elo.PROVISIONAL })}</p>
+        <p>${tr("{n} jogo(s) contados.", { n: data.games })}</p>
+      </details>`;
+    view.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { rankKind = b.dataset.kind; renderRankingView(view); }));
+    view.querySelectorAll(".rank-row").forEach((row) => {
+      const open = () => rankKind === "players"
+        ? nav("player-detail", { key: playerDetailKey(row.dataset.name) })
+        : nav("profile-detail", { id: row.dataset.key });
+      row.addEventListener("click", open);
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
+  }
+
+  /** Cartão "Classificação" nos ecrãs de detalhe: posição, pontos, liga e
+   *  a evolução dos pontos jogo a jogo. */
+  function eloCardHtml(rec, total) {
+    if (!rec) return "";
+    const values = rec.series.map((x) => Math.round(x.rating));
+    return `
+      <div class="chart-card elo-card">
+        <div class="elo-head">
+          <span class="elo-rank">${rec.tier === "provisional" ? "–" : "#" + rec.rank}<small>/${total}</small></span>
+          <span class="elo-main"><b>${rec.rating}</b> ${deltaHtml(rec.delta)}</span>
+          ${tierChip(rec.tier)}
+        </div>
+        <div class="chart-title">${tr("Classificação ELO")}</div>
+        <div class="chart-sub">${tr("Pontos depois de cada jogo")}</div>
+        ${values.length >= 3 ? Charts.multiLine([{ name: tr("Pontos"), values }], { xLabel: (i) => (i === 0 ? tr("Início") : tr("Jogo {n}", { n: i })), aria: tr("Evolução da classificação") }) : `<div class="footer-note">${tr("Joga mais uns jogos para ver a evolução.")}</div>`}
+      </div>`;
+  }
+  function bindEloCard(root, rec) {
+    if (!rec || rec.series.length < 3) return;
+    const values = rec.series.map((x) => Math.round(x.rating));
+    Charts.bindMultiLine(root.querySelector(".elo-card") || root, [{ name: tr("Pontos"), values }], {
+      tipTitle: (i) => (i === 0 ? tr("Início") : tr("Jogo {n}", { n: i }) + " · " + formatDateTime(rec.series[i].date)),
+    });
   }
 
   /** Visão geral no topo do ecrã de perfis: números-resumo + comparação da
@@ -4610,7 +4697,9 @@
         </div>`;
     }
 
-    body.innerHTML = head + kpis + streak + form + evo + modes + h2hHtml + durations + `
+    const eloAll = MTG.Elo.compute(Profiles.all());
+    const eloRec = eloAll.decks.find((r) => r.key === profile.id || (profile.aliases || []).includes(r.key));
+    body.innerHTML = head + kpis + eloCardHtml(eloRec, eloAll.decks.length) + streak + form + evo + modes + h2hHtml + durations + `
       <div class="section-title">${tr("Histórico de jogos")}</div>
       <div class="col" id="history-list"></div>
       <button class="btn btn-ghost btn-block merge-entry" id="merge-deck-btn">${I("merge")} ${tr("Fundir com outro deck")}</button>`;
@@ -4641,6 +4730,7 @@
 
     Charts.bindTips(body);
     if (evoPoints) Charts.bindLine(body, evoPoints);
+    bindEloCard(body, eloRec);
     s.querySelector("#back-btn").addEventListener("click", () => (screenParams.fromPlayer ? nav("player-detail", { key: screenParams.fromPlayer }) : nav("profiles")));
   }
 
@@ -4665,6 +4755,9 @@
     const pct = Math.round(pl.winRate * 100);
     const recent = pl.history.slice(-10);
     const decks = pl.profiles.map((p) => ({ p, d: Profiles.derived(p) })).sort((a, b) => (b.d.winRate - a.d.winRate) || (b.d.games - a.d.games));
+    const plEloAll = MTG.Elo.compute(Profiles.all());
+    const normKey = (x) => String(x || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const plElo = plEloAll.players.find((r) => r.key === normKey(pl.name));
     body.innerHTML = `
       <div class="pd-head">
         ${initialsAvatar(pl.name, 0).replace("player-avatar", "player-avatar lg")}
@@ -4678,6 +4771,7 @@
           <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
         </div>
       </div>
+      ${eloCardHtml(plElo, plEloAll.players.length)}
       ${recent.length ? `
       <div class="chart-card">
         <div class="chart-title">${tr("Forma recente")}</div>
@@ -4710,6 +4804,7 @@
     body.insertAdjacentHTML("beforeend", `<button class="btn btn-ghost btn-block merge-entry" id="merge-player-btn">${I("merge")} ${tr("Fundir com outro jogador")}</button>`);
     body.querySelector("#merge-player-btn").addEventListener("click", () => openMergePlayerSheet(pl.key));
     body.querySelectorAll(".profile-card[data-id]").forEach((c) => c.addEventListener("click", () => nav("profile-detail", { id: c.dataset.id, fromPlayer: pl.key })));
+    bindEloCard(body, plElo);
     Charts.bindTips(body);
     s.querySelector("#back-btn").addEventListener("click", () => nav("profiles"));
   }

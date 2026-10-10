@@ -284,83 +284,176 @@ function openReorderPositionsModal(mode) {
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
 }
 
-/** Histórico ao vivo das alterações de vida do jogo atual (qualquer modo),
- *  agrupado por turno — mostra CADA alteração individual (ex: -3, +5, -1),
- *  não só a diferença total acumulada, e quem estava a jogar em cada turno. */
+let lhView = "table";   // vista escolhida no histórico de vida: "table" | "list"
+let lhFilter = null;     // filtro da lista: id do jogador/equipa ou null
+
+/** Histórico ao vivo das alterações de vida do jogo atual (qualquer modo).
+ *  Duas vistas:
+ *  - Tabela: uma coluna por jogador e uma linha por turno, com a variação
+ *    e a vida no fim do turno (como a folha de papel à mesa);
+ *  - Lista: cada alteração com a vida antes → depois e a origem (commander
+ *    damage, dano a todos, drenar…), filtro por jogador e "Desfazer". */
 function openLifeHistoryModal() {
   closeAnyModal();
-  const modeState = game.mode === "standard" ? game.standard : game.mode === "br" ? game.br : game.teams;
-  const log = (modeState && modeState.lifeLog) || [];
-  const timedLog = !modeState || modeState.trackTurns !== false;
-  const groups = [];
-  const byTurn = new Map();
-  log.forEach((entry) => {
-    if (!byTurn.has(entry.turnSeq)) {
-      const g = { turnSeq: entry.turnSeq, roundNumber: entry.roundNumber, turnName: entry.turnName, entries: [] };
-      byTurn.set(entry.turnSeq, g);
-      groups.push(g);
-    }
-    byTurn.get(entry.turnSeq).entries.push(entry);
-  });
-  groups.sort((a, b) => b.turnSeq - a.turnSeq);
-
+  const mode = game.mode === "standard" ? "standard" : game.mode === "br" ? "br" : "teams";
+  const ms = mode === "standard" ? game.standard : mode === "br" ? game.br : game.teams;
+  const timed = !ms || ms.trackTurns !== false;
+  const entities = (mode === "teams" ? ms.teams : ms.players) || [];
+  const view = timed ? lhView : "list";
   const backdrop = el(`
     <div class="modal-backdrop center">
-      <div class="modal-sheet">
-        <h2>${tr("Histórico de vida")}</h2>
-        <div class="scroll" style="padding:0; flex:1; min-height:0;">
-          ${groups.length ? `<div id="life-history-list"></div>` : `<div class="footer-note">${tr("Ainda não há alterações de vida registadas neste jogo.")}</div>`}
+      <div class="modal-sheet lh-sheet">
+        <div class="lh-head">
+          <h2>${tr("Histórico de vida")}</h2>
+          ${timed ? `<div class="seg lh-seg" role="tablist">
+            <button type="button" class="seg-btn" data-view="table" aria-selected="${view === "table"}">${tr("Tabela")}</button>
+            <button type="button" class="seg-btn" data-view="list" aria-selected="${view === "list"}">${tr("Lista")}</button>
+          </div>` : ""}
+          <button type="button" class="btn btn-icon lh-x" id="lh-x" title="${tr("Fechar")}" aria-label="${tr("Fechar")}">${I("x")}</button>
         </div>
-        <div class="row" style="margin-top:12px;">
-          <button class="btn btn-ghost grow" id="close-lh-btn">${tr("Fechar")}</button>
-        </div>
+        <div class="lh-body" id="lh-body"></div>
+        <button class="btn btn-ghost lh-close" id="close-lh-btn">${tr("Fechar")}</button>
       </div>
-    </div>
-  `);
+    </div>`);
   document.body.appendChild(backdrop);
-  // Junta toques consecutivos do MESMO alvo feitos a menos de 2s uns dos
-  // outros numa só linha (o mesmo intervalo usado no indicador ao vivo do
-  // tabuleiro) — ex: -1,-1,-1 seguidos viram uma linha "-3" — mas mantém
-  // ações separadas no tempo como linhas distintas (-3; +5; -1), nunca
-  // reduzindo tudo à diferença total do turno.
-  function mergeBursts(entries) {
-    const merged = [];
-    entries.forEach((entry) => {
-      const last = merged[merged.length - 1];
-      if (last && last.targetId === entry.targetId && entry.ts - last.lastTs <= 2000) {
-        last.delta += entry.delta;
-        last.lastTs = entry.ts;
-      } else {
-        merged.push({ targetId: entry.targetId, targetName: entry.targetName, delta: entry.delta, ts: entry.ts, lastTs: entry.ts });
-      }
-    });
-    return merged;
+  const body = backdrop.querySelector("#lh-body");
+  const close = () => backdrop.remove();
+  backdrop.querySelector("#close-lh-btn").addEventListener("click", close);
+  backdrop.querySelector("#lh-x").addEventListener("click", close);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+  backdrop.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => {
+    lhView = b.dataset.view;
+    backdrop.querySelectorAll("[data-view]").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    paint();
+  }));
+
+  const byId = new Map(entities.map((e) => [e.id, e]));
+  const dotStyle = (en) => playerBgStyle(mode === "teams" ? (en.players || [])[0] : en);
+  const dot = (id, name) => `<span class="lh-dot" style="${dotStyle(byId.get(id))}" title="${esc(name || "")}"></span>`;
+
+  function paint() {
+    const v = timed ? lhView : "list";
+    const log = ms.lifeLog || [];
+    if (!log.length) { body.innerHTML = `<div class="footer-note">${tr("Ainda não há alterações de vida registadas neste jogo.")}</div>`; return; }
+    body.innerHTML = v === "table" ? tableHtml(log) : listHtml(log);
+    bind(v);
   }
 
-  const list = backdrop.querySelector("#life-history-list");
-  if (list) {
-    list.classList.add("lh-timeline");
-    groups.forEach((g) => {
-      const bursts = mergeBursts(g.entries.slice().sort((a, b) => a.ts - b.ts)).filter((b) => b.delta !== 0);
-      if (!timedLog) bursts.reverse(); // sem turnos: lista simples, mais recente primeiro
-      if (!bursts.length) return;
-      if (timedLog) list.appendChild(el(`<div class="lh-turn"><span class="lh-turn-round">${tr("Ronda {n}", { n: g.roundNumber })}</span> · ${tr("Turno de {name}", { name: esc(g.turnName) })}</div>`));
-      bursts.forEach((entry) => {
-        const sign = entry.delta > 0 ? "plus" : "minus";
-        const row = el(`
-          <div class="lh-event ${sign}">
-            <div class="lh-event-body">
-              <div class="lh-event-name">${esc(entry.targetName)}</div>
-              <div class="lh-event-time">${formatTimeOnly(entry.ts)}</div>
-            </div>
-            <div class="lh-event-delta ${sign}">${entry.delta > 0 ? "+" : ""}${entry.delta}</div>
-          </div>
-        `);
-        list.appendChild(row);
-      });
-    });
-    if (!list.children.length) list.appendChild(el(`<div class="footer-note">${tr("Ainda não há alterações de vida registadas neste jogo.")}</div>`));
+  // ---------- Tabela: jogador × turno ----------
+  function tableHtml(log) {
+    const tl = State.lifeTimeline(ms, entities);
+    const n = tl.turns.length;
+    const rows = [];
+    for (let i = n; i >= 1; i--) {
+      const deltas = tl.series.map((s) => s.values[i] - s.values[i - 1]);
+      if (i < n && deltas.every((d) => !d)) continue; // turnos sem mudanças não ocupam espaço (o atual fica sempre)
+      const t = tl.turns[i - 1];
+      rows.push(`
+        <tr${i === n ? ' class="lh-now"' : ""}>
+          <th scope="row"><span class="lh-turn-cell">${t.round ? `<b>R${t.round}</b>` : ""}<span>${esc(t.name || "")}</span>${i === n ? `<small>${tr("agora")}</small>` : ""}</span></th>
+          ${tl.series.map((s, k) => {
+            const d = deltas[k];
+            return `<td data-col="${esc(s.id)}" class="${d > 0 ? "plus" : d < 0 ? "minus" : "zero"}">${d ? `<span class="lh-d">${d > 0 ? "+" : "−"}${Math.abs(d)}</span><span class="lh-l">${s.values[i]}</span>` : `<span class="lh-l dim">${s.values[i]}</span>`}</td>`;
+          }).join("")}
+        </tr>`);
+    }
+    return `
+      <div class="lh-table-wrap">
+        <table class="lh-table">
+          <thead><tr><th scope="col"><span class="lh-corner">${tr("Turno")}</span></th>${entities.map((en) => `
+            <th scope="col" data-col="${esc(en.id)}"><span class="lh-col-head">${dot(en.id, en.name)}<span class="lh-col-name">${esc(en.name)}</span><span class="lh-col-life ${en.eliminated ? "out" : ""}">${en.life}</span></span></th>`).join("")}</tr></thead>
+          <tbody>${rows.join("")}
+            <tr class="lh-start"><th scope="row"><span class="lh-turn-cell"><span>${tr("Início")}</span></span></th>${tl.series.map((s) => `<td><span class="lh-l dim">${s.values[0]}</span></td>`).join("")}</tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="mg-hint lh-hint">${tr("Toca num jogador para ver as alterações dele.")}</div>`;
   }
-  backdrop.querySelector("#close-lh-btn").addEventListener("click", () => backdrop.remove());
-  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) backdrop.remove(); });
+
+  // ---------- Lista: cada alteração ----------
+  // toques seguidos no mesmo alvo e com a mesma origem (menos de 2 s) juntam-se
+  function bursts(log) {
+    const out = [];
+    log.forEach((e) => {
+      const last = out[out.length - 1];
+      const key = e.source ? e.source.kind + ":" + (e.source.fromId || "") : "";
+      if (last && last.targetId === e.targetId && last.key === key && last.turnSeq === e.turnSeq && e.ts - last.lastTs <= 2000) {
+        last.delta += e.delta; last.lastTs = e.ts; last.ids.push(e.id); last.lifeAfter = e.lifeAfter;
+      } else {
+        out.push({ targetId: e.targetId, targetName: e.targetName, delta: e.delta, ts: e.ts, lastTs: e.ts, ids: [e.id], key, source: e.source, turnSeq: e.turnSeq, roundNumber: e.roundNumber, turnName: e.turnName, lifeAfter: e.lifeAfter });
+      }
+    });
+    // vida depois de cada alteração: a guardada, ou contada para trás a partir da atual
+    const running = new Map(entities.map((en) => [en.id, en.life]));
+    for (let i = out.length - 1; i >= 0; i--) {
+      const b = out[i];
+      const cur = running.has(b.targetId) ? running.get(b.targetId) : null;
+      if (typeof b.lifeAfter !== "number") b.lifeAfter = cur;
+      if (typeof b.lifeAfter === "number") running.set(b.targetId, b.lifeAfter - b.delta);
+    }
+    return out.filter((b) => b.delta !== 0);
+  }
+  function sourceText(src) {
+    if (!src) return "";
+    if (src.kind === "cmd") return `${I("swords")}${esc(tr("Commander damage de {name}", { name: src.fromName || "?" }))}${src.partner ? " (" + esc(tr("parceiro")) + ")" : ""}`;
+    if (src.kind === "group") return `${I("zap")}${esc(tr("Dano a todos ({name})", { name: src.fromName || "?" }))}`;
+    if (src.kind === "drain") return `${I("droplet")}${esc(tr("Drenar ({name})", { name: src.fromName || "?" }))}`;
+    if (src.kind === "zone") return `${I("target")}${esc(tr("Zona fechada"))}`;
+    if (src.kind === "event") return `${I("dice")}${esc(src.fromName || tr("Evento"))}`;
+    return "";
+  }
+  let listBursts = [];
+  function listHtml(log) {
+    listBursts = bursts(log);
+    const undoable = new Set(listBursts.slice(-5).map((b) => b)); // as 5 mais recentes
+    const shown = listBursts.map((b, i) => ({ b, i })).filter(({ b }) => !lhFilter || b.targetId === lhFilter).reverse();
+    let lastTurn = null;
+    const rows = shown.map(({ b, i }) => {
+      const head = timed && b.turnSeq !== lastTurn ? `<div class="lh-turn">${tr("Ronda {n}", { n: b.roundNumber })} · ${tr("Turno de {name}", { name: esc(b.turnName) })}</div>` : "";
+      lastTurn = b.turnSeq;
+      const en = byId.get(b.targetId);
+      const canUndo = undoable.has(b) && !(mode === "br" && en && en.eliminated);
+      const before = typeof b.lifeAfter === "number" ? b.lifeAfter - b.delta : null;
+      return `${head}
+        <div class="lh-row ${b.delta > 0 ? "plus" : "minus"}">
+          ${dot(b.targetId, b.targetName)}
+          <div class="lh-row-main">
+            <div class="lh-row-top"><span class="lh-row-name">${esc(b.targetName)}</span>${before != null ? `<span class="lh-row-life">${before} → <b>${b.lifeAfter}</b></span>` : ""}</div>
+            ${b.source ? `<div class="lh-row-src">${sourceText(b.source)}</div>` : ""}
+          </div>
+          <span class="lh-row-delta">${b.delta > 0 ? "+" : "−"}${Math.abs(b.delta)}</span>
+          ${canUndo ? `<button type="button" class="btn btn-icon lh-undo" data-undo="${i}" title="${tr("Desfazer")}" aria-label="${tr("Desfazer")}">${I("undo")}</button>` : `<span class="lh-undo-space"></span>`}
+        </div>`;
+    }).join("");
+    return `
+      <div class="lh-filters" role="group" aria-label="${tr("Filtrar por jogador")}">
+        <button type="button" class="sort-chip" data-filter="" aria-pressed="${!lhFilter}">${tr("Todos")}</button>
+        ${entities.map((en) => `<button type="button" class="sort-chip lh-chip" data-filter="${esc(en.id)}" aria-pressed="${lhFilter === en.id}">${dot(en.id, en.name)}${esc(en.name)}</button>`).join("")}
+      </div>
+      <div class="lh-list">${rows || `<div class="footer-note">${tr("Sem alterações para este jogador.")}</div>`}</div>`;
+  }
+
+  function bind(v) {
+    if (v === "table") {
+      body.querySelectorAll("[data-col]").forEach((c) => c.addEventListener("click", () => {
+        lhFilter = c.dataset.col; lhView = "list";
+        backdrop.querySelectorAll("[data-view]").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.view === "list")));
+        paint();
+      }));
+      return;
+    }
+    body.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", () => { lhFilter = b.dataset.filter || null; paint(); }));
+    body.querySelectorAll("[data-undo]").forEach((b) => b.addEventListener("click", () => {
+      const burst = listBursts[+b.dataset.undo];
+      if (!burst) return;
+      State.undoLifeChanges(game, mode, burst.ids);
+      render();               // o tabuleiro atualiza por baixo
+      document.body.appendChild(backdrop); // render() pode ter fechado janelas abertas
+      paint();
+      toast(tr("Alteração desfeita"));
+    }));
+  }
+
+  if (lhFilter && !byId.has(lhFilter)) lhFilter = null;
+  paint();
 }

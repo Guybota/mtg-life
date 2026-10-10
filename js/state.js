@@ -88,7 +88,10 @@
     return { turns, series };
   }
 
-  function logLifeChange(modeState, turnEntity, targetEntity, delta) {
+  /** Regista uma alteração de vida. source (opcional) diz de onde veio:
+   *  { kind: "cmd" | "group" | "drain" | "zone" | "event", fromId, fromName, partner }.
+   *  Sem source = toque no +/− do próprio jogador. */
+  function logLifeChange(modeState, turnEntity, targetEntity, delta, source) {
     if (!delta) return;
     if (!modeState.lifeLog) modeState.lifeLog = [];
     modeState.lifeLog.push({
@@ -100,6 +103,8 @@
       targetId: targetEntity.id,
       targetName: targetEntity.name,
       delta,
+      lifeAfter: targetEntity.life,
+      source: source || undefined,
     });
     // limite generoso para não fazer crescer o localStorage indefinidamente
     // em jogos muito longos — mantém sempre as 500 alterações mais recentes.
@@ -194,12 +199,12 @@
     p.eliminated = p.life <= 0 || anyLethalCmd || (p.poison || 0) >= 10;
   }
 
-  function stdAdjustLife(state, playerId, delta) {
+  function stdAdjustLife(state, playerId, delta, source) {
     const p = state.standard.players.find((x) => x.id === playerId);
     if (!p) return state;
     p.life += delta;
     stdRecomputeEliminated(p);
-    logLifeChange(state.standard, stdCurrentPlayer(state), p, delta);
+    logLifeChange(state.standard, stdCurrentPlayer(state), p, delta, source);
     save(state);
     return state;
   }
@@ -219,7 +224,8 @@
     // oficiais, e fica no histórico de vida como qualquer outra alteração
     p.life -= applied;
     stdRecomputeEliminated(p);
-    logLifeChange(state.standard, stdCurrentPlayer(state), p, -applied);
+    const from = state.standard.players.find((x) => x.id === fromId);
+    logLifeChange(state.standard, stdCurrentPlayer(state), p, -applied, { kind: "cmd", fromId, fromName: from ? from.name : "", partner: source === "partner" || undefined });
     save(state);
     return state;
   }
@@ -286,8 +292,10 @@
     if (!amount) return 0;
     const alive = std.players.filter((p) => !p.eliminated);
     const targets = mode === "all" ? alive : alive.filter((p) => p.id !== sourceId);
-    targets.forEach((p) => stdAdjustLife(state, p.id, -amount));
-    if (mode === "drain" && targets.length) stdAdjustLife(state, sourceId, amount * targets.length);
+    const src = std.players.find((p) => p.id === sourceId);
+    const source = { kind: mode === "drain" ? "drain" : "group", fromId: sourceId, fromName: src ? src.name : "" };
+    targets.forEach((p) => stdAdjustLife(state, p.id, -amount, source));
+    if (mode === "drain" && targets.length) stdAdjustLife(state, sourceId, amount * targets.length, source);
     return targets.length;
   }
 
@@ -690,7 +698,7 @@
     return state.br.players.filter((p) => !p.eliminated);
   }
 
-  function brAdjustLife(state, playerId, delta) {
+  function brAdjustLife(state, playerId, delta, source) {
     const p = state.br.players.find((x) => x.id === playerId);
     if (!p) return state;
     if (delta > 0 && (state.br.phase === "final_circle" || state.br.phase === "final_duel_pending")) {
@@ -698,7 +706,7 @@
       return state;
     }
     p.life += delta;
-    logLifeChange(state.br, brCurrentPlayer(state), p, delta);
+    logLifeChange(state.br, brCurrentPlayer(state), p, delta, source);
     if (p.life <= 0 && !p.eliminated) {
       brEliminate(state, playerId, []);
       return state;
@@ -929,7 +937,7 @@
     const current = brCurrentPlayer(state);
     if (current && state.br.closedZones.includes(current.zone)) {
       brLog(state, tr("{name} está numa zona fechada e perde 5 vidas!", { name: current.name }));
-      brAdjustLife(state, current.id, -5);
+      brAdjustLife(state, current.id, -5, { kind: "zone" });
     }
 
     save(state);
@@ -951,9 +959,9 @@
     const ev = BR_EVENTS[roll];
     brLog(state, tr("Rolou {roll} — {title}: {desc}", { roll, title: ev.title, desc: ev.desc }));
     if (ev.effect === "loseAll") {
-      brAlivePlayers(state).forEach((p) => brAdjustLife(state, p.id, -ev.amount));
+      brAlivePlayers(state).forEach((p) => brAdjustLife(state, p.id, -ev.amount, { kind: "event", fromName: ev.title }));
     } else if (ev.effect === "gainAll") {
-      brAlivePlayers(state).forEach((p) => brAdjustLife(state, p.id, ev.amount));
+      brAlivePlayers(state).forEach((p) => brAdjustLife(state, p.id, ev.amount, { kind: "event", fromName: ev.title }));
     }
     save(state);
     return { roll, event: ev };
@@ -1276,7 +1284,38 @@
   }
 
   global.MTG = global.MTG || {};
+  /** Desfaz alterações do histórico de vida (ids do registo): repõe a vida
+   *  (e o commander damage, se veio daí), acerta a "vida depois" das
+   *  alterações seguintes do mesmo alvo e tira-as do registo.
+   *  mode: "standard" | "br" | "teams". */
+  function undoLifeChanges(state, mode, ids) {
+    const ms = mode === "standard" ? state.standard : mode === "br" ? state.br : state.teams;
+    if (!ms || !ms.lifeLog) return state;
+    const entities = mode === "teams" ? ms.teams : ms.players;
+    const want = new Set(ids);
+    for (let i = ms.lifeLog.length - 1; i >= 0; i--) {
+      const e = ms.lifeLog[i];
+      if (!want.has(e.id)) continue;
+      const t = entities.find((x) => x.id === e.targetId);
+      if (t) {
+        t.life -= e.delta;
+        if (e.source && e.source.kind === "cmd" && t.cmdDamage) {
+          const key = e.source.partner ? e.source.fromId + "::partner" : e.source.fromId;
+          t.cmdDamage[key] = Math.max(0, (t.cmdDamage[key] || 0) + e.delta);
+        }
+        if (mode === "standard") stdRecomputeEliminated(t);
+        else if (mode === "teams") t.eliminated = t.life <= 0;
+        ms.lifeLog.slice(i + 1).forEach((x) => { if (x.targetId === e.targetId && typeof x.lifeAfter === "number") x.lifeAfter -= e.delta; });
+      }
+      ms.lifeLog.splice(i, 1);
+    }
+    save(state);
+    return state;
+  }
+
   global.MTG.State = {
+    undoLifeChanges,
+    lifeTimeline,
     save,
     load,
     clear,

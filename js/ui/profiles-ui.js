@@ -29,6 +29,7 @@ function renderProfilesScreen() {
         </div>
         ${profiles.length ? `<button class="btn btn-ghost btn-block pf-manual" id="manual-game-btn">${I("plus")} ${tr("Registar jogo à mão")}</button>` : ""}
         <div class="backup-note ${Cloud.status().code ? "hidden" : ""}">${backupInfo().at ? tr("Última cópia de segurança: {when}", { when: relativeDay(backupInfo().at) }) : tr("Os perfis ficam só neste aparelho. Exporta uma cópia de vez em quando.")}</div>
+        ${profiles.length ? `<button type="button" class="btn btn-ghost btn-sm pf-reset" id="reset-all-btn">${I("trash")} ${tr("Apagar todos os dados")}</button>` : ""}
         </aside>
         <div class="pf-main">
         ${profiles.length ? "" : `<div class="footer-note">${tr("Ainda não tens perfis guardados. Cria um ao escolher o commander de um jogador, no ecrã de setup de um jogo.")}</div>`}
@@ -64,6 +65,8 @@ function renderProfilesScreen() {
   appEl.appendChild(s);
   s.querySelector("#export-profiles-btn").addEventListener("click", () => saveBackup().then((ok) => ok && render()));
   s.querySelector("#merge-btn").addEventListener("click", () => openMergeMenu(render));
+  const resetBtn = s.querySelector("#reset-all-btn");
+  if (resetBtn) resetBtn.addEventListener("click", () => openResetAllSheet());
   const manualBtn = s.querySelector("#manual-game-btn");
   if (manualBtn) manualBtn.addEventListener("click", () => openManualGame());
   bindSyncCard(s);

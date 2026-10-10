@@ -565,7 +565,7 @@ async function joinGroupFlow(rawCode, done) {
 }
 
 /** Janela do grupo: criar/entrar (sem grupo) ou código, QR e sair. */
-function openCloudSheet() {
+function openCloudSheet(prefillCode) {
   closeAnyModal();
   const st = Cloud.status();
   const backdrop = el(st.code ? `
@@ -598,6 +598,9 @@ function openCloudSheet() {
       </div>
     </div>`);
   document.body.appendChild(backdrop);
+  // código já escrito (ex: voltar ao grupo depois de apagar tudo)
+  const codeInput = backdrop.querySelector("#cloud-code-input");
+  if (codeInput && typeof prefillCode === "string") codeInput.value = prefillCode;
   const close = () => backdrop.remove();
   backdrop.querySelector("#cloud-close").addEventListener("click", close);
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
@@ -696,4 +699,84 @@ function backupReminderHtml() {
       <button class="btn btn-primary" id="backup-btn">${tr("Guardar")}</button>
       <button class="btn btn-icon" id="backup-later-btn" title="${tr("Agora não")}" aria-label="${tr("Agora não")}">${I("x")}</button>
     </div>`;
+}
+
+// ===========================================================
+// APAGAR TODOS OS DADOS — começar de novo (e importar de novo)
+// ===========================================================
+/** Confirmação para apagar todos os perfis e jogos deste aparelho. Se o
+ *  aparelho estiver num grupo da nuvem, sai do grupo (os dados na nuvem
+ *  ficam lá: voltar a entrar traz tudo de volta). Depois sugere importar. */
+function openResetAllSheet() {
+  closeAnyModal();
+  const cloud = Cloud.status();
+  const profiles = Profiles.all();
+  const games = Profiles.gamesList().length;
+  const backdrop = el(`
+    <div class="modal-backdrop">
+      <div class="modal-sheet reset-sheet">
+        <h2>${tr("Apagar todos os dados")}</h2>
+        <p class="merge-hint">${tr("Apaga deste aparelho {p} deck(s), {g} jogo(s), os jogadores e as estatísticas, para começares de novo ou voltares a importar de um ficheiro ou da nuvem.", { p: profiles.length, g: games })}</p>
+        ${cloud.code ? `<p class="merge-hint">${tr("Este aparelho sai do grupo {code}. Os dados na nuvem não são apagados: para os trazer de volta, volta a entrar no grupo com o mesmo código.", { code: `<b>${esc(cloud.code)}</b>` })}</p>` : ""}
+        <button type="button" class="btn btn-ghost btn-block" id="ra-export">${I("download")} ${tr("Exportar uma cópia primeiro")}</button>
+        <button type="button" class="btn btn-block danger-btn" id="ra-go">${I("trash")} ${tr("Apagar tudo")}</button>
+        <button type="button" class="btn btn-ghost btn-block" id="ra-cancel">${tr("Cancelar")}</button>
+      </div>
+    </div>`);
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.querySelector("#ra-cancel").addEventListener("click", close);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+  backdrop.querySelector("#ra-export").addEventListener("click", () => saveBackup());
+  const go = backdrop.querySelector("#ra-go");
+  let armed = false, timer = null;
+  go.addEventListener("click", () => {
+    // dois toques: o primeiro só pede confirmação
+    if (!armed) {
+      armed = true;
+      go.innerHTML = `${I("trash")} ${tr("Toca outra vez para apagar tudo")}`;
+      timer = setTimeout(() => { armed = false; go.innerHTML = `${I("trash")} ${tr("Apagar tudo")}`; }, 4000);
+      return;
+    }
+    clearTimeout(timer);
+    const cloudState = localStorage.getItem("mtg_lc_cloud_v1");
+    if (cloud.code) Cloud.leaveGroup(); // antes de apagar: assim não sincroniza o vazio
+    const backup = Profiles.resetAll();
+    close();
+    render();
+    toast(tr("Dados apagados"));
+    openRestartSheet(cloud.code, () => {
+      Profiles.restoreAll(backup);
+      if (cloudState) localStorage.setItem("mtg_lc_cloud_v1", cloudState);
+      render();
+      toast(tr("Dados repostos"));
+    });
+  });
+}
+
+/** Depois de apagar: importar de um ficheiro, entrar no grupo da nuvem ou
+ *  desfazer (repõe tudo como estava). */
+function openRestartSheet(oldCode, undo) {
+  const backdrop = el(`
+    <div class="modal-backdrop">
+      <div class="modal-sheet">
+        <h2>${tr("Começar de novo")}</h2>
+        <p class="merge-hint">${tr("Queres trazer dados agora?")}</p>
+        <button type="button" class="btn btn-ghost btn-block" id="rs-file">${I("upload")} ${tr("Importar de um ficheiro")}</button>
+        <button type="button" class="btn btn-ghost btn-block" id="rs-cloud">${I("cloud")} ${oldCode ? tr("Voltar a entrar no grupo {code}", { code: esc(oldCode) }) : tr("Entrar num grupo da nuvem")}</button>
+        <button type="button" class="btn btn-ghost btn-block" id="rs-none">${tr("Agora não")}</button>
+        <button type="button" class="btn btn-ghost btn-block danger-text" id="rs-undo">${I("undo")} ${tr("Desfazer — repor os dados apagados")}</button>
+      </div>
+    </div>`);
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.querySelector("#rs-none").addEventListener("click", close);
+  backdrop.querySelector("#rs-undo").addEventListener("click", () => { close(); if (undo) undo(); });
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+  backdrop.querySelector("#rs-file").addEventListener("click", () => {
+    close();
+    const input = document.querySelector("#import-profiles-input");
+    if (input) input.click();
+  });
+  backdrop.querySelector("#rs-cloud").addEventListener("click", () => { close(); openCloudSheet(oldCode); });
 }

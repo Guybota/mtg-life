@@ -13,8 +13,7 @@ Ainda não estão feitas; ficam aqui para decidir mais tarde.
   resultados).
 - **Registar um jogo à mão depois de acabar**, sem ter usado o contador
   (vencedor, jogadores, decks, duração) — atualiza as mesmas estatísticas.
-- **Emprestar decks**: jogar com o deck de outro membro do grupo e as stats
-  contarem para o jogador e para o deck.
+- ~~Emprestar decks~~ — feito (o jogo conta para o deck e para quem jogou).
 - **Resumo anual ("Rewind")** do grupo: mais vitórias, deck mais jogado,
   jogo mais longo, etc.
 

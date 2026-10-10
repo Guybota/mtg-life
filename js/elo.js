@@ -70,7 +70,8 @@
       entries.push({
         date: g.date, mode: g.mode || "standard", won: !!g.won,
         profileId: p.id, deck: p.name,
-        playerName: (p.playerName || "").trim(), playerKey: norm(p.playerName),
+        // deck emprestado: conta para quem jogou, não para o dono
+        playerName: (g.playedBy || p.playerName || "").trim(), playerKey: norm(g.playedBy || p.playerName),
       });
     }));
     entries.sort((a, b) => a.date - b.date);

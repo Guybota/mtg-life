@@ -492,7 +492,8 @@
             turnsTaken: p.turnsTaken,
             mode: state.presetName || "standard",
             timed,
-            opponents: std.players.filter((o) => o.id !== p.id).map((o) => ({ profileId: o.profileId || null, name: o.name, won: o.id === winnerId })),
+            opponents: std.players.filter((o) => o.id !== p.id).map((o) => ({ profileId: o.profileId || null, name: o.name, pilot: o.pilot || undefined, won: o.id === winnerId })),
+            pilot: p.pilot, commanderName: p.commander && p.commander.name,
           });
         }
       });
@@ -820,7 +821,8 @@
           turnTimeMs: p.turnTimeMs,
           turnsTaken: p.turnsTaken,
           mode: "br",
-          opponents: state.br.players.filter((o) => o.id !== p.id).map((o) => ({ profileId: o.profileId || null, name: o.name, won: o.id === state.br.championId })),
+          opponents: state.br.players.filter((o) => o.id !== p.id).map((o) => ({ profileId: o.profileId || null, name: o.name, pilot: o.pilot || undefined, won: o.id === state.br.championId })),
+          pilot: p.pilot, commanderName: p.commander && p.commander.name,
         });
       }
     });
@@ -1261,7 +1263,8 @@
               mode: "teams",
               timed,
               // só os jogadores das OUTRAS equipas contam como adversários
-              opponents: t.teams.filter((o) => o.id !== team.id).reduce((acc, o) => acc.concat(o.players.map((x) => ({ profileId: x.profileId || null, name: x.name, won: o.id === winnerTeamId }))), []),
+              opponents: t.teams.filter((o) => o.id !== team.id).reduce((acc, o) => acc.concat(o.players.map((x) => ({ profileId: x.profileId || null, name: x.name, pilot: x.pilot || undefined, won: o.id === winnerTeamId }))), []),
+              pilot: p.pilot, commanderName: p.commander && p.commander.name,
             });
           }
         });

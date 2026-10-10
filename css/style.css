@@ -1149,52 +1149,7 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .modal-sheet label.row{ background: var(--surface-2) ; text-transform:none; letter-spacing:0; font-size:.9rem; color: var(--text); font-weight:500; }
 
 /* Histórico de vida em formato de "timeline" vertical */
-.lh-timeline{
-  position:relative;
-  padding: 2px 4px 2px 6px;
-}
-.lh-timeline::before{
-  content:"";
-  position:absolute; left:15px; top:8px; bottom:8px; width:2px;
-  background: var(--line);
-}
-.lh-turn{
-  position:relative;
-  padding: 14px 0 8px 34px;
-  font-weight:700; font-size:.72rem;
-  text-transform:uppercase; letter-spacing:.4px;
-  color: var(--text-dim);
-}
-.lh-turn:first-child{ padding-top:2px; }
-.lh-turn .lh-turn-round{ color: var(--lavender-ink); }
-.lh-turn::before{
-  content:"";
-  position:absolute; left:9px; top:19px;
-  width:13px; height:13px; border-radius:50%;
-  background: var(--lavender-ink);
-  box-shadow: 0 0 0 4px var(--surface);
-}
-.lh-turn:first-child::before{ top:5px; }
-.lh-event{
-  position:relative;
-  display:flex; align-items:center; gap:10px;
-  padding: 7px 4px 7px 34px;
-}
-.lh-event::before{
-  content:"";
-  position:absolute; left:11px; top:50%; transform:translateY(-50%);
-  width:9px; height:9px; border-radius:50%;
-  background: var(--surface-3);
-  box-shadow: 0 0 0 4px var(--surface);
-}
-.lh-event.plus::before{ background: var(--plus-ink); }
-.lh-event.minus::before{ background: var(--minus-ink); }
-.lh-event-body{ flex:1; min-width:0; }
-.lh-event-name{ font-size:.86rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.lh-event-time{ font-size:.7rem; color:var(--text-dim); margin-top:1px; }
-.lh-event-delta{ font-weight:700; font-size:.95rem; flex-shrink:0; min-width:30px; text-align:right; }
-.lh-event-delta.plus{ color: var(--plus-ink); }
-.lh-event-delta.minus{ color: var(--minus-ink); }
+/* histórico de vida: ver "Histórico de vida (tabela e lista)" mais abaixo */
 
 /* ===========================================================
    CHIPS DE ESTADO (vez / ronda / relógios)
@@ -2425,3 +2380,83 @@ button.pd-chip{ cursor:pointer; }
 .pp-new-cmd .commander-thumb.sm .ic{ width:16px; height:16px; }
 .pp-new-cmd-name{ flex:1; min-width:0; font-weight:600; font-size:.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pp-new-cmd .btn-sm{ flex-shrink:0; }
+
+
+/* ---------- Histórico de vida (tabela e lista) ---------- */
+.lh-sheet{ width:100%; max-width:760px; max-height:88vh; gap:10px; }
+.lh-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.lh-head h2{ margin:0; }
+.lh-seg{ margin:0; width:200px; }
+.lh-seg .seg-btn{ height:32px; font-size:.84rem; }
+.lh-body{ flex:1 1 auto; min-height:0; overflow:auto; display:flex; flex-direction:column; gap:8px; }
+.modal-sheet .lh-body{ flex-shrink:1; }
+.lh-hint{ text-align:center; }
+.lh-dot{ width:18px; height:18px; border-radius:50%; flex-shrink:0; background-size:cover; background-position:center; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); display:inline-block; }
+
+.lh-table-wrap{ overflow:auto; border:1px solid var(--line); border-radius:14px; max-height:100%; }
+.lh-table{ border-collapse:separate; border-spacing:0; width:100%; font-variant-numeric: tabular-nums; }
+.lh-table th, .lh-table td{ padding:7px 8px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap; }
+.lh-table thead th{ position:sticky; top:0; z-index:2; background: var(--surface-2); cursor:pointer; vertical-align:bottom; }
+.lh-table th[scope=row]{ position:sticky; left:0; z-index:1; background: var(--surface); text-align:left; }
+.lh-table thead th:first-child{ left:0; z-index:3; cursor:default; }
+.lh-corner{ font-size:.7rem; color: var(--text-dim); font-weight:600; text-transform:uppercase; letter-spacing:.4px; }
+.lh-col-head{ display:flex; flex-direction:column; align-items:center; gap:3px; min-width:56px; }
+.lh-col-name{ font-size:.74rem; font-weight:600; color: var(--text-dim); max-width:96px; overflow:hidden; text-overflow:ellipsis; }
+.lh-col-life{ font-size:1.25rem; font-weight:800; color: var(--text); line-height:1; }
+.lh-col-life.out{ color: var(--text-dim); text-decoration: line-through; }
+.lh-turn-cell{ display:flex; align-items:baseline; gap:5px; font-size:.78rem; color: var(--text-dim); max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+.lh-turn-cell b{ color: var(--lavender-ink); font-weight:700; }
+.lh-turn-cell small{ font-size:.66rem; font-weight:700; color: var(--chart-accent); text-transform:uppercase; }
+.lh-table td{ cursor:pointer; }
+.lh-table td .lh-d{ display:block; font-weight:800; font-size:.92rem; line-height:1.1; }
+.lh-table td.plus .lh-d{ color: var(--plus-ink); }
+.lh-table td.minus .lh-d{ color: var(--minus-ink); }
+.lh-table td .lh-l{ display:block; font-size:.72rem; color: var(--text-dim); }
+.lh-table td .lh-l.dim{ opacity:.55; }
+.lh-table td.minus{ background: color-mix(in srgb, var(--minus-ink) 7%, transparent); }
+.lh-table td.plus{ background: color-mix(in srgb, var(--plus-ink) 7%, transparent); }
+.lh-table tr.lh-now th[scope=row]{ background: color-mix(in srgb, var(--chart-accent) 8%, var(--surface)); }
+.lh-table tr.lh-start td, .lh-table tr.lh-start th{ border-bottom:none; }
+
+.lh-filters{ display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; flex-shrink:0; scrollbar-width:none; }
+.lh-filters::-webkit-scrollbar{ display:none; }
+.lh-filters .sort-chip{ flex-shrink:0; height:32px; font-size:.8rem; }
+.lh-chip{ display:inline-flex; align-items:center; gap:6px; }
+.lh-chip .lh-dot{ width:16px; height:16px; }
+.lh-list{ display:flex; flex-direction:column; }
+.lh-turn{
+  position:sticky; top:0; z-index:1; background: var(--surface);
+  font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color: var(--text-dim);
+  padding:8px 2px 4px;
+}
+.lh-row{ display:flex; align-items:center; gap:10px; padding:7px 2px; border-bottom:1px solid var(--line); }
+.lh-row-main{ flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.lh-row-top{ display:flex; align-items:baseline; gap:8px; min-width:0; }
+.lh-row-name{ font-weight:600; font-size:.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lh-row-life{ font-size:.8rem; color: var(--text-dim); white-space:nowrap; font-variant-numeric: tabular-nums; }
+.lh-row-life b{ color: var(--text); }
+.lh-row-src{ display:flex; align-items:center; gap:4px; font-size:.74rem; color: var(--text-dim); }
+.lh-row-src .ic{ width:12px; height:12px; }
+.lh-row-delta{ font-weight:800; font-size:1rem; min-width:34px; text-align:right; font-variant-numeric: tabular-nums; }
+.lh-row.plus .lh-row-delta{ color: var(--plus-ink); }
+.lh-row.minus .lh-row-delta{ color: var(--minus-ink); }
+.lh-undo{ width:32px; height:32px; background: transparent; }
+.lh-undo .ic{ width:16px; height:16px; }
+.lh-undo-space{ width:32px; flex-shrink:0; }
+.lh-head .lh-x{ display:none; }
+/* contador deitado num telemóvel (pouca altura): fechar no topo, tabela apertada */
+html.compact-board .lh-sheet{ max-height: calc(100% - 12px); padding:10px 12px; gap:6px; }
+html.compact-board .lh-head{ flex-wrap:nowrap; }
+html.compact-board .lh-head h2{ font-size:.95rem; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+html.compact-board .lh-head .lh-x{ display:flex; width:34px; height:34px; flex-shrink:0; }
+html.compact-board .lh-seg{ width:170px; }
+html.compact-board .lh-seg .seg-btn{ height:28px; }
+html.compact-board .lh-close, html.compact-board .lh-hint{ display:none; }
+html.compact-board .lh-table th, html.compact-board .lh-table td{ padding:4px 6px; }
+html.compact-board .lh-col-head{ flex-direction:row; gap:5px; min-width:0; }
+html.compact-board .lh-col-name{ max-width:70px; }
+html.compact-board .lh-col-life{ font-size:1rem; }
+html.compact-board .lh-table td .lh-d{ display:inline; font-size:.85rem; margin-right:4px; }
+html.compact-board .lh-table td .lh-l{ display:inline; }
+html.compact-board .lh-row{ padding:4px 2px; }
+html.compact-board .lh-turn{ padding:5px 2px 2px; }

@@ -122,3 +122,21 @@ module.exports.push({
     t.eq(chip, ["10", true], "insígnia de veneno no cartão");
   },
 });
+
+module.exports.push({
+  name: "iPhone deitado: barras dos lados e insígnias visíveis",
+  async run(t) {
+    const page = await t.page({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    await openWith(t, page, null);
+    await page.click(".mode-card.commander");
+    await page.click("#qs-go");
+    await page.waitForSelector(".player-panel");
+    await page.evaluate(() => { MTG.State.stdAdjustCounter(game, game.standard.players[3].id, "rad", 2); MTG.State.stdAdjustPoison(game, game.standard.players[3].id, 3); render(); });
+    const box = (sel) => page.$eval(sel, (e) => ({ x: e.offsetLeft, w: e.offsetWidth, h: e.offsetHeight }));
+    const [st, board, bar] = [await box(".br-status-row"), await box(".board"), await box(".board-toolbar")];
+    t.ok(st.x === 0 && board.x >= st.w && bar.x >= board.x + board.w - 1, "estado | tabuleiro | botões lado a lado");
+    t.ok(bar.w >= 44 && bar.h > 300, "coluna de botões com tamanho: " + JSON.stringify(bar));
+    const chips = await page.$$eval(".player-panel .st-chip", (x) => x.map((e) => e.offsetHeight >= 20 && e.offsetWidth >= 30));
+    t.ok(chips.length === 2 && chips.every(Boolean), "insígnias com tamanho visível");
+  },
+});

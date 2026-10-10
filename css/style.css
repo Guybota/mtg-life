@@ -2609,3 +2609,25 @@ html.compact-board .std-game:not(.board-fullscreen) > .br-status-row .br-chip .i
 .reset-sheet{ gap:8px; }
 .danger-btn{ background: var(--minus-ink); color:#fff; border-color: var(--minus-ink); }
 .danger-btn .ic{ color:#fff; }
+
+/* ---------- Ecrã inteiro no telemóvel deitado: hub numa coluna lateral ----------
+   Com 3+ jogadores no telemóvel deitado (tabuleiro compacto) o hub sai do
+   meio das filas e passa a uma coluna à esquerda: informação em cima,
+   botões em baixo. No iPad e no 1v1 continua no centro. */
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .board{
+  display:grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap:6px; row-gap:6px; padding-top:6px;
+}
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .board > #row-top{ grid-column:2; grid-row:1; }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .board > #row-bottom{ grid-column:2; grid-row:2; }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-hub-row{ grid-column:1; grid-row:1 / span 2; height:auto; margin:0; align-items:stretch; }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-hub{
+  flex-direction:column; justify-content:flex-start; height:auto; width:50px;
+  padding:8px 4px; border-radius:24px; gap:6px;
+}
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-chip{ flex-direction:column; padding:6px 0; gap:3px; font-size:.64rem; text-align:center; white-space:normal; line-height:1.15; }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-chip .ic{ width:16px; height:16px; }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-chip + .fs-chip{ border-left:none; border-top:1px solid var(--line); }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-exit{ margin:0; width:38px; height:38px; }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-exit .ic{ width:17px; height:17px; }
+html.compact-board .screen.std-game.board-fullscreen:not(.duel) .fs-exit:first-of-type{ margin-top:auto; } /* botões em baixo, informação em cima */

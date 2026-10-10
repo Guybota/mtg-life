@@ -2523,12 +2523,9 @@ html.compact-board .lh-turn{ padding:5px 2px 2px; }
 .gl-attach{ height:28px; padding:0 8px; font-size:.74rem; flex-shrink:0; }
 
 /* ---------- 1v1 ao alto no telemóvel ----------
-   Cada painel ocupa metade do ecrã: o + fica na metade de cima e o − na de
-   baixo (de cada jogador — o painel de cima está rodado para o adversário).
+   Cada painel ocupa metade do ecrã (o de cima rodado para o adversário),
+   com os +/− dos lados da vida, como nos outros modos.
    A linha de estado e a barra de botões encolhem para caber na largura. */
-html.duel-portrait .life-tap{ width:100%; height:50%; left:0; right:0; justify-content:center; padding:0; }
-html.duel-portrait .life-tap.plus{ top:0; bottom:auto; align-items:flex-start; padding-top:3%; }
-html.duel-portrait .life-tap.minus{ bottom:0; top:auto; align-items:flex-end; padding-bottom:3%; }
 html.duel-portrait .life-tap .tap-circle{ width:3rem; height:3rem; }
 html.duel-portrait .life-total{ font-size: clamp(3rem, min(34cqh, 40cqw), 8rem); }
 html.duel-portrait .br-status-row{ flex-wrap:nowrap; overflow:hidden; gap:6px; }

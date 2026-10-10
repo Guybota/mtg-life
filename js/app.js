@@ -1419,11 +1419,12 @@
     // de outro modal já aberto, ex. dentro do ecrã de editar jogador)
     const backdrop = el(`
       <div class="modal-backdrop">
-        <div class="modal-sheet">
+        <div class="modal-sheet search-sheet">
           <h2>${esc(title || tr("Escolher commander"))}</h2>
-          <input type="text" id="cp-input" placeholder="${tr("Nome do commander (ex: Atraxa, Krenko...)")}" autocomplete="off" autocorrect="off" spellcheck="false">
+          <input type="text" id="cp-input" enterkeyhint="search" placeholder="${tr("Nome do commander (ex: Atraxa, Krenko...)")}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
           <div class="search-status hidden" id="cp-status"></div>
           <div class="search-results" id="cp-results"></div>
+          <div class="sheet-foot">
           <div class="row" style="margin-top:10px">
             <button class="btn btn-ghost grow" id="cp-manual">${I("image")} ${tr("Imagem manual")}</button>
             <button class="btn btn-ghost grow" id="cp-none">${I("ban")} ${tr("Sem imagem")}</button>
@@ -1434,11 +1435,14 @@
             <button class="btn btn-primary" id="cp-manual-confirm">${tr("Usar esta imagem")}</button>
           </div>
           <button class="btn btn-ghost" id="cp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
+          </div>
         </div>
       </div>
     `);
     document.body.appendChild(backdrop);
     const input = backdrop.querySelector("#cp-input");
+    // "Pesquisar" no teclado fecha-o para se verem todos os resultados
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
     const results = backdrop.querySelector("#cp-results");
     const status = backdrop.querySelector("#cp-status");
     input.focus();
@@ -1456,6 +1460,7 @@
         const cards = await Scryfall.searchCommanders(q);
         setStatus(cards.length ? "" : tr("Sem resultados para esse nome."));
         results.innerHTML = "";
+        results.scrollTop = 0;
         cards.forEach((card) => {
           const item = el(`
             <div class="search-result-item">
@@ -5152,7 +5157,26 @@
   // ---------------------------------------------------------
   // Arranque
   // ---------------------------------------------------------
+  /** Teclado do iPhone/iPad: o browser não encolhe a página quando o
+   *  teclado abre — tapa a parte de baixo. A área visível (visualViewport)
+   *  fica em variáveis CSS, e as janelas passam a caber acima do teclado. */
+  function trackKeyboard() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const update = () => {
+      const open = window.innerHeight - vv.height > 120;
+      root.classList.toggle("kb-open", open);
+      root.style.setProperty("--vv-h", vv.height + "px");
+      root.style.setProperty("--vv-top", vv.offsetTop + "px");
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
+    trackKeyboard();
     render();
     setupServiceWorker();
     // Sincronização na nuvem: atualiza o cartão de estado e, quando chegam

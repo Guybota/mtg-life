@@ -334,10 +334,10 @@
         return;
       }
       if (!dest.history) dest.history = [];
-      const have = new Set(dest.history.map((g) => g.id));
+      const have = new Map(dest.history.map((g) => [g.id, g]));
       hist.forEach((g) => {
-        if (have.has(g.id)) return;
-        have.add(g.id);
+        if (have.has(g.id)) { takeNewerGameEdit(have.get(g.id), g); return; }
+        have.set(g.id, g);
         dest.history.push(g);
         dest.stats.games += 1;
         if (g.won) dest.stats.wins += 1;
@@ -357,6 +357,18 @@
     list.forEach((p) => { if (p.history) p.history = p.history.map(fixOpponents); });
     persist(list);
     return res;
+  }
+
+  // Campos de um jogo que se podem corrigir depois (ao trocar o dono ou o
+  // commander principal). A correção mais recente (editedAt) ganha.
+  const GAME_EDITABLE = ["playedBy", "commander"];
+  /** Aplica a `local` a correção de `remote` se esta for mais recente.
+   *  Devolve true se mudou alguma coisa. */
+  function takeNewerGameEdit(local, remote) {
+    if (!local || !remote || (remote.editedAt || 0) <= (local.editedAt || 0)) return false;
+    GAME_EDITABLE.forEach((k) => { if (remote[k] !== undefined) local[k] = remote[k]; else delete local[k]; });
+    local.editedAt = remote.editedAt;
+    return true;
   }
 
   /** Junta os commanders alternativos de `src` aos de `dst` (sem repetir
@@ -521,11 +533,12 @@
           return;
         }
         if (!lp.history) lp.history = [];
-        const have = new Set(lp.history.map((g) => g.id));
+        const have = new Map(lp.history.map((g) => [g.id, g]));
         hist.forEach((g) => {
-          if (have.has(g.id)) return;
-          have.add(g.id);
-          lp.history.push(JSON.parse(JSON.stringify(g)));
+          if (have.has(g.id)) { if (takeNewerGameEdit(have.get(g.id), g)) res.games++; return; }
+          const copy = JSON.parse(JSON.stringify(g));
+          have.set(g.id, copy);
+          lp.history.push(copy);
           lp.stats.games += 1;
           if (g.won) lp.stats.wins += 1;
           lp.stats.totalGameTimeMs += g.gameTimeMs || 0;

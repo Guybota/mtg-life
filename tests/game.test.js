@@ -176,5 +176,19 @@ module.exports.push({
     t.eq(await hubSide({ width: 1180, height: 820 }, "commander", false), false, "iPad: central");
     t.eq(await hubSide({ width: 390, height: 844 }, "duel", true), false, "1v1 ao alto: central");
     t.eq(await hubSide({ width: 844, height: 390 }, "duel", true), false, "1v1 com o telemóvel deitado: central");
+
+    // 4 jogadores no telemóvel deitado: o hub fica no meio, entre os dois pares
+    const page = await t.page({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    await openWith(t, page, null);
+    await page.click(".mode-card.commander");
+    await page.click("#qs-go");
+    await page.waitForSelector(".fs-hub");
+    const xs = await page.evaluate(() => {
+      const board = document.querySelector(".board");
+      const x = (el) => { let v = 0; for (; el && el !== board; el = el.offsetParent) v += el.offsetLeft; return v; };
+      return { hub: x(document.querySelector(".fs-hub-row")), panels: [...document.querySelectorAll(".player-panel")].map(x) };
+    });
+    t.eq(xs.panels.filter((p) => p < xs.hub).length, 2, "dois cartões à esquerda do hub");
+    t.eq(xs.panels.filter((p) => p > xs.hub).length, 2, "dois cartões à direita do hub");
   },
 });

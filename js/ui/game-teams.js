@@ -353,7 +353,7 @@ function openEndGameTeamsModal() {
             <span class="grow">${tr("Sem vencedor / não contar")}</span>
           </label>
         </div>
-        <div class="row" style="margin-top:14px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="eg-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="eg-confirm">${tr("Confirmar")}</button>
         </div>

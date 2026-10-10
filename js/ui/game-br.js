@@ -282,7 +282,7 @@ function showEventResult(roll, event) {
           <div class="ev-title">${esc(event.title)}</div>
           <div class="ev-desc">${esc(event.desc)}</div>
         </div>
-        <button class="btn btn-primary btn-block" id="ev-ok" style="margin-top:14px">${tr("Continuar")}</button>
+        <div class="sheet-actions"><button class="btn btn-primary btn-block" id="ev-ok">${tr("Continuar")}</button></div>
       </div>
     </div>
   `);
@@ -308,7 +308,7 @@ function openKillCreditFlow(eliminatedId, onDone) {
             </label>
           `).join("")}
         </div>
-        <div class="row" style="margin-top:14px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="kc-skip">${tr("Ninguém escolhe recompensa")}</button>
           <button class="btn btn-primary grow" id="kc-confirm">${tr("Confirmar")}</button>
         </div>
@@ -339,7 +339,7 @@ function openLootPicker(playerId, onDone) {
       <div class="modal-sheet">
         <h2>${tr("Recompensa para {name}", { name: esc(p.name) })}</h2>
         <div class="loot-grid" id="loot-grid"></div>
-        <button class="btn btn-ghost btn-block" id="loot-skip" style="margin-top:12px">${tr("Não escolher recompensa")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="loot-skip">${tr("Não escolher recompensa")}</button></div>
       </div>
     </div>
   `);
@@ -377,7 +377,7 @@ function showBRRules() {
             ${tr("__br_rules__")}
           </div>
         </div>
-        <button class="btn btn-primary btn-block" id="rules-close" style="margin-top:12px">${tr("Entendido")}</button>
+        <div class="sheet-actions"><button class="btn btn-primary btn-block" id="rules-close">${tr("Entendido")}</button></div>
       </div>
     </div>
   `);

@@ -198,7 +198,7 @@ function openCommanderPicker(onSelect, title) {
           <input type="text" id="cp-manual-url" placeholder="${tr("URL da imagem (https://...)")}">
           <button class="btn btn-primary" id="cp-manual-confirm">${tr("Usar esta imagem")}</button>
         </div>
-        <button class="btn btn-ghost" id="cp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost" id="cp-cancel">${tr("Cancelar")}</button></div>
         </div>
       </div>
     </div>
@@ -282,7 +282,7 @@ function openVersionPicker(baseCard, onSelect, parentBackdrop) {
         <h2>${tr("Escolher arte — {name}", { name: esc(baseCard.name) })}</h2>
         <div class="search-status" id="vp-status">${tr("A carregar edições…")}</div>
         <div class="search-results" id="vp-results"></div>
-        <button class="btn btn-ghost" id="vp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost" id="vp-cancel">${tr("Cancelar")}</button></div>
       </div>
     </div>
   `);
@@ -358,7 +358,7 @@ function openProfilePicker({ commander, partner, currentProfileId, playerName, o
           ${ownerChipsHtml("pp-owners")}
           <button class="btn btn-primary" id="pp-new-confirm">${tr("Criar e ligar")}</button>
         </div>
-        <button class="btn btn-ghost" id="pp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost" id="pp-cancel">${tr("Cancelar")}</button></div>
       </div>
     </div>
   `);

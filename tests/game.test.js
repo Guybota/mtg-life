@@ -178,3 +178,39 @@ module.exports.push({
     t.eq(await hubSide({ width: 844, height: 390 }, "duel", true), false, "1v1 com o telemóvel deitado: central");
   },
 });
+
+module.exports.push({
+  name: "janelas com scroll: o botão de fechar fica preso no fundo",
+  async run(t) {
+    const page = await t.page({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+    await openWith(t, page, null);
+    await page.click(".mode-card.commander");
+    await page.click("#qs-go");
+    await page.waitForSelector(".player-panel");
+    // jogador do lado de baixo: a janela não vem rodada
+    await page.click('.player-panel:not(.rot180) >> nth=0 >> [data-action="player-sheet"] >> nth=0');
+    await page.waitForSelector("#ps-close");
+    await page.waitForTimeout(400);
+    // janela baixa o suficiente para ter scroll
+    await page.evaluate(() => { document.querySelector(".ps-sheet").style.maxHeight = "320px"; });
+    const m = await page.evaluate(() => {
+      const sheet = document.querySelector(".ps-sheet");
+      sheet.scrollTop = 0;
+      const s = sheet.getBoundingClientRect();
+      const b = document.querySelector("#ps-close").getBoundingClientRect();
+      return { scrolls: sheet.scrollHeight > sheet.clientHeight + 20, sheetBottom: s.bottom, btnTop: b.top, btnBottom: b.bottom, hit: document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) === document.querySelector("#ps-close") };
+    });
+    t.ok(m.scrolls, "a janela tem scroll");
+    t.ok(m.btnTop > m.sheetBottom - 100 && m.btnBottom <= m.sheetBottom, "Fechar está visível no fundo da janela sem fazer scroll");
+    t.ok(m.hit, "Fechar está por cima do conteúdo e responde ao toque");
+    // no fim do scroll fica no mesmo sítio (sem saltar nem deixar espaço vazio por baixo)
+    const end = await page.evaluate(() => {
+      const sheet = document.querySelector(".ps-sheet");
+      sheet.scrollTop = sheet.scrollHeight;
+      return document.querySelector("#ps-close").getBoundingClientRect().bottom;
+    });
+    t.ok(Math.abs(end - m.btnBottom) < 2, "no fim do scroll o botão não mexe");
+    await page.click("#ps-close");
+    t.ok(!(await page.$(".ps-sheet")), "Fechar fecha a janela");
+  },
+});

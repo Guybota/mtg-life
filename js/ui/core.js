@@ -337,7 +337,7 @@ function openBoardMenu(scope) {
     <div class="modal-backdrop center">
       <div class="modal-sheet board-menu">
         ${items.map(([id, icon, label]) => `<button type="button" class="bm-item ${id === "end-game-btn" ? "primary" : ""}" data-target="${id}">${I(icon)}<span>${esc(label)}</span></button>`).join("")}
-        <button type="button" class="btn btn-ghost" id="bm-close">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button type="button" class="btn btn-ghost" id="bm-close">${tr("Fechar")}</button></div>
       </div>
     </div>`);
   document.body.appendChild(backdrop);

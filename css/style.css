@@ -528,8 +528,9 @@ input.switch:checked::after{ transform: translateX(18px); }
   max-height:82vh;
   overflow-y:auto; overflow-x:hidden; overscroll-behavior: contain;
   display:flex; flex-direction:column;
-  padding: 16px;
-  padding-bottom: calc(16px + var(--safe-bottom));
+  --sheet-px: 16px;
+  --sheet-pb: calc(16px + var(--safe-bottom));
+  padding: 16px var(--sheet-px) var(--sheet-pb);
   box-shadow: var(--shadow-lg);
   animation: sheetUp .32s var(--ease-out) both;
 }
@@ -549,8 +550,26 @@ input.switch:checked::after{ transform: translateX(18px); }
 .modal-backdrop.center .modal-sheet{
   border-radius: 22px;
   max-height:88vh;
-  padding-bottom: 16px;
+  --sheet-pb: 16px;
   animation: modalIn .28s var(--ease-out) both;
+}
+/* botões de fechar / guardar / cancelar: se a janela tiver scroll, ficam
+   presos no fundo (com o fundo da janela por baixo e um esbatido por cima
+   para o conteúdo passar por trás sem corte seco). Sem scroll, ficam onde
+   sempre estiveram, logo a seguir ao conteúdo. */
+.sheet-actions{
+  position: sticky; bottom: calc(-1 * var(--sheet-pb));
+  z-index: 2;
+  display:flex; flex-direction:column; gap:8px;
+  margin: 4px calc(-1 * var(--sheet-px)) calc(-1 * var(--sheet-pb));
+  padding: 10px var(--sheet-px) var(--sheet-pb);
+  background: var(--surface);
+}
+.sheet-actions.row{ flex-direction:row; gap:10px; }
+.sheet-actions::before{
+  content:""; position:absolute; left:0; right:0; bottom:100%; height:14px;
+  background: linear-gradient(to bottom, transparent, var(--surface));
+  pointer-events:none;
 }
 .modal-sheet h2{ margin:0 0 10px 0; font-size:1.08rem; font-weight:700; color: var(--text); letter-spacing:-.1px; }
 @keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
@@ -2268,7 +2287,7 @@ html.kb-open:not(.force-landscape) .modal-backdrop{
 }
 html.kb-open:not(.force-landscape) .modal-sheet{
   max-height: calc(var(--vv-h, 100vh) - 10px);
-  padding-bottom: 12px;
+  --sheet-pb: 12px;
   animation: none;
 }
 html.kb-open:not(.force-landscape) .modal-backdrop.center{ align-items:flex-end; padding: 8px; }

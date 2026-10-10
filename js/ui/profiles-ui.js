@@ -557,7 +557,7 @@ function openEditProfileModal(profileId) {
               <button type="button" class="color-dot" data-color="${k}" aria-label="${tr("Cor {n}", { n: k + 1 })}" style="background:${c[0]}"></button>`).join("")}</div>
           </div>
         </div>
-        <div class="row" style="margin-top:16px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="epf-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="epf-save">${tr("Guardar")}</button>
         </div>

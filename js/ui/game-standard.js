@@ -310,7 +310,7 @@ function openEndGameModal() {
             <span class="grow">${tr("Sem vencedor / não contar")}</span>
           </label>
         </div>
-        <div class="row" style="margin-top:14px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="eg-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="eg-confirm">${tr("Confirmar")}</button>
         </div>
@@ -447,7 +447,7 @@ function openCommanderTaxModal(mode, playerId) {
         <h2>Commander tax — ${esc(p.name)}</h2>
         <div class="footer-note" style="margin-bottom:10px">${tr("Cada vez que conjuras o commander da zona de comando, o custo sobe {2}. Toca em \"+\" de cada vez que o conjurares.")}</div>
         <div class="cd-list" id="tax-list"></div>
-        <button class="btn btn-ghost btn-block" id="tax-close" style="margin-top:14px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="tax-close">${tr("Fechar")}</button></div>
       </div>
     </div>
   `);
@@ -501,7 +501,7 @@ function openWhoStartsModal(players, onConfirm) {
         <div class="cd-list" id="who-manual-list"></div>
         <button class="btn btn-accent btn-block" id="who-roll-btn" style="margin-top:14px">${I("dice")} ${tr("Rolar dados por todos")}</button>
         <div id="who-roll-results" style="margin-top:12px"></div>
-        <button class="btn btn-ghost btn-block" id="who-cancel" style="margin-top:14px">${tr("Cancelar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="who-cancel">${tr("Cancelar")}</button></div>
       </div>
     </div>
   `);
@@ -725,7 +725,7 @@ function openPlayerSheet(playerId) {
           <button class="ps-toggle" data-toggle="initiative">${I("door")} ${tr("Iniciativa")}</button>
           <button class="ps-toggle" data-toggle="blessing">${I("shield")} ${tr("City's Blessing")}</button>
         </div>
-        <button class="btn btn-primary btn-block" id="ps-close" style="margin-top:14px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-primary btn-block" id="ps-close">${tr("Fechar")}</button></div>
       </div>
     </div>`);
   flipForPlayer(backdrop, playerId);
@@ -815,7 +815,7 @@ function openTableTools(mode) {
           ${pickHtml("monarch", std.monarchId)}
           <div class="section-title">${I("door")} ${tr("Iniciativa")}</div>
           ${pickHtml("initiative", std.initiativeId)}` : ""}
-        <button class="btn btn-primary btn-block" id="tt-close" style="margin-top:14px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-primary btn-block" id="tt-close">${tr("Fechar")}</button></div>
       </div>
     </div>`);
   document.body.appendChild(backdrop);
@@ -949,7 +949,7 @@ function openCmdDamageModal(playerId, focusOppId) {
         </div>
         <div class="cdx-list" id="cdx-list"></div>
         <p class="cdx-note">${tr("O dano também é tirado à vida. Aos 21 do mesmo commander o jogador é eliminado.")}</p>
-        <button class="btn btn-ghost btn-block" id="cd-close" style="margin-top:12px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="cd-close">${tr("Fechar")}</button></div>
       </div>
     </div>
   `);
@@ -1061,7 +1061,7 @@ function openEditPlayerModal({ mode, playerId }) {
           <button class="btn btn-ghost btn-sm" id="ep-profile" style="margin-top:6px">${profileBtnHtml(pendingProfileId ? (Profiles.get(pendingProfileId) || { name: tr("Perfil") }) : null)}</button>
           ${mode === "standard" ? `<button class="btn ${p.eliminated ? "btn-primary" : "btn-ghost"}" id="ep-elim" style="margin-top:6px">${p.eliminated ? tr("Reviver jogador") : tr("Marcar como eliminado")}</button>` : ""}
         </div>
-        <div class="row" style="margin-top:14px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="ep-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="ep-save">${tr("Guardar")}</button>
         </div>

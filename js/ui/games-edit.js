@@ -67,7 +67,7 @@ function openGameSheet(cfg) {
           </div>
         </div>
         <datalist id="mg-players">${players.map((n) => `<option value="${esc(n)}"></option>`).join("")}</datalist>
-        <div class="row" style="margin-top:14px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="mg-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="mg-save">${cfg.edit ? tr("Guardar") : tr("Registar jogo")}</button>
         </div>

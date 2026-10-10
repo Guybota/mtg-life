@@ -223,7 +223,7 @@ function openReorderPositionsModal(mode) {
       <div class="modal-sheet reorder-sheet">
         <h2>${tr("Trocar posições")}</h2>
         ${asTable ? `<div class="mesa reorder-mesa" id="ro-mesa"></div>` : `<div class="col reorder-list" id="reorder-list"></div>`}
-        <button class="btn btn-primary btn-block" id="reorder-done-btn" style="margin-top:14px">${tr("Concluído")}</button>
+        <div class="sheet-actions"><button class="btn btn-primary btn-block" id="reorder-done-btn">${tr("Concluído")}</button></div>
       </div>
     </div>
   `);

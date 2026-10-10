@@ -178,7 +178,7 @@ function openMergeReview(list, extra, done) {
                 <span class="merge-games">${r.newGames ? tr("+{n} jogo(s) novo(s)", { n: r.newGames }) : tr("sem jogos novos")}</span>
               </div>
             </div>`).join("")}</div>` : ""}
-        <div class="row" style="margin-top:16px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="mg-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="mg-go">${I("merge")} ${extra && extra.confirmLabel ? esc(extra.confirmLabel) : tr("Fundir")}</button>
         </div>
@@ -240,7 +240,7 @@ async function openQrShow() {
         <p class="merge-hint">${tr("No outro telemóvel: Perfis → Juntar com outro telemóvel → Ler QR. Mantém este ecrã aberto até ele dizer que terminou.")}</p>
         <div class="qr-box"><canvas id="qr-canvas"></canvas></div>
         <div class="qr-status" id="qr-status">${tr("A preparar…")}</div>
-        <button class="btn btn-ghost btn-block" id="qr-close" style="margin-top:12px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="qr-close">${tr("Fechar")}</button></div>
       </div>
     </div>`);
   document.body.appendChild(backdrop);
@@ -279,7 +279,7 @@ async function openQrScan(done) {
         <div class="qr-video"><video id="qr-video" playsinline muted></video><span class="qr-frame" aria-hidden="true"></span></div>
         <div class="qr-progress"><span id="qr-bar"></span></div>
         <div class="qr-status" id="qr-status">${tr("A abrir a câmara…")}</div>
-        <button class="btn btn-ghost btn-block" id="qr-close" style="margin-top:12px">${tr("Cancelar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="qr-close">${tr("Cancelar")}</button></div>
       </div>
     </div>`);
   document.body.appendChild(backdrop);
@@ -368,7 +368,7 @@ function openMergeDeckSheet(profileId) {
           </label>`).join("")}</div>
         <div id="md-keep"></div>
         <p class="merge-summary" id="md-summary"></p>
-        <div class="row" style="margin-top:12px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="md-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="md-go" disabled>${I("merge")} ${tr("Fundir")}</button>
         </div>
@@ -431,7 +431,7 @@ function openMergePlayerSheet(playerKey) {
           </label>`).join("")}</div>
         <div id="mp-keep"></div>
         <div id="mp-decks"></div>
-        <div class="row" style="margin-top:12px">
+        <div class="row sheet-actions">
           <button class="btn btn-ghost grow" id="mp-cancel">${tr("Cancelar")}</button>
           <button class="btn btn-primary grow" id="mp-go" disabled>${I("merge")} ${tr("Fundir")}</button>
         </div>
@@ -580,7 +580,7 @@ function openCloudSheet(prefillCode) {
           <button class="btn btn-ghost" id="cloud-sync">${I("rotate")} ${tr("Sincronizar agora")}</button>
         </div>
         <button class="btn btn-ghost btn-block danger-text" id="cloud-leave">${tr("Sair do grupo")}</button>
-        <button class="btn btn-ghost btn-block" id="cloud-close" style="margin-top:8px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="cloud-close">${tr("Fechar")}</button></div>
       </div>
     </div>` : `
     <div class="modal-backdrop">
@@ -594,7 +594,7 @@ function openCloudSheet(prefillCode) {
           <button class="btn btn-primary" id="cloud-join">${tr("Entrar")}</button>
         </div>
         <button class="btn btn-ghost btn-block" id="cloud-scan" style="margin-top:8px">${I("scan")} ${tr("Ler QR do grupo")}</button>
-        <button class="btn btn-ghost btn-block" id="cloud-close" style="margin-top:8px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="cloud-close">${tr("Fechar")}</button></div>
       </div>
     </div>`);
   document.body.appendChild(backdrop);
@@ -660,7 +660,7 @@ function openMergeMenu(done) {
           <button class="btn btn-ghost" id="mm-recv-file">${I("download")} ${tr("Abrir ficheiro")}</button>
         </div>
         <input type="file" id="mm-file" accept="application/json,.json" style="display:none">
-        <button class="btn btn-ghost btn-block" id="mm-close" style="margin-top:16px">${tr("Fechar")}</button>
+        <div class="sheet-actions"><button class="btn btn-ghost btn-block" id="mm-close">${tr("Fechar")}</button></div>
       </div>
     </div>`);
   document.body.appendChild(backdrop);
@@ -720,7 +720,7 @@ function openResetAllSheet() {
         ${cloud.code ? `<p class="merge-hint">${tr("Este aparelho sai do grupo {code}. Os dados na nuvem não são apagados: para os trazer de volta, volta a entrar no grupo com o mesmo código.", { code: `<b>${esc(cloud.code)}</b>` })}</p>` : ""}
         <button type="button" class="btn btn-ghost btn-block" id="ra-export">${I("download")} ${tr("Exportar uma cópia primeiro")}</button>
         <button type="button" class="btn btn-block danger-btn" id="ra-go">${I("trash")} ${tr("Apagar tudo")}</button>
-        <button type="button" class="btn btn-ghost btn-block" id="ra-cancel">${tr("Cancelar")}</button>
+        <div class="sheet-actions"><button type="button" class="btn btn-ghost btn-block" id="ra-cancel">${tr("Cancelar")}</button></div>
       </div>
     </div>`);
   document.body.appendChild(backdrop);

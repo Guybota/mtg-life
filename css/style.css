@@ -2189,3 +2189,30 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .player-header .player-name{ flex: 1 1 64px; min-width:64px; }
 .chart-sub + .chart-legend{ margin-top:10px; }
 .chart-sub + .chart-hbars{ margin-top:10px; }
+
+/* ---------- Emblemas das ligas ---------- */
+.league-badge{ display:block; flex-shrink:0; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.18)); }
+.rank-badge{ display:flex; align-items:center; flex-shrink:0; }
+.rank-league{ font-weight:700; }
+.league-bronze{ color:#9a5530; } .league-silver{ color:#5a6675; } .league-gold{ color:#946006; }
+.league-platinum{ color:#1d7266; } .league-diamond{ color:#3b4fbf; } .league-provisional{ color: var(--text-dim); }
+@media (prefers-color-scheme: dark){
+  .league-bronze{ color:#f0b48a; }
+  .league-silver{ color:#c9d1db; }
+  .league-gold{ color:#f5cd5f; }
+  .league-platinum{ color:#7fd9cb; }
+  .league-diamond{ color:#a9b7ff; }
+}
+.elo-badge{ display:flex; }
+.elo-league{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.elo-league-name{ font-weight:800; font-size:1rem; letter-spacing:.01em; }
+.elo-head .elo-rank{ align-self:flex-start; }
+.elo-progress{ height:6px; border-radius:99px; background: var(--surface-3); overflow:hidden; }
+.elo-progress span{ display:block; height:100%; border-radius:inherit; background: currentColor; transition: width .4s ease; }
+.elo-next{ font-size:.78rem; color: var(--text-dim); margin:6px 0 10px; }
+.elo-next b{ color: var(--text); }
+.league-legend{ display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.ll-row{ display:grid; grid-template-columns: 5.2rem repeat(3, 1fr); align-items:center; gap:6px; padding:6px 8px; border-radius:12px; background: var(--surface-2); }
+.ll-name{ font-weight:700; color: var(--text); font-size:.8rem; }
+.ll-div{ display:flex; align-items:center; gap:5px; }
+.ll-div small{ font-size:.66rem; line-height:1.2; font-variant-numeric: tabular-nums; }

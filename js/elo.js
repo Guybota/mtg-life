@@ -32,6 +32,33 @@
     return t;
   }
 
+  // Cada liga tem 3 divisões: III (entrada), II e I (a mais alta).
+  // Valores = pontos mínimos de III, II e I.
+  const DIVISIONS = {
+    bronze: [-Infinity, 1400, 1420],
+    silver: [1440, 1457, 1474],
+    gold: [1490, 1507, 1524],
+    platinum: [1540, 1560, 1580],
+    diamond: [1600, 1640, 1680],
+  };
+  const LEAGUE_ORDER = ["bronze", "silver", "gold", "platinum", "diamond"];
+  /** { league, division (3 = III … 1 = I), next: pontos para subir (ou null),
+   *  progress: 0–1 dentro da divisão atual } */
+  function divisionOf(rating, games) {
+    const league = tierOf(rating, games);
+    if (league === "provisional") return { league, division: null, next: null, progress: Math.min(1, games / PROVISIONAL) };
+    const steps = DIVISIONS[league];
+    let idx = 0;
+    steps.forEach((min, i) => { if (rating >= min) idx = i; });
+    const division = 3 - idx; // idx 0 → III, 1 → II, 2 → I
+    // limite seguinte: próxima divisão, ou entrada da liga seguinte
+    const li = LEAGUE_ORDER.indexOf(league);
+    const upper = idx < 2 ? steps[idx + 1] : (LEAGUE_ORDER[li + 1] ? DIVISIONS[LEAGUE_ORDER[li + 1]][0] : null);
+    const lower = isFinite(steps[idx]) ? steps[idx] : (upper != null ? upper - 20 : rating);
+    const progress = upper == null ? 1 : Math.max(0, Math.min(1, (rating - lower) / (upper - lower)));
+    return { league, division, next: upper == null ? null : Math.max(0, Math.ceil(upper - rating)), progress };
+  }
+
   const norm = (x) => String(x || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
   /** Reconstrói os jogos a partir dos históricos dos perfis.
@@ -106,11 +133,12 @@
     });
     const finish = (map) => Array.from(map.values())
       .map((r) => Object.assign(r, { rating: Math.round(r.rating), delta: Math.round(r.delta), tier: tierOf(r.rating, r.games) }))
+      .map((r) => Object.assign(r, divisionOf(r.rating, r.games)))
       .sort((a, b) => (b.games >= PROVISIONAL) - (a.games >= PROVISIONAL) || b.rating - a.rating || b.games - a.games)
       .map((r, i) => Object.assign(r, { rank: i + 1 }));
     return { players: finish(players), decks: finish(decks), games: rated };
   }
 
   global.MTG = global.MTG || {};
-  global.MTG.Elo = { compute, gamesFrom, tierOf, START, K, PROVISIONAL, TIERS };
+  global.MTG.Elo = { compute, gamesFrom, tierOf, divisionOf, DIVISIONS, LEAGUE_ORDER, START, K, PROVISIONAL, TIERS };
 })(typeof window !== "undefined" ? window : globalThis);

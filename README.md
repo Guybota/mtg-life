@@ -98,3 +98,18 @@ Ver [ROADMAP.md](ROADMAP.md) — funcionalidades que as apps de topo têm ou que
 
 ---
 Os símbolos de mana são copyright Wizards of the Coast; os traçados vêm do projeto [Mana](https://mana.andrewgioia.com) de Andrew Gioia (SIL OFL 1.1). Esta app é conteúdo de fãs, não oficial.
+
+## Testes
+
+Os testes automáticos estão em `tests/` e usam o Playwright com o Chromium:
+
+```
+npm install        # instala o Playwright (só da primeira vez)
+npx playwright install chromium
+npm test           # corre todos
+node tests/run.js elo   # só os ficheiros com "elo" no nome
+```
+
+O `tests/run.js` serve a app localmente e bloqueia os pedidos para fora
+(Scryfall, Supabase), que os testes simulam quando precisam. Um erro de
+JavaScript na página faz o teste falhar.

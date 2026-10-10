@@ -261,3 +261,94 @@ function openGameEditor(profileId, gameId) {
     },
   });
 }
+
+// ===========================================================
+// SEPARADOR "JOGOS" — todos os jogos registados
+// ===========================================================
+let gamesShown = 30; // quantos jogos se veem (com "Ver mais")
+
+/** Lista de todos os jogos (cada um com todos os decks que lá estiveram):
+ *  editar, apagar e ligar um lugar sem deck a um deck novo ou existente. */
+function renderGamesView(view) {
+  if (!view) return;
+  const games = Profiles.gamesList();
+  const monthKey = (ts) => { const d = new Date(ts); return d.getFullYear() * 12 + d.getMonth(); };
+  const monthLabel = (ts) => { const t = new Date(ts).toLocaleDateString(MTG.i18n.lang === "en" ? "en-GB" : "pt-PT", { month: "long", year: "numeric" }); return t.charAt(0).toUpperCase() + t.slice(1); };
+  let lastMonth = null;
+  const cards = games.slice(0, gamesShown).map((G, gi) => {
+    const head = monthKey(G.date) !== lastMonth ? `<div class="section-title gl-month">${esc(monthLabel(G.date))}</div>` : "";
+    lastMonth = monthKey(G.date);
+    const g0 = G.seats[0].game;
+    const time = g0.timed === false ? tr("sem tempo") : g0.gameTimeMs ? formatDuration(g0.gameTimeMs) : "";
+    const seat = ({ profile, game }) => {
+      const who = (game.playedBy || profile.playerName || "").trim();
+      return `
+        <button type="button" class="gl-seat ${game.won ? "won" : ""}" data-deck="${profile.id}">
+          <span class="commander-thumb sm" style="${seatThumbStyle(profile)}">${profile.commander && profile.commander.art ? "" : I("card")}</span>
+          <span class="gl-seat-text"><b>${esc(profile.name)}</b>${who ? `<small>${esc(who)}${game.playedBy && profile.playerName ? " · " + tr("emprestado") : ""}</small>` : ""}</span>
+          ${game.won ? `<span class="gl-win">${I("trophy")}</span>` : ""}
+        </button>`;
+    };
+    const guest = (x) => `
+      <div class="gl-seat guest ${x.won ? "won" : ""}">
+        <span class="commander-thumb sm">${I("user")}</span>
+        <span class="gl-seat-text"><b>${esc(x.name)}</b><small>${tr("sem deck")}</small></span>
+        ${x.won ? `<span class="gl-win">${I("trophy")}</span>` : ""}
+        <button type="button" class="btn btn-ghost btn-sm gl-attach" data-attach="${gi}" data-guest="${esc(x.name)}">${I("plus")} ${tr("Deck")}</button>
+      </div>`;
+    return `${head}
+      <div class="gl-game" data-g="${gi}">
+        <div class="gl-top">
+          <span class="gl-mode">${esc(modeLabel(G.mode))}</span>
+          <span class="gl-date">${formatDateTime(G.date)}${time ? " · " + time : ""}${g0.manual ? " · " + tr("registado à mão") : ""}</span>
+          <span class="gl-actions">
+            <button class="btn btn-icon" data-edit-g="${gi}" title="${tr("Editar este jogo")}" aria-label="${tr("Editar este jogo")}">${I("pencil")}</button>
+            <button class="btn btn-icon" data-del-g="${gi}" title="${tr("Apagar este jogo")}" aria-label="${tr("Apagar este jogo")}">${I("trash")}</button>
+          </span>
+        </div>
+        <div class="gl-seats">${G.seats.slice().sort((a, b) => b.game.won - a.game.won).map(seat).join("")}${G.guests.map(guest).join("")}</div>
+      </div>`;
+  }).join("");
+  const guestsTotal = games.reduce((a, G) => a + G.guests.length, 0);
+  view.innerHTML = `
+    <div class="section-head gl-head">
+      <span class="section-title">${tr("{n} jogo(s)", { n: games.length })}</span>
+      <button type="button" class="btn btn-ghost btn-sm" id="gl-manual">${I("plus")} ${tr("Registar jogo")}</button>
+    </div>
+    ${guestsTotal ? `<div class="mg-hint gl-hint">${tr("Lugares sem deck: toca em \"+ Deck\" para criar um perfil para esse jogador (ou escolher um deck que já exista). O jogo passa a contar para esse deck.")}</div>` : ""}
+    ${games.length ? `<div class="gl-list">${cards}</div>` : `<div class="chart-card"><div class="footer-note">${tr("Ainda não há jogos registados.")}</div></div>`}
+    ${games.length > gamesShown ? `<button type="button" class="btn btn-ghost btn-block" id="gl-more">${tr("Ver mais ({n})", { n: games.length - gamesShown })}</button>` : ""}`;
+
+  view.querySelector("#gl-manual").addEventListener("click", () => openManualGame());
+  const more = view.querySelector("#gl-more");
+  if (more) more.addEventListener("click", () => { gamesShown += 30; renderGamesView(view); });
+  view.querySelectorAll("[data-deck]").forEach((b) => b.addEventListener("click", () => nav("profile-detail", { id: b.dataset.deck })));
+  view.querySelectorAll("[data-edit-g]").forEach((b) => b.addEventListener("click", () => {
+    const s0 = games[+b.dataset.editG].seats[0];
+    openGameEditor(s0.profile.id, s0.game.id);
+  }));
+  view.querySelectorAll("[data-del-g]").forEach((b) => b.addEventListener("click", () => {
+    const G = games[+b.dataset.delG];
+    const before = Profiles.snapshot();
+    G.seats.forEach(({ profile, game }) => Profiles.removeGame(profile.id, game.id));
+    render();
+    undoToast(tr("Jogo apagado"), () => { Profiles.replaceAll(before); render(); });
+  }));
+  view.querySelectorAll("[data-attach]").forEach((b) => b.addEventListener("click", () => {
+    const G = games[+b.dataset.attach];
+    const s0 = G.seats[0];
+    const name = b.dataset.guest;
+    openProfilePicker({
+      commander: null, playerName: name,
+      onSelect: (id) => {
+        if (!id) return;
+        const before = Profiles.snapshot();
+        const res = Profiles.attachGuest(s0.profile.id, s0.game.id, name, id);
+        if (res.error === "same") { toast(tr("Esse deck já está neste jogo.")); return; }
+        if (res.error) { toast(tr("Não foi possível ligar o deck a este jogo.")); return; }
+        render();
+        undoToast(tr("Jogo de {name} ligado ao deck", { name }), () => { Profiles.replaceAll(before); render(); });
+      },
+    });
+  }));
+}

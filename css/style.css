@@ -2330,3 +2330,34 @@ html.kb-open .search-sheet h2{ margin-bottom: 6px; }
   .sync-text{ flex: 1 1 calc(100% - 50px); }
   .sync-card > .btn:first-of-type{ margin-left: auto; }
 }
+
+/* ---------- Editar / registar jogo ---------- */
+.pf-manual{ margin: 2px 0 8px; }
+.history-actions{ display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+.game-sheet .mg-field{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.game-sheet .mg-meta{ font-size:.82rem; color: var(--text-dim); margin: -4px 0 12px; }
+.mg-hint{ font-size:.74rem; color: var(--text-dim); line-height:1.35; }
+.mg-modes{ display:flex; gap:6px; flex-wrap:wrap; }
+.mg-seats{ display:flex; flex-direction:column; gap:8px; }
+.mg-seat{ background: var(--surface-2); border:1.5px solid transparent; border-radius:14px; padding:8px; display:flex; flex-direction:column; gap:6px; }
+.mg-seat.won{ border-color: var(--butter-ink); background: color-mix(in srgb, var(--butter) 55%, var(--surface-2)); }
+.mg-seat-top{ display:flex; align-items:center; gap:6px; }
+.mg-deck{ flex:1; min-width:0; display:flex; align-items:center; gap:8px; background: var(--surface); border:1px solid var(--line); border-radius:12px; padding:5px 8px; font: 600 .88rem var(--font); color: var(--text); text-align:left; }
+.mg-deck.static{ background: transparent; border-color: transparent; padding-left:2px; }
+.mg-deck .commander-thumb.sm{ width:30px; height:30px; border-radius:8px; flex-shrink:0; }
+.mg-deck .commander-thumb.sm .ic{ width:14px; height:14px; }
+.mg-deck-name{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mg-deck-name.dim{ color: var(--text-dim); font-weight:500; }
+.mg-win{ width:40px; height:40px; border-radius:12px; background: var(--surface); border:1px solid var(--line); color: var(--text-dim); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.mg-win[aria-pressed="true"]{ background: var(--butter); border-color: var(--butter-ink); color: var(--butter-ink); }
+.mg-seat .mg-del{ width:36px; height:36px; }
+.mg-who{ width:100%; }
+.mg-switch{ display:flex; align-items:center; justify-content:space-between; gap:12px; text-transform:none; letter-spacing:0; }
+.mg-switch > span{ display:flex; flex-direction:column; gap:2px; }
+.mg-switch-title{ font-size:.92rem; font-weight:600; color: var(--text); }
+.mg-duration{ display:flex; align-items:center; gap:8px; font-size:.88rem; color: var(--text-dim); }
+.mg-duration input{ width:110px; }
+.game-sheet input[type=datetime-local]{
+  width:100%; height:44px; border:1px solid var(--line); border-radius:12px; padding:0 12px;
+  font: .95rem var(--font); background: var(--surface); color: var(--text);
+}

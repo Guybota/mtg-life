@@ -955,6 +955,7 @@ function openCmdDamageModal(playerId, focusOppId) {
   `);
   document.body.appendChild(backdrop);
   const list = backdrop.querySelector("#cdx-list");
+  bindRotatedScroll(backdrop.querySelector(".cdx-sheet"));
 
   function paintLife() {
     const d = p.life - lifeAtOpen;
@@ -1019,8 +1020,8 @@ function openCmdDamageModal(playerId, focusOppId) {
       paint();
       paintLife();
     }
-    bindPressRepeat(row.querySelector(".cdx-btn.minus"), () => change(-1));
-    bindPressRepeat(row.querySelector(".cdx-btn.plus"), () => change(1));
+    bindPressRepeat(row.querySelector(".cdx-btn.minus"), () => change(-1), { allowScroll: true });
+    bindPressRepeat(row.querySelector(".cdx-btn.plus"), () => change(1), { allowScroll: true });
     paint();
     return row;
   }

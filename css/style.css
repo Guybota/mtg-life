@@ -1084,6 +1084,8 @@ html.compact-board .cmd-badge{ width:24px; height:24px; }
 .cd-group .cd-list-item:last-child{ margin-bottom:0; }
 /* ---------- Dano de commander ---------- */
 .cdx-sheet{ max-height: 90vh; overflow-y:auto; }
+/* O gesto no painel rodado é convertido para scroll por bindRotatedScroll. */
+html.force-landscape .cdx-sheet{ touch-action:none; }
 .cdx-sheet h2{ margin-bottom:4px; }
 .cdx-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
 .cdx-target{ color: var(--text-dim); font-size:.9rem; }

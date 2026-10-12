@@ -235,8 +235,9 @@ document.addEventListener("selectstart", (e) => {
 });
 
 /** Tap simples + press-and-hold repetido (para os contadores de vida). */
-function bindPressRepeat(elm, callback) {
+function bindPressRepeat(elm, callback, { allowScroll = false } = {}) {
   let timer = null, interval = null, fired = false, startedAt = 0;
+  let startX = 0, startY = 0;
   function fire(e) {
     retrigger(elm, "tap-flash");
     callback(e);
@@ -247,10 +248,11 @@ function bindPressRepeat(elm, callback) {
     activeRepeats.delete(stop);
   }
   function start(e) {
-    e.preventDefault();
+    if (!allowScroll) e.preventDefault();
     stop(); // nunca duas repetições do mesmo botão
     fired = false;
     startedAt = Date.now();
+    startX = e.clientX; startY = e.clientY;
     elm.classList.add("pressed");
     try { elm.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
     activeRepeats.add(stop);
@@ -270,15 +272,47 @@ function bindPressRepeat(elm, callback) {
     startedAt = 0;
     stop();
   }
+  function cancel() {
+    startedAt = 0;
+    stop();
+  }
+  function move(e) {
+    // Um arrastar pertence ao scroll, mesmo com a página rodada 90°.
+    // Cancela também o tap para não alterar o contador ao levantar o dedo.
+    if (allowScroll && startedAt && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) cancel();
+  }
   elm.addEventListener("pointerdown", start);
+  if (allowScroll) elm.addEventListener("pointermove", move);
   elm.addEventListener("pointerup", up);
-  elm.addEventListener("pointerleave", stop);
-  elm.addEventListener("pointercancel", stop);
-  elm.addEventListener("lostpointercapture", stop);
+  elm.addEventListener("pointerleave", cancel);
+  elm.addEventListener("pointercancel", cancel);
+  elm.addEventListener("lostpointercapture", cancel);
   elm.addEventListener("contextmenu", (e) => e.preventDefault());
   // no iOS só cancelar o touchstart impede a lupa/seleção ao manter o dedo
   // (os eventos de pointer continuam a chegar normalmente)
-  elm.addEventListener("touchstart", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+  if (!allowScroll) elm.addEventListener("touchstart", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+}
+
+/** Chromium pode ignorar o scroll nativo no eixo rodado por CSS.
+ *  Só nesse modo, o movimento horizontal do ecrã corresponde ao scroll
+ *  vertical da folha. Captura implícita do toque mantém o gesto na folha. */
+function bindRotatedScroll(sheet) {
+  let gesture = null;
+  sheet.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch" || !e.isPrimary || !document.documentElement.classList.contains("force-landscape")) return;
+    gesture = { id: e.pointerId, x: e.clientX, y: e.clientY, top: sheet.scrollTop, scrolling: false };
+  }, true);
+  sheet.addEventListener("pointermove", (e) => {
+    if (!gesture || e.pointerId !== gesture.id) return;
+    const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
+    if (!gesture.scrolling && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) gesture.scrolling = true;
+    if (!gesture.scrolling) return;
+    if (e.cancelable) e.preventDefault();
+    sheet.scrollTop = gesture.top + dx;
+  }, true);
+  function end(e) { if (gesture && e.pointerId === gesture.id) gesture = null; }
+  sheet.addEventListener("pointerup", end, true);
+  sheet.addEventListener("pointercancel", end, true);
 }
 
 // Feedback ao tocar: uma "onda" que nasce no ponto tocado nos botões e

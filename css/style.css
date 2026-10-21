@@ -576,7 +576,8 @@ input.switch:checked::after{ transform: translateX(18px); }
 .search-result-item .info{ flex:1; min-width:0; }
 .search-result-item .name{ font-size:.9rem; font-weight:600; }
 .search-result-item .type{ font-size:.72rem; color:var(--text-dim); }
-.search-result-item .versions-btn{ flex-shrink:0; width:36px; height:36px; background: var(--surface); }
+.search-result-item .versions-btn{ flex-shrink:0; padding:6px 10px; background: var(--surface); }
+.search-result-item .versions-btn .ic{ width:16px; height:16px; }
 .search-status{ font-size:.82rem; color:var(--text-dim); padding:8px 2px; }
 
 /* ===========================================================
@@ -2385,6 +2386,13 @@ button.pd-chip{ cursor:pointer; }
 .pp-new-cmd .commander-thumb.sm .ic{ width:16px; height:16px; }
 .pp-new-cmd-name{ flex:1; min-width:0; font-weight:600; font-size:.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pp-new-cmd .btn-sm{ flex-shrink:0; }
+.pp-new-form{ gap:8px; }
+.pp-new-form > label{ margin-top:4px; }
+.pp-new-form > .btn-primary{ margin-top:6px; }
+.pp-new-cmd-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.pp-new-cmd-actions:not(:has(.btn:not(.hidden))){ display:none; }
+.sheet-foot{ display:flex; flex-direction:column; }
+.sheet-foot .row .btn{ white-space:nowrap; padding-inline:10px; }
 
 
 /* ---------- Histórico de vida (tabela e lista) ---------- */
@@ -2649,3 +2657,79 @@ html.compact-board .screen.std-game.p4.board-fullscreen #row-bottom > .player-pa
 html.compact-board .screen.std-game.p4.board-fullscreen .fs-hub-row{ grid-column:2; grid-row:1 / span 2; }
 html.compact-board .screen.std-game.p4.board-fullscreen .fs-hub{ justify-content:space-evenly; }
 html.compact-board .screen.std-game.p4.board-fullscreen .fs-exit:first-of-type{ margin-top:0; }
+
+/* ---------- Escolher arte: grelha com as artes em tamanho útil ---------- */
+.art-sheet{ max-width:760px; }
+.art-grid{
+  display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap:10px;
+  overflow-y:auto; min-height:0; margin-top:6px;
+}
+.modal-sheet .art-grid{ flex-shrink:1; }
+.art-tile{
+  display:flex; flex-direction:column; gap:2px; text-align:left;
+  background: var(--surface-2); border:2px solid transparent; border-radius: var(--radius-sm);
+  padding:6px 6px 8px; min-width:0;
+  transition: transform .15s var(--ease-spring);
+}
+.art-tile:active{ transform: scale(.97); }
+.art-tile.current{ border-color: var(--lavender-ink); }
+.art-tile img{ width:100%; aspect-ratio: 4 / 3; object-fit:cover; border-radius:8px; background: var(--surface-3); margin-bottom:4px; }
+.art-set{ font-size:.78rem; font-weight:600; line-height:1.25; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.art-by{ font-size:.68rem; color: var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ---------- Setup padrão: quem joga (fichas) e um lugar por linha ---------- */
+.roster{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.roster-chip{
+  display:flex; align-items:center; gap:6px;
+  height:38px; padding:0 14px; border-radius:999px;
+  border:1px solid var(--line); background: var(--surface);
+  font: 600 .88rem var(--font); color: var(--text);
+  transition: transform .15s var(--ease-spring), background .15s ease;
+}
+.roster-chip:active{ transform: scale(.95); }
+.roster-chip[aria-pressed="true"]{ background: var(--lavender); border-color: transparent; color: var(--lavender-ink); padding-left:6px; }
+.roster-num{
+  width:24px; height:24px; border-radius:50%; flex-shrink:0;
+  background: var(--lavender-ink); color: var(--lavender);
+  display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:800;
+}
+.roster-chip.add{ border-style:dashed; color: var(--text-dim); background: transparent; }
+.roster-chip.add .ic{ width:16px; height:16px; }
+.roster-new{ display:flex; gap:8px; margin:-4px 0 12px; }
+.roster-new input{ flex:1; min-width:0; padding:8px 12px; }
+.seat-row{ position:relative; align-items:flex-start; padding:10px 8px 10px 10px; }
+.seat-row .seat-num{ position:absolute; top:4px; left:4px; }
+.seat-thumb{ width:52px; height:52px; border:none; padding:0; }
+.seat-who{ font-weight:700; font-size:.96rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-top:2px; }
+.seat-who.empty{ color: var(--text-dim); font-weight:600; }
+.seat-deck-btn{
+  display:flex; align-items:center; gap:6px; align-self:flex-start; max-width:100%;
+  background: var(--surface-2); border-radius:10px; padding:6px 8px 6px 10px;
+  font: 600 .84rem var(--font); color: var(--text);
+}
+.seat-deck-btn span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.seat-deck-btn .ic{ width:14px; height:14px; flex-shrink:0; color: var(--text-dim); }
+.seat-deck-btn.empty{ background:transparent; border:1px dashed var(--line); color: var(--text-dim); }
+.seat-remove{ flex-shrink:0; width:32px; height:32px; color: var(--text-dim); }
+.seat-remove .ic{ width:16px; height:16px; }
+.seat-add{ margin:10px 0 4px; border-style:dashed; color: var(--text-dim); background:transparent; }
+
+/* ---------- Folha de escolher o deck de um lugar ---------- */
+.deck-sheet .deck-list{ display:flex; flex-direction:column; gap:6px; overflow-y:auto; min-height:0; }
+.modal-sheet .deck-list{ flex-shrink:1; }
+.deck-sec{ font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color: var(--text-dim); margin:8px 2px 0; }
+.deck-sec:first-child{ margin-top:0; }
+.deck-sec:empty{ display:none; }
+.deck-item{ width:100%; text-align:left; font: inherit; color: var(--text); }
+.deck-item .info{ display:flex; flex-direction:column; }
+.deck-item.current{ border-color: var(--lavender-ink); }
+.deck-noart{
+  width:44px; height:44px; border-radius:10px; flex-shrink:0;
+  background: var(--lavender); color: var(--lavender-ink);
+  display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700;
+}
+.deck-pill{ flex-shrink:0; font-size:.68rem; font-weight:700; border-radius:999px; padding:3px 8px; background: var(--surface-3); color: var(--text-dim); }
+.deck-pill.last{ background: var(--mint); color: var(--mint-ink); }
+.deck-pill.borrow{ background: var(--butter); color: var(--butter-ink); }
+.deck-actions{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:12px; }
+.deck-actions .btn{ padding:10px 8px; font-size:.86rem; }

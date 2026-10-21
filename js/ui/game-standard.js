@@ -10,6 +10,7 @@
 // ===========================================================
 function renderSetupStandard() {
   const preset = PRESETS[draft.preset];
+  const newSeat = () => ({ name: "", commander: null, partnerCommander: null, profileId: null });
   const s = el(`
     <div class="screen">
       <div class="topbar">
@@ -19,11 +20,6 @@ function renderSetupStandard() {
       </div>
       <div class="scroll">
         <div class="setup-controls">
-          ${preset.minPlayers !== preset.maxPlayers ? `
-          <div class="field">
-            <label>${tr("Jogadores")}</label>
-            ${chipRowHtml("players-chips", Array.from({ length: preset.maxPlayers - preset.minPlayers + 1 }, (_, i) => preset.minPlayers + i), draft.playerCount)}
-          </div>` : ""}
           <div class="field">
             <label>${tr("Vida inicial")}</label>
             ${lifeFieldHtml(draft.startLife)}
@@ -34,12 +30,19 @@ function renderSetupStandard() {
           (preset.cmdDmgToggle ? switchFieldHtml("cfg-cmddmg", "Commander damage", tr("Contador de dano de commander por oponente (21 elimina)."), draft.cmdDmgEnabled) : "") +
           trackTurnsFieldHtml(draft.trackTurns !== false)
         )}
+        <div class="section-head"><span class="section-title" id="roster-title"></span></div>
+        <div class="roster" id="roster" role="group" aria-label="${tr("Quem joga?")}"></div>
+        <form class="roster-new hidden" id="roster-new">
+          <input type="text" id="roster-new-name" placeholder="${tr("Nome do jogador")}" autocomplete="off" enterkeyhint="done" aria-label="${tr("Nome do jogador novo")}">
+          <button type="submit" class="btn btn-primary btn-sm">${tr("Adicionar")}</button>
+        </form>
+        <div class="player-setup-list" id="players-list"></div>
+        <button type="button" class="btn btn-ghost btn-block seat-add" id="seat-add">${I("plus")} ${tr("Mais um lugar")}</button>
         ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
         <div class="mesa-card">
           <div class="mesa" id="mesa"></div>
           <div class="mesa-hint">${I("reorder")} ${tr("Arrasta um lugar para trocar · os números são a ordem dos turnos")}</div>
         </div>
-        <div class="player-setup-list" id="players-list"></div>
       </div>
       <div class="board-toolbar">
         <button class="btn btn-primary btn-block" id="start-btn">${tr("Começar jogo")}</button>
@@ -48,106 +51,127 @@ function renderSetupStandard() {
   `);
   appEl.appendChild(s);
 
-  // Reconciliação por índice: reaproveita os cards já existentes em vez de
-  // destruir e recriar tudo a cada alteração (nº de jogadores, escolher
-  // commander/perfil de OUTRO jogador, etc.) — isto evita perder o foco
-  // (e o que já se tinha escrito) no campo de nome de um jogador quando
-  // outra parte do ecrã dispara um re-render ao mesmo tempo.
-  function buildPlayerCard(i) {
-    const p = draft.players[i];
-    const profile = p.profileId ? Profiles.get(p.profileId) : null;
-    const card = el(`
-      <div class="player-setup-card">
-        <div class="commander-thumbs">
-          <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">
-            ${p.commander ? "" : I("card")}
-          </div>
-          <div class="commander-thumb thumb-sm" data-role="partner" title="${tr("Commander parceiro")}" style="${commanderThumbStyle(p.partnerCommander)}">
-            ${p.partnerCommander ? "" : "+"}
-          </div>
-        </div>
-        <div class="player-setup-fields">
-          <input type="text" data-i="${i}" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(p.name)}">
-          <div class="commander-name">${p.commander ? esc(p.commander.name) : tr("Sem commander escolhido")}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
-          <button class="btn btn-ghost btn-sm profile-btn" data-i="${i}">${profileBtnHtml(profile)}</button>
-          <div class="seat-extras"></div>
-        </div>
-      </div>
-    `);
-    bindSeatExtras(card, () => draft.players[i], renderPlayersList);
-    card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
-      openCommanderPicker((card2) => { draft.players[i].commander = card2; renderPlayersList(); });
-    });
-    card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
-      openCommanderPicker((card2) => { draft.players[i].partnerCommander = card2; renderPlayersList(); }, tr("Escolher commander parceiro"));
-    });
-    card.querySelector(".name-input").addEventListener("input", (e) => {
-      draft.players[i].name = e.target.value;
-      s.querySelector("#mesa").innerHTML = mesaInnerHtml(draft.players);
-      card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(draft.players[i], i, draft.players);
-    });
-    card.querySelector(".profile-btn").addEventListener("click", () => {
-      openProfilePicker({
-        commander: draft.players[i].commander,
-        partner: draft.players[i].partnerCommander,
-        currentProfileId: draft.players[i].profileId,
-        playerName: draft.players[i].name,
-        onSelect: (id) => {
-          const prof = id ? Profiles.get(id) : null;
-          draft.players[i].name = seatNameAfterProfile(draft.players[i].name, draft.players[i].profileId, prof);
-          draft.players[i].profileId = id;
-          if (prof && prof.commander) { draft.players[i].commander = prof.commander; draft.players[i].partnerCommander = prof.partnerCommander || null; }
-          renderPlayersList();
-        },
-      });
-    });
-    return card;
+  const seatIdxOf = (name) => draft.players.findIndex((p) => p.name.trim() && normName(p.name) === normName(name));
+  /** Senta alguém: no 1.º lugar vazio, ou num lugar novo; com o último
+   *  deck com que jogou, se o lugar ainda não tiver deck. */
+  function seatPlayer(name) {
+    name = Profiles.canonicalPlayer(name.trim());
+    let i = draft.players.findIndex((p) => !p.name.trim());
+    if (i < 0) {
+      if (draft.players.length >= preset.maxPlayers) { toast(tr("Máximo de {n} jogadores", { n: preset.maxPlayers })); return; }
+      draft.players.push(newSeat());
+      i = draft.players.length - 1;
+    }
+    const seat = draft.players[i];
+    seat.name = name;
+    if (!seat.profileId && !seat.commander) {
+      const pr = lastDeckOf(name, draft.players.map((p) => p.profileId));
+      if (pr) applyProfileToSeat(seat, pr);
+    }
   }
-  function updatePlayerCard(card, i) {
-    const p = draft.players[i];
-    const profile = p.profileId ? Profiles.get(p.profileId) : null;
-    const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
-    mainThumb.style.cssText = seatThumbStyle(p);
-    mainThumb.innerHTML = p.commander ? "" : I("card");
-    const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
-    partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
-    partnerThumb.textContent = p.partnerCommander ? "" : "+";
-    card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : tr("Sem commander escolhido")) + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
-    card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
-    card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(p, i, draft.players);
-    const nameInput = card.querySelector(".name-input");
-    if (document.activeElement !== nameInput) nameInput.value = p.name;
+  /** Tira a pessoa do lugar (o lugar fica vazio, na mesma posição). */
+  function clearSeat(i) {
+    draft.players[i] = Object.assign(newSeat(), { colorIdx: draft.players[i].colorIdx });
+  }
+
+  function renderRoster() {
+    const names = rosterPlayers();
+    draft.players.forEach((p) => { if (p.name.trim() && !names.some((n) => normName(n) === normName(p.name))) names.push(p.name.trim()); });
+    const seated = draft.players.filter((p) => p.name.trim()).length;
+    s.querySelector("#roster-title").textContent = tr("Quem joga?") + (seated ? " · " + seated : "");
+    s.querySelector("#roster").innerHTML = names.map((n) => {
+      const i = seatIdxOf(n);
+      return `<button type="button" class="roster-chip" data-player="${esc(n)}" aria-pressed="${i >= 0}">
+        ${i >= 0 ? `<span class="roster-num">${i + 1}</span>` : ""}${esc(n)}</button>`;
+    }).join("") + `<button type="button" class="roster-chip add" id="roster-add">${I("plus")} ${tr("Novo")}</button>`;
+  }
+
+  function seatRowHtml(p, i) {
+    const name = p.name.trim();
+    const deck = p.profileId ? Profiles.get(p.profileId) : null;
+    const deckLabel = deck ? deck.name : p.commander ? cmdLabel(p.commander, p.partnerCommander || null) : "";
+    const cmd = deck && p.commander ? cmdLabel(p.commander, p.partnerCommander || null) : "";
+    const style = seatThumbStyle(p);
+    return `
+      <span class="mesa-num seat-num">${i + 1}</span>
+      <button type="button" class="commander-thumb seat-thumb" data-act="deck" style="${style}" aria-label="${tr("Escolher deck")}">${style ? "" : I("card")}</button>
+      <div class="player-setup-fields">
+        <div class="seat-who ${name ? "" : "empty"}">${name ? esc(name) : tr("Jogador {n}", { n: i + 1 })}</div>
+        <button type="button" class="seat-deck-btn ${deckLabel ? "" : "empty"}" data-act="deck">
+          <span>${deckLabel ? esc(deckLabel) : tr("Escolher deck")}</span>${I("chevron-down")}
+        </button>
+        ${cmd && normName(cmd) !== normName(deckLabel) ? `<div class="commander-name">${esc(cmd)}</div>` : ""}
+        <div class="seat-extras">${seatExtrasHtml(p, i, draft.players, true)}</div>
+      </div>
+      ${draft.players.length > preset.minPlayers ? `<button type="button" class="btn btn-icon seat-remove" data-act="remove" aria-label="${tr("Tirar o lugar {n}", { n: i + 1 })}">${I("x")}</button>` : ""}`;
   }
   function renderPlayersList() {
     const list = s.querySelector("#players-list");
-    draft.players.forEach((p, i) => { if (!list.children[i]) list.appendChild(buildPlayerCard(i)); });
+    draft.playerCount = draft.players.length;
     while (list.children.length > draft.players.length) list.removeChild(list.lastChild);
-    // atualiza TODOS (os avisos de perfil repetido dependem dos outros lugares)
-    draft.players.forEach((p, i) => updatePlayerCard(list.children[i], i));
+    draft.players.forEach((p, i) => {
+      let card = list.children[i];
+      if (!card) {
+        card = el(`<div class="player-setup-card seat-row"></div>`);
+        bindSeatExtras(card, () => draft.players[i], renderAll);
+        card.addEventListener("click", (e) => {
+          const b = e.target.closest("[data-act]");
+          if (!b) return;
+          if (b.dataset.act === "deck") openDeckSheet(draft.players, i, renderAll);
+          if (b.dataset.act === "remove") { draft.players.splice(i, 1); renderAll(); }
+        });
+        list.appendChild(card);
+      }
+      card.innerHTML = seatRowHtml(p, i);
+    });
+    s.querySelector("#seat-add").classList.toggle("hidden", draft.players.length >= preset.maxPlayers);
     s.querySelector("#mesa").innerHTML = mesaInnerHtml(draft.players);
   }
+  function renderAll() {
+    renderRoster();
+    renderPlayersList();
+  }
+
+  s.querySelector("#roster").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-player]");
+    if (b) {
+      const i = seatIdxOf(b.dataset.player);
+      if (i >= 0) clearSeat(i); else seatPlayer(b.dataset.player);
+      renderAll();
+      return;
+    }
+    if (e.target.closest("#roster-add")) {
+      const form = s.querySelector("#roster-new");
+      form.classList.toggle("hidden");
+      if (!form.classList.contains("hidden")) form.querySelector("input").focus();
+    }
+  });
+  s.querySelector("#roster-new").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = s.querySelector("#roster-new-name");
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    if (seatIdxOf(name) >= 0) { toast(tr("{name} já está sentado", { name })); return; }
+    seatPlayer(name);
+    input.value = "";
+    s.querySelector("#roster-new").classList.add("hidden");
+    renderAll();
+  });
+  s.querySelector("#seat-add").addEventListener("click", () => {
+    if (draft.players.length < preset.maxPlayers) draft.players.push(newSeat());
+    renderAll();
+  });
   bindMesa(s.querySelector("#mesa"), (a, b) => {
     [draft.players[a], draft.players[b]] = [draft.players[b], draft.players[a]];
-    renderPlayersList();
+    renderAll();
   }, (i) => {
     const card = s.querySelector("#players-list").children[i];
     if (!card) return;
     card.scrollIntoView({ behavior: "smooth", block: "center" });
     retrigger(card, "seat-flash");
   });
-  renderPlayersList();
+  renderAll();
 
-  if (preset.minPlayers !== preset.maxPlayers) {
-    function setPlayerCount(n) {
-      n = Math.max(preset.minPlayers, Math.min(preset.maxPlayers, n || preset.defaultPlayers));
-      const cur = draft.players.length;
-      if (n > cur) for (let i = cur; i < n; i++) draft.players.push({ name: "", commander: null, partnerCommander: null, profileId: null });
-      else draft.players.length = n;
-      draft.playerCount = n;
-      renderPlayersList();
-    }
-    bindChipRow(s, "players-chips", setPlayerCount);
-  }
   bindLifeField(s, (v) => { draft.startLife = Math.max(1, v || preset.defaultLife); });
   if (preset.cmdDmgToggle) {
     s.querySelector("#cfg-cmddmg").addEventListener("change", (e) => { draft.cmdDmgEnabled = e.target.checked; });
@@ -156,7 +180,7 @@ function renderSetupStandard() {
   s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
   s.querySelector("#shuffle-btn").addEventListener("click", () => {
     shuffleInPlace(draft.players);
-    renderPlayersList();
+    renderAll();
     toast(tr("Lugares sorteados"));
   });
   s.querySelector("#start-btn").addEventListener("click", () => startStandardFromDraft(draft));

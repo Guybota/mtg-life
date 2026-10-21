@@ -1,5 +1,5 @@
 /* Dono do deck, decks emprestados e commanders alternativos. */
-const { seedProfiles, openWith, stored, goProfiles, pickProfile, startGame, endGame } = require("./helpers");
+const { seedProfiles, openWith, stored, goProfiles, pickProfile, tapPlayer, startGame, endGame } = require("./helpers");
 
 module.exports = [
   {
@@ -15,17 +15,17 @@ module.exports = [
       if (await page.$("#qs-setup")) await page.click("#qs-setup");
       const card = async (i) => (await page.$$(".player-setup-card"))[i];
 
-      await (await (await card(0)).$(".name-input")).fill("Rui");
+      await tapPlayer(page, "Rui");
       await pickProfile(page, 0, "Atraxa");
-      t.eq(await (await (await card(0)).$(".name-input")).inputValue(), "Rui", "nome escrito mantém-se");
+      t.eq(await (await card(0)).$eval(".seat-who", (e) => e.textContent), "Rui", "quem está sentado mantém-se");
       t.ok((await (await card(0)).$eval(".seat-extras", (e) => e.textContent)).includes("Deck emprestado por Ana"), "aviso de empréstimo");
       await (await (await card(0)).$('.alt-chip:has-text("Tymna")')).click();
       t.eq(await (await card(0)).$eval(".commander-name", (e) => e.textContent), "Tymna the Weaver", "commander alternativo escolhido");
 
       await pickProfile(page, 1, "Edgar Markov");
-      t.eq(await (await (await card(1)).$(".name-input")).inputValue(), "Tiago", "lugar vazio fica com o dono");
+      t.eq(await (await card(1)).$eval(".seat-who", (e) => e.textContent), "Tiago", "lugar vazio fica com o dono");
       await pickProfile(page, 2, "Yuriko");
-      await (await (await card(3)).$(".name-input")).fill("Joana");
+      await tapPlayer(page, "Joana");
       await startGame(page);
       await endGame(page, "Rui");
 

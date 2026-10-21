@@ -48,12 +48,16 @@ async function goProfiles(page, tab) {
   if (tab) await page.click(`.seg-btn[data-tab="${tab}"]`);
 }
 
-/** Escolhe um perfil para o lugar i do setup, pelo seletor de perfis. */
+/** Escolhe um deck para o lugar i do setup, pela folha de decks. */
 async function pickProfile(page, i, name) {
   const card = (await page.$$(".player-setup-card"))[i];
-  await (await card.$(".profile-btn")).click();
-  await page.click(`#pp-list .search-result-item:has(.name:text-is("${name}"))`);
-  await page.waitForSelector("#pp-list", { state: "detached" });
+  await (await card.$(".seat-deck-btn")).click();
+  await page.click(`#ds-list [data-deck]:has(.name:text-is("${name}"))`);
+  await page.waitForSelector("#ds-list", { state: "detached" });
+}
+/** Senta (ou levanta) um jogador conhecido, pelas fichas de "Quem joga?". */
+async function tapPlayer(page, name) {
+  await page.click(`#roster [data-player="${name}"]`);
 }
 
 /** Do setup do Commander: começa o jogo e escolhe quem começa (se pedir). */
@@ -84,4 +88,4 @@ async function endGame(page, winnerName) {
   await page.waitForTimeout(500);
 }
 
-module.exports = { seedProfiles, openWith, stored, goProfiles, pickProfile, startGame, endGame, boardAction, exitFullscreen };
+module.exports = { seedProfiles, openWith, stored, goProfiles, pickProfile, tapPlayer, startGame, endGame, boardAction, exitFullscreen };

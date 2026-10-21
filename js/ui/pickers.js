@@ -233,7 +233,7 @@ function openCommanderPicker(onSelect, title) {
               <div class="name">${esc(card.name)}</div>
               <div class="type">${esc(card.typeLine)}</div>
             </div>
-            ${card.printsUri ? `<button class="btn btn-icon versions-btn" title="${tr("Escolher arte/versão alternativa")}">${I("palette")}</button>` : ""}
+            ${card.printsUri ? `<button type="button" class="btn btn-ghost btn-sm versions-btn" title="${tr("Escolher arte/versão alternativa")}">${I("palette")} ${tr("Artes")}</button>` : ""}
           </div>
         `);
         item.addEventListener("click", () => {
@@ -278,11 +278,11 @@ function openVersionPicker(baseCard, onSelect, parentBackdrop) {
   // (sem closeAnyModal aqui de propósito: abre por cima do commander picker)
   const backdrop = el(`
     <div class="modal-backdrop">
-      <div class="modal-sheet">
+      <div class="modal-sheet art-sheet">
         <h2>${tr("Escolher arte — {name}", { name: esc(baseCard.name) })}</h2>
         <div class="search-status" id="vp-status">${tr("A carregar edições…")}</div>
-        <div class="search-results" id="vp-results"></div>
-        <button class="btn btn-ghost" id="vp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
+        <div class="art-grid" id="vp-results"></div>
+        <button class="btn btn-ghost btn-block" id="vp-cancel" style="margin-top:10px">${tr("Cancelar")}</button>
       </div>
     </div>
   `);
@@ -306,13 +306,11 @@ function openVersionPicker(baseCard, onSelect, parentBackdrop) {
       status.classList.add("hidden");
       prints.forEach((card) => {
         const item = el(`
-          <div class="search-result-item">
-            <img src="${card.art ? esc(card.art) : ""}" onerror="this.style.visibility='hidden'">
-            <div class="info">
-              <div class="name">${esc(card.setName || card.set)}</div>
-              <div class="type">${esc(card.artist ? tr("Arte de {artist}", { artist: card.artist }) : "")}${card.collectorNumber ? " · #" + esc(card.collectorNumber) : ""}</div>
-            </div>
-          </div>
+          <button type="button" class="art-tile ${card.art && card.art === baseCard.art ? "current" : ""}">
+            <img src="${card.art ? esc(card.art) : ""}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+            <span class="art-set">${esc(card.setName || card.set)}</span>
+            <span class="art-by">${esc(card.artist || "")}${card.collectorNumber ? " · #" + esc(card.collectorNumber) : ""}</span>
+          </button>
         `);
         item.addEventListener("click", () => selectVersion(card));
         results.appendChild(item);
@@ -329,7 +327,7 @@ function openVersionPicker(baseCard, onSelect, parentBackdrop) {
 // ===========================================================
 // PROFILE PICKER (modal reutilizável) — ligar/criar perfil de commander
 // ===========================================================
-function openProfilePicker({ commander, partner, currentProfileId, playerName, onSelect }) {
+function openProfilePicker({ commander, partner, currentProfileId, playerName, onSelect, create }) {
   let newCommander = commander || null; // commander do perfil novo (pode pesquisar-se aqui)
   let newPartner = partner || null;     // e o parceiro, se tiver
   // (sem closeAnyModal aqui de propósito: pode abrir por cima do modal de editar jogador)
@@ -337,22 +335,27 @@ function openProfilePicker({ commander, partner, currentProfileId, playerName, o
   const backdrop = el(`
     <div class="modal-backdrop">
       <div class="modal-sheet">
-        <h2>${tr("Perfil do jogador")}</h2>
-        <div class="footer-note" style="margin-bottom:10px">${tr("Os perfis guardam as estatísticas deste commander entre jogos (vitórias, tempo médio por turno/jogo, etc).")}</div>
+        <h2 id="pp-title">${tr("Perfil do jogador")}</h2>
+        <div class="footer-note" id="pp-note" style="margin-bottom:10px">${tr("Os perfis guardam as estatísticas deste commander entre jogos (vitórias, tempo médio por turno/jogo, etc).")}</div>
         ${profiles.length > 6 ? `<label class="search-field pp-search">${I("search")}<input type="search" id="pp-filter" placeholder="${tr("Procurar perfil, commander ou jogador")}" aria-label="${tr("Procurar perfis")}" autocomplete="off"></label>` : ""}
         <div class="col" id="pp-list" style="max-height:38vh;overflow-y:auto"></div>
-        <div class="row" style="margin-top:10px">
+        <div class="row" id="pp-actions" style="margin-top:10px">
           <button class="btn btn-ghost grow" id="pp-new">${I("plus")} ${tr("Criar novo perfil")}</button>
           ${currentProfileId ? `<button class="btn btn-ghost grow" id="pp-clear">${I("x")} ${tr("Remover perfil")}</button>` : ""}
         </div>
-        <div id="pp-new-form" class="col hidden" style="margin-top:10px">
+        <div id="pp-new-form" class="col pp-new-form hidden">
+          <label>${tr("Commander")}</label>
           <div class="pp-new-cmd">
             <span class="commander-thumb sm" id="pp-new-thumb"></span>
             <span class="pp-new-cmd-name" id="pp-new-cmd-name"></span>
             <button type="button" class="btn btn-ghost btn-sm" id="pp-new-cmd-btn">${I("search")} ${tr("Procurar commander")}</button>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm pp-new-partner" id="pp-new-partner"></button>
-          <input type="text" id="pp-new-name" placeholder="${tr("Nome do perfil")}" value="${commander ? esc(cmdLabel(commander, partner || null)) : ""}">
+          <div class="pp-new-cmd-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="pp-new-art">${I("palette")} ${tr("Escolher arte")}</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="pp-new-partner"></button>
+          </div>
+          <label for="pp-new-name">${tr("Nome do deck")}</label>
+          <input type="text" id="pp-new-name" placeholder="${tr("Ex: Atraxa Superfriends")}" value="${commander ? esc(cmdLabel(commander, partner || null)) : ""}">
           <label for="pp-new-owner">${tr("Dono do deck")}</label>
           <input type="text" id="pp-new-owner" placeholder="${tr("Nome de quem é este deck")}" value="${esc(playerName && !/^\s*$/.test(playerName) ? playerName : "")}">
           ${ownerChipsHtml("pp-owners")}
@@ -396,6 +399,7 @@ function openProfilePicker({ commander, partner, currentProfileId, playerName, o
     const pBtn = backdrop.querySelector("#pp-new-partner");
     pBtn.classList.toggle("hidden", !newCommander);
     pBtn.innerHTML = newPartner ? `${I("x")} ${tr("Tirar parceiro")}` : `${I("plus")} ${tr("Adicionar parceiro")}`;
+    backdrop.querySelector("#pp-new-art").classList.toggle("hidden", !(newCommander && newCommander.printsUri));
     backdrop.querySelector("#pp-new-cmd-btn").lastChild.textContent = " " + (newCommander ? tr("Trocar") : tr("Procurar commander"));
   }
   function searchCommander() {
@@ -409,6 +413,9 @@ function openProfilePicker({ commander, partner, currentProfileId, playerName, o
   }
   paintNewCommander();
   backdrop.querySelector("#pp-new-cmd-btn").addEventListener("click", searchCommander);
+  backdrop.querySelector("#pp-new-art").addEventListener("click", () => {
+    openVersionPicker(newCommander, (c) => { newCommander = c; paintNewCommander(); });
+  });
   backdrop.querySelector("#pp-new-partner").addEventListener("click", () => {
     if (newPartner) { newPartner = null; paintNewCommander(); return; }
     openCommanderPicker((c) => {
@@ -424,18 +431,17 @@ function openProfilePicker({ commander, partner, currentProfileId, playerName, o
   backdrop.querySelector("#pp-cancel").addEventListener("click", () => backdrop.remove());
   const clearBtn = backdrop.querySelector("#pp-clear");
   if (clearBtn) clearBtn.addEventListener("click", () => { onSelect(null); backdrop.remove(); });
-  backdrop.querySelector("#pp-new").addEventListener("click", () => {
-    const form = backdrop.querySelector("#pp-new-form");
-    form.classList.toggle("hidden");
-    // a criar: a lista de perfis existentes esconde-se para dar espaço
-    const creating = !form.classList.contains("hidden");
-    list.classList.toggle("hidden", creating);
-    if (filter) filter.closest(".pp-search").classList.toggle("hidden", creating);
-    if (!creating) return;
-    form.scrollIntoView({ block: "nearest" });
+  // a criar: a janela passa a ser só o formulário do deck novo
+  function startCreating() {
+    ["#pp-list", "#pp-actions", "#pp-note"].forEach((sel) => backdrop.querySelector(sel).classList.add("hidden"));
+    if (filter) filter.closest(".pp-search").classList.add("hidden");
+    backdrop.querySelector("#pp-title").textContent = tr("Novo deck");
+    backdrop.querySelector("#pp-new-form").classList.remove("hidden");
     // sem commander escolhido: abre logo a pesquisa
     if (!newCommander) searchCommander();
-  });
+  }
+  backdrop.querySelector("#pp-new").addEventListener("click", startCreating);
+  if (create) startCreating();
   backdrop.querySelector("#pp-new-confirm").addEventListener("click", () => {
     const name = nameEl.value.trim();
     if (!name && !newCommander) { toast(tr("Dá um nome ao perfil ou escolhe um commander.")); return; }
@@ -601,12 +607,13 @@ function seatDeckExtrasHtml(name, commander, prof, partner) {
       </button>`).join("")}</div>` : ""}`;
 }
 /** HTML dos extras de um lugar. `seats` = todos os lugares (para saber
- *  que perfis já estão ocupados e se este perfil está repetido). */
-function seatExtrasHtml(p, idx, seats) {
+ *  que perfis já estão ocupados e se este perfil está repetido).
+ *  `noRecents`: sem as sugestões de decks (o setup padrão tem a folha). */
+function seatExtrasHtml(p, idx, seats, noRecents) {
   const others = seats.filter((_, j) => j !== idx).map((x) => x.profileId);
   const dupAt = p.profileId ? seats.findIndex((x, j) => j !== idx && x.profileId === p.profileId) : -1;
   // até 8 sugestões; o CSS mostra 3 no telemóvel, 6 no iPad ao alto e 8 deitado
-  const recents = p.profileId ? [] : recentProfiles(others, 8, p.name);
+  const recents = p.profileId || noRecents ? [] : recentProfiles(others, 8, p.name);
   const palette = State.FALLBACK_PALETTE;
   const prof = p.profileId ? Profiles.get(p.profileId) : null;
   return `
@@ -616,9 +623,15 @@ function seatExtrasHtml(p, idx, seats) {
         <span class="recent-avatar" style="${pr.commander && pr.commander.art ? commanderThumbStyle(pr.commander) : ""}">${pr.commander && pr.commander.art ? "" : esc(pr.name.slice(0, 2).toUpperCase())}</span>
         <span class="recent-name">${esc(pr.name)}${pr.playerName ? `<small class="recent-owner">${esc(pr.playerName)}</small>` : ""}</span>
       </button>`).join("")}</div>` : ""}
-    ${!p.commander ? `<div class="seat-colors" role="group" aria-label="${tr("Cor sem commander")}">${palette.map((c, k) => `
+    ${!p.commander && !(noRecents && p.profileId) ? `<div class="seat-colors" role="group" aria-label="${tr("Cor sem commander")}">${palette.map((c, k) => `
       <button type="button" class="color-dot" data-color="${k}" aria-pressed="${p.colorIdx === k}" aria-label="${tr("Cor {n}", { n: k + 1 })}" style="background:${c[0]}"></button>`).join("")}</div>` : ""}
     ${dupAt >= 0 ? `<div class="seat-warn">${I("info")}<span>${tr("Este perfil já está no lugar {n} — as estatísticas contariam duas vezes.", { n: dupAt + 1 })}</span></div>` : ""}`;
+}
+/** Liga um deck a um lugar: o perfil, o commander (e parceiro) e a cor. */
+function applyProfileToSeat(seat, pr) {
+  seat.profileId = pr.id;
+  if (pr.commander) { seat.commander = pr.commander; seat.partnerCommander = pr.partnerCommander || null; }
+  if (typeof pr.colorIdx === "number") seat.colorIdx = pr.colorIdx;
 }
 /** Liga (uma vez) os cliques dos extras de um cartão de lugar. */
 function bindSeatExtras(card, getSeat, rerender) {
@@ -629,9 +642,7 @@ function bindSeatExtras(card, getSeat, rerender) {
       const seat = getSeat();
       if (!pr || !seat) return;
       seat.name = seatNameAfterProfile(seat.name, seat.profileId, pr);
-      seat.profileId = pr.id;
-      if (pr.commander) { seat.commander = pr.commander; seat.partnerCommander = pr.partnerCommander || null; }
-      if (typeof pr.colorIdx === "number") seat.colorIdx = pr.colorIdx;
+      applyProfileToSeat(seat, pr);
       rerender();
       return;
     }
@@ -649,4 +660,125 @@ function bindSeatExtras(card, getSeat, rerender) {
       rerender();
     }
   });
+}
+
+// ===========================================================
+// SETUP PADRÃO: QUEM JOGA (fichas) E O DECK DE CADA UM (folha)
+// ===========================================================
+/** Jogadores conhecidos, quem jogou mais recentemente primeiro. */
+function rosterPlayers() {
+  const last = (pl) => (pl.history.length ? pl.history[pl.history.length - 1].date || 0 : 0);
+  return playersFromProfiles(Profiles.all()).sort((a, b) => last(b) - last(a) || a.name.localeCompare(b.name)).map((pl) => pl.name);
+}
+/** Último deck com que esta pessoa jogou (seu ou emprestado), fora os
+ *  `excludeIds`; sem jogos, o seu deck mais recente. */
+function lastDeckOf(name, excludeIds) {
+  const who = normName(Profiles.canonicalPlayer((name || "").trim()));
+  if (!who) return null;
+  const used = new Set((excludeIds || []).filter(Boolean));
+  const pl = playersFromProfiles(Profiles.all()).find((x) => normName(x.name) === who);
+  const hist = pl ? pl.history : [];
+  for (let k = hist.length - 1; k >= 0; k--) {
+    const pr = Profiles.get(hist[k].deckId);
+    if (pr && !used.has(pr.id)) return pr;
+  }
+  return recentProfiles(excludeIds || [], 1, name).find((pr) => normName(pr.playerName) === who) || null;
+}
+
+/** Folha para escolher o deck de um lugar: os decks de quem lá está
+ *  primeiro, depois os dos outros (emprestados), e as alternativas sem
+ *  deck. `onChange()` corre depois de mudar o lugar. */
+function openDeckSheet(seats, idx, onChange) {
+  const seat = seats[idx];
+  const who = (seat.name || "").trim();
+  const whoKey = normName(Profiles.canonicalPlayer(who));
+  const seatOf = new Map(seats.map((x, j) => [x.profileId, j]).filter(([id, j]) => id && j !== idx));
+  const last = who ? lastDeckOf(who, []) : null;
+  const all = Profiles.all();
+  const mine = whoKey ? all.filter((pr) => normName(pr.playerName) === whoKey) : [];
+  const others = all.filter((pr) => !mine.includes(pr));
+  const item = (pr) => {
+    const at = seatOf.get(pr.id);
+    const owner = (pr.playerName || "").trim();
+    const borrowed = who && owner && normName(owner) !== whoKey;
+    return `
+      <button type="button" class="search-result-item deck-item ${pr.id === seat.profileId ? "current" : ""}" data-deck="${pr.id}" aria-pressed="${pr.id === seat.profileId}">
+        ${pr.commander && pr.commander.art ? `<img src="${esc(pr.commander.art)}" alt="">` : `<span class="deck-noart" style="${seatThumbStyle(pr)}">${esc(pr.name.slice(0, 2).toUpperCase())}</span>`}
+        <span class="info">
+          <span class="name">${esc(pr.name)}</span>
+          <span class="type">${[pr.commander && normName(pr.commander.name) !== normName(pr.name) ? esc(cmdLabel(pr.commander, pr.partnerCommander || null)) : "", !mine.includes(pr) && owner ? esc(owner) : ""].filter(Boolean).join(" · ")}</span>
+        </span>
+        ${last && last.id === pr.id ? `<span class="deck-pill last">${tr("último")}</span>` : ""}
+        ${at != null ? `<span class="deck-pill">${tr("lugar {n}", { n: at + 1 })}</span>` : borrowed ? `<span class="deck-pill borrow">${tr("emprestado")}</span>` : ""}
+      </button>`;
+  };
+  const section = (title, list) => (list.length ? `<div class="deck-sec">${esc(title)}</div>${list.map(item).join("")}` : "");
+  const backdrop = el(`
+    <div class="modal-backdrop">
+      <div class="modal-sheet deck-sheet">
+        <h2>${who ? tr("Deck de {name}", { name: esc(who) }) : tr("Deck do lugar {n}", { n: idx + 1 })}</h2>
+        ${all.length > 6 ? `<label class="search-field pp-search">${I("search")}<input type="search" id="ds-filter" placeholder="${tr("Procurar deck, commander ou jogador")}" aria-label="${tr("Procurar decks")}" autocomplete="off"></label>` : ""}
+        <div class="deck-list" id="ds-list">
+          ${all.length ? section(who ? tr("Decks de {name}", { name: who }) : "", mine) + section(who && mine.length ? tr("Decks de outros") : who ? tr("Emprestar um deck") : tr("Decks"), others) : `<div class="search-status">${tr("Ainda não tens decks guardados.")}</div>`}
+        </div>
+        <div class="deck-actions">
+          <button type="button" class="btn btn-ghost" id="ds-new">${I("plus")} ${tr("Novo deck")}</button>
+          <button type="button" class="btn btn-ghost" id="ds-cmd">${I("search")} ${tr("Só commander")}</button>
+          ${seat.commander && !seat.profileId ? `<button type="button" class="btn btn-ghost" id="ds-partner">${seat.partnerCommander ? I("x") + " " + tr("Tirar parceiro") : I("plus") + " " + tr("Parceiro")}</button>` : ""}
+          ${seat.profileId || seat.commander ? `<button type="button" class="btn btn-ghost" id="ds-clear">${I("ban")} ${tr("Sem deck")}</button>` : ""}
+        </div>
+        <button type="button" class="btn btn-ghost btn-block" id="ds-cancel">${tr("Cancelar")}</button>
+      </div>
+    </div>
+  `);
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  const pick = (pr) => {
+    // o lugar sem ninguém fica com o dono; quem já lá está joga com o deck emprestado
+    if (!who) seat.name = (pr.playerName || "").trim();
+    applyProfileToSeat(seat, pr);
+    close();
+    onChange();
+  };
+  backdrop.querySelector("#ds-list").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-deck]");
+    const pr = b && Profiles.get(b.dataset.deck);
+    if (pr) pick(pr);
+  });
+  const filter = backdrop.querySelector("#ds-filter");
+  if (filter) filter.addEventListener("input", () => {
+    const q = normName(filter.value);
+    backdrop.querySelectorAll("#ds-list [data-deck]").forEach((b) => {
+      const pr = Profiles.get(b.dataset.deck);
+      b.classList.toggle("hidden", !!q && !normName([pr.name, pr.playerName, pr.commander && pr.commander.name].join(" ")).includes(q));
+    });
+    backdrop.querySelectorAll("#ds-list .deck-sec").forEach((h) => h.classList.toggle("hidden", !!q));
+  });
+  backdrop.querySelector("#ds-new").addEventListener("click", () => {
+    openProfilePicker({ create: true, playerName: who, onSelect: (id) => { const pr = id && Profiles.get(id); if (pr) pick(pr); } });
+  });
+  backdrop.querySelector("#ds-cmd").addEventListener("click", () => {
+    openCommanderPicker((c) => {
+      seat.profileId = null;
+      seat.commander = c;
+      seat.partnerCommander = null;
+      close();
+      onChange();
+    });
+  });
+  const partnerBtn = backdrop.querySelector("#ds-partner");
+  if (partnerBtn) partnerBtn.addEventListener("click", () => {
+    if (seat.partnerCommander) { seat.partnerCommander = null; close(); onChange(); return; }
+    openCommanderPicker((c) => { if (!c) return; seat.partnerCommander = c; close(); onChange(); }, tr("Escolher commander parceiro"));
+  });
+  const clearBtn = backdrop.querySelector("#ds-clear");
+  if (clearBtn) clearBtn.addEventListener("click", () => {
+    seat.profileId = null;
+    seat.commander = null;
+    seat.partnerCommander = null;
+    close();
+    onChange();
+  });
+  backdrop.querySelector("#ds-cancel").addEventListener("click", close);
+  backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
 }

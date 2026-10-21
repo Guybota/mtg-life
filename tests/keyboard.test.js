@@ -20,7 +20,8 @@ module.exports = [
         await openWith(t, page, null);
         await page.click(".mode-card.commander");
         if (await page.$("#qs-setup")) await page.click("#qs-setup");
-        await page.click('.player-setup-card .commander-thumb[data-role="main"] >> nth=0');
+        await page.click(".player-setup-card .seat-deck-btn >> nth=0");
+        await page.click("#ds-cmd");
         await page.evaluate(() => window.__kb(true));
         await page.fill("#cp-input", "atra");
         await page.waitForSelector("#cp-results .search-result-item");

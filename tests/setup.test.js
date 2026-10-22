@@ -130,3 +130,44 @@ module.exports = [
     },
   },
 ];
+
+module.exports.push(
+  {
+    name: "Equipas: quem joga preenche as equipas por ordem, com o deck",
+    async run(t) {
+      const page = await openSetup(t, "teams");
+      for (const n of ["Ana", "Rui", "Tiago", "Pedro"]) await tapPlayer(page, n);
+      t.eq(await page.$$eval(".team-setup-card", (c) => c.map((x) => [...x.querySelectorAll(".seat-who")].map((e) => e.textContent))), [["Ana", "Rui"], ["Tiago", "Pedro"]], "equipas preenchidas");
+      t.eq(await page.$eval('#roster [data-player="Tiago"] .roster-num', (e) => e.textContent), "2", "ficha mostra a equipa");
+      await pickProfile(page, 1, "Yuriko");
+      t.ok((await page.$$eval(".player-setup-card", (c) => c[1].textContent)).includes("Deck emprestado por Pedro"), "aviso de empréstimo");
+      await page.click("#start-btn");
+      const who = await page.waitForSelector(".modal-sheet .cd-list-item", { timeout: 1500 }).catch(() => null);
+      if (who) await who.click();
+      await page.waitForSelector(".player-panel, .team-panel");
+      const st = await page.evaluate(() => JSON.parse(localStorage.getItem("mtg_lc_game_v2")).teams.teams.map((tm) => tm.players.map((p) => p.name + ":" + p.profileId)));
+      t.eq(st[1][0], "Tiago:t1", "Tiago com o seu deck");
+      t.eq(st[0][1], "Rui:p1", "Rui com o Yuriko emprestado");
+    },
+  },
+  {
+    name: "Battle Royale: quem joga e deck sem parceiro nem cores",
+    async run(t) {
+      const page = await openSetup(t, "br");
+      t.eq((await seats(page)).length, 6, "6 lugares");
+      await tapPlayer(page, "Joana");
+      await tapPlayer(page, "Rui");
+      t.eq((await seats(page)).slice(0, 2), [["Joana", "Muldrotha"], ["Rui", "Krenko"]], "sentados com o último deck");
+      t.eq(await page.$$eval(".color-dot, .seat-remove, #seat-add", (x) => x.length), 0, "sem cores nem tirar/acrescentar lugares");
+      await page.click(".player-setup-card >> nth=2 >> .seat-deck-btn");
+      t.eq(await page.$("#ds-partner"), null, "sem parceiro");
+      await page.click('#ds-list [data-deck]:has(.name:text-is("Edgar Markov"))');
+      await page.click("#start-btn");
+      const who = await page.waitForSelector(".modal-sheet .cd-list-item", { timeout: 1500 }).catch(() => null);
+      if (who) await who.click();
+      await page.waitForSelector(".br-players");
+      const st = await page.evaluate(() => JSON.parse(localStorage.getItem("mtg_lc_game_v2")).br.players.slice(0, 3).map((p) => [p.name, p.profileId]));
+      t.eq(st, [["Joana", "j1"], ["Rui", "r1"], ["Tiago", "t1"]], "jogo com os nomes e decks");
+    },
+  },
+);

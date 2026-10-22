@@ -365,7 +365,8 @@ input.switch:checked::after{ transform: translateX(18px); }
   grid-auto-rows: minmax(76px, 1fr);
   gap: 10px;
   flex: 1 1 auto !important;
-  min-height: 0;
+  /* encolhe até às 3 filas de 76px, não abaixo (iPhone deitado) */
+  min-height: min-content;
   max-height: 540px;
 }
 .mode-card{
@@ -494,18 +495,8 @@ input.switch:checked::after{ transform: translateX(18px); }
 }
 .commander-thumb:active{ transform: scale(.93); }
 .commander-thumb .ic{ width:22px; height:22px; }
-.commander-thumbs{ display:flex; flex-direction:column; align-items:center; gap:5px; flex-shrink:0; }
-.commander-thumb.thumb-sm{
-  width:28px; height:28px;
-  border-radius:9px;
-  border:1.5px dashed var(--surface-3);
-  color: var(--text-dim);
-}
-.commander-thumb.thumb-sm .ic{ width:14px; height:14px; }
-.commander-thumb.thumb-sm:not([style*="background-image"]){ background: transparent; }
 .player-setup-fields{ flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }
 .player-setup-fields input{ padding:8px 10px; font-size:.92rem; }
-.player-setup-fields .profile-btn{ align-self:flex-start; }
 .commander-name{ font-size:.78rem; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
 /* ===========================================================
@@ -561,6 +552,8 @@ input.switch:checked::after{ transform: translateX(18px); }
 }
 
 .search-results{ overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+/* listas com scroll: as linhas não encolhem (com muitas, a lista faz scroll) */
+.search-results > *, .br-players > *{ flex-shrink:0; }
 .search-result-item{
   display:flex; align-items:center; gap:10px;
   background: var(--surface-2);
@@ -1787,7 +1780,6 @@ html.force-landscape .cdx-sheet{ touch-action:none; }
 /* ---------- Extras de cada lugar no setup ---------- */
 .seat-extras{ display:flex; flex-direction:column; gap:8px; }
 .seat-extras:empty{ display:none; }
-.seat-recents{ display:flex; gap:6px; flex-wrap:wrap; }
 .recent-chip{
   display:flex; align-items:center; gap:6px;
   height:34px; padding:0 10px 0 3px; border-radius:999px;
@@ -2481,24 +2473,12 @@ html.compact-board .lh-turn{ padding:5px 2px 2px; }
 .alt-row [data-alt-partner]{ margin-left:40px; }
 .alt-row [data-alt-del]{ margin-left:auto; }
 
-/* ---------- Sugestões de perfis nos lugares do setup ----------
-   Até 8 sugestões: 3 no telemóvel, 6 no iPad ao alto, 8 no iPad deitado
-   (onde os lugares ficam em duas colunas). */
-.recent-owner{ display:none; }
-.seat-recents .recent-chip:nth-child(n+4){ display:none; }
+/* ---------- Lugares do setup em duas colunas no iPad deitado ---------- */
 @media (min-width: 700px){
-  .seat-recents .recent-chip:nth-child(n+4){ display:flex; }
-  .seat-recents .recent-chip:nth-child(n+7){ display:none; }
   .recent-chip{ height:38px; }
-  .recent-name{ display:flex; flex-direction:column; line-height:1.15; }
-  .recent-owner{ display:block; font-size:.66rem; font-weight:500; color: var(--text-dim); overflow:hidden; text-overflow:ellipsis; }
 }
 @media (min-width: 1000px){
-  .seat-recents .recent-chip:nth-child(n+7){ display:flex; }
   .player-setup-list{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; align-items:start; }
-  .seat-recents{ display:grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  .seat-recents .recent-chip{ max-width:none; min-width:0; }
-  .seat-recents .recent-name{ max-width:none; min-width:0; }
 }
 
 /* ---------- Separador "Jogos" ---------- */

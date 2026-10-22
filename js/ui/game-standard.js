@@ -30,12 +30,7 @@ function renderSetupStandard() {
           (preset.cmdDmgToggle ? switchFieldHtml("cfg-cmddmg", "Commander damage", tr("Contador de dano de commander por oponente (21 elimina)."), draft.cmdDmgEnabled) : "") +
           trackTurnsFieldHtml(draft.trackTurns !== false)
         )}
-        <div class="section-head"><span class="section-title" id="roster-title"></span></div>
-        <div class="roster" id="roster" role="group" aria-label="${tr("Quem joga?")}"></div>
-        <form class="roster-new hidden" id="roster-new">
-          <input type="text" id="roster-new-name" placeholder="${tr("Nome do jogador")}" autocomplete="off" enterkeyhint="done" aria-label="${tr("Nome do jogador novo")}">
-          <button type="submit" class="btn btn-primary btn-sm">${tr("Adicionar")}</button>
-        </form>
+        ${rosterSectionHtml()}
         <div class="player-setup-list" id="players-list"></div>
         <button type="button" class="btn btn-ghost btn-block seat-add" id="seat-add">${I("plus")} ${tr("Mais um lugar")}</button>
         ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
@@ -51,111 +46,26 @@ function renderSetupStandard() {
   `);
   appEl.appendChild(s);
 
-  const seatIdxOf = (name) => draft.players.findIndex((p) => p.name.trim() && normName(p.name) === normName(name));
-  /** Senta alguém: no 1.º lugar vazio, ou num lugar novo; com o último
-   *  deck com que jogou, se o lugar ainda não tiver deck. */
-  function seatPlayer(name) {
-    name = Profiles.canonicalPlayer(name.trim());
-    let i = draft.players.findIndex((p) => !p.name.trim());
-    if (i < 0) {
-      if (draft.players.length >= preset.maxPlayers) { toast(tr("Máximo de {n} jogadores", { n: preset.maxPlayers })); return; }
-      draft.players.push(newSeat());
-      i = draft.players.length - 1;
-    }
-    const seat = draft.players[i];
-    seat.name = name;
-    if (!seat.profileId && !seat.commander) {
-      const pr = lastDeckOf(name, draft.players.map((p) => p.profileId));
-      if (pr) applyProfileToSeat(seat, pr);
-    }
-  }
-  /** Tira a pessoa do lugar (o lugar fica vazio, na mesma posição). */
-  function clearSeat(i) {
-    draft.players[i] = Object.assign(newSeat(), { colorIdx: draft.players[i].colorIdx });
-  }
-
-  function renderRoster() {
-    const names = rosterPlayers();
-    draft.players.forEach((p) => { if (p.name.trim() && !names.some((n) => normName(n) === normName(p.name))) names.push(p.name.trim()); });
-    const seated = draft.players.filter((p) => p.name.trim()).length;
-    s.querySelector("#roster-title").textContent = tr("Quem joga?") + (seated ? " · " + seated : "");
-    s.querySelector("#roster").innerHTML = names.map((n) => {
-      const i = seatIdxOf(n);
-      return `<button type="button" class="roster-chip" data-player="${esc(n)}" aria-pressed="${i >= 0}">
-        ${i >= 0 ? `<span class="roster-num">${i + 1}</span>` : ""}${esc(n)}</button>`;
-    }).join("") + `<button type="button" class="roster-chip add" id="roster-add">${I("plus")} ${tr("Novo")}</button>`;
-  }
-
-  function seatRowHtml(p, i) {
-    const name = p.name.trim();
-    const deck = p.profileId ? Profiles.get(p.profileId) : null;
-    const deckLabel = deck ? deck.name : p.commander ? cmdLabel(p.commander, p.partnerCommander || null) : "";
-    const cmd = deck && p.commander ? cmdLabel(p.commander, p.partnerCommander || null) : "";
-    const style = seatThumbStyle(p);
-    return `
-      <span class="mesa-num seat-num">${i + 1}</span>
-      <button type="button" class="commander-thumb seat-thumb" data-act="deck" style="${style}" aria-label="${tr("Escolher deck")}">${style ? "" : I("card")}</button>
-      <div class="player-setup-fields">
-        <div class="seat-who ${name ? "" : "empty"}">${name ? esc(name) : tr("Jogador {n}", { n: i + 1 })}</div>
-        <button type="button" class="seat-deck-btn ${deckLabel ? "" : "empty"}" data-act="deck">
-          <span>${deckLabel ? esc(deckLabel) : tr("Escolher deck")}</span>${I("chevron-down")}
-        </button>
-        ${cmd && normName(cmd) !== normName(deckLabel) ? `<div class="commander-name">${esc(cmd)}</div>` : ""}
-        <div class="seat-extras">${seatExtrasHtml(p, i, draft.players, true)}</div>
-      </div>
-      ${draft.players.length > preset.minPlayers ? `<button type="button" class="btn btn-icon seat-remove" data-act="remove" aria-label="${tr("Tirar o lugar {n}", { n: i + 1 })}">${I("x")}</button>` : ""}`;
-  }
+  const removable = () => draft.players.length > preset.minPlayers;
   function renderPlayersList() {
     const list = s.querySelector("#players-list");
     draft.playerCount = draft.players.length;
     while (list.children.length > draft.players.length) list.removeChild(list.lastChild);
     draft.players.forEach((p, i) => {
-      let card = list.children[i];
-      if (!card) {
-        card = el(`<div class="player-setup-card seat-row"></div>`);
-        bindSeatExtras(card, () => draft.players[i], renderAll);
-        card.addEventListener("click", (e) => {
-          const b = e.target.closest("[data-act]");
-          if (!b) return;
-          if (b.dataset.act === "deck") openDeckSheet(draft.players, i, renderAll);
-          if (b.dataset.act === "remove") { draft.players.splice(i, 1); renderAll(); }
-        });
-        list.appendChild(card);
-      }
-      card.innerHTML = seatRowHtml(p, i);
+      if (!list.children[i]) list.appendChild(seatRowCard(() => draft.players, i, renderAll, { onRemove: (k) => { draft.players.splice(k, 1); renderAll(); } }));
+      list.children[i].innerHTML = seatRowHtml(p, i, draft.players, { num: i + 1, removable: removable() });
     });
     s.querySelector("#seat-add").classList.toggle("hidden", draft.players.length >= preset.maxPlayers);
     s.querySelector("#mesa").innerHTML = mesaInnerHtml(draft.players);
   }
   function renderAll() {
-    renderRoster();
+    paintRoster(s, draft.players, (i) => i + 1);
     renderPlayersList();
   }
-
-  s.querySelector("#roster").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-player]");
-    if (b) {
-      const i = seatIdxOf(b.dataset.player);
-      if (i >= 0) clearSeat(i); else seatPlayer(b.dataset.player);
-      renderAll();
-      return;
-    }
-    if (e.target.closest("#roster-add")) {
-      const form = s.querySelector("#roster-new");
-      form.classList.toggle("hidden");
-      if (!form.classList.contains("hidden")) form.querySelector("input").focus();
-    }
-  });
-  s.querySelector("#roster-new").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const input = s.querySelector("#roster-new-name");
-    const name = input.value.trim();
-    if (!name) { input.focus(); return; }
-    if (seatIdxOf(name) >= 0) { toast(tr("{name} já está sentado", { name })); return; }
-    seatPlayer(name);
-    input.value = "";
-    s.querySelector("#roster-new").classList.add("hidden");
-    renderAll();
+  bindRoster(s, {
+    seats: () => draft.players,
+    addSeat: () => (draft.players.length < preset.maxPlayers ? draft.players[draft.players.push(newSeat()) - 1] : null),
+    onChange: renderAll,
   });
   s.querySelector("#seat-add").addEventListener("click", () => {
     if (draft.players.length < preset.maxPlayers) draft.players.push(newSeat());

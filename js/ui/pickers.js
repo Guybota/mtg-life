@@ -607,23 +607,15 @@ function seatDeckExtrasHtml(name, commander, prof, partner) {
       </button>`).join("")}</div>` : ""}`;
 }
 /** HTML dos extras de um lugar. `seats` = todos os lugares (para saber
- *  que perfis já estão ocupados e se este perfil está repetido).
- *  `noRecents`: sem as sugestões de decks (o setup padrão tem a folha). */
-function seatExtrasHtml(p, idx, seats, noRecents) {
-  const others = seats.filter((_, j) => j !== idx).map((x) => x.profileId);
+ *  se este perfil está repetido). `noColors`: sem a escolha de cor
+ *  (modos que não a usam). */
+function seatExtrasHtml(p, idx, seats, noColors) {
   const dupAt = p.profileId ? seats.findIndex((x, j) => j !== idx && x.profileId === p.profileId) : -1;
-  // até 8 sugestões; o CSS mostra 3 no telemóvel, 6 no iPad ao alto e 8 deitado
-  const recents = p.profileId || noRecents ? [] : recentProfiles(others, 8, p.name);
   const palette = State.FALLBACK_PALETTE;
   const prof = p.profileId ? Profiles.get(p.profileId) : null;
   return `
     ${seatDeckExtrasHtml(p.name, p.commander, prof, p.partnerCommander)}
-    ${recents.length ? `<div class="seat-recents" role="group" aria-label="${tr("Perfis recentes")}">${recents.map((pr) => `
-      <button type="button" class="recent-chip" data-recent="${pr.id}" title="${tr("Usar o perfil {name}", { name: esc(pr.name) })}">
-        <span class="recent-avatar" style="${pr.commander && pr.commander.art ? commanderThumbStyle(pr.commander) : ""}">${pr.commander && pr.commander.art ? "" : esc(pr.name.slice(0, 2).toUpperCase())}</span>
-        <span class="recent-name">${esc(pr.name)}${pr.playerName ? `<small class="recent-owner">${esc(pr.playerName)}</small>` : ""}</span>
-      </button>`).join("")}</div>` : ""}
-    ${!p.commander && !(noRecents && p.profileId) ? `<div class="seat-colors" role="group" aria-label="${tr("Cor sem commander")}">${palette.map((c, k) => `
+    ${!p.commander && !p.profileId && !noColors ? `<div class="seat-colors" role="group" aria-label="${tr("Cor sem commander")}">${palette.map((c, k) => `
       <button type="button" class="color-dot" data-color="${k}" aria-pressed="${p.colorIdx === k}" aria-label="${tr("Cor {n}", { n: k + 1 })}" style="background:${c[0]}"></button>`).join("")}</div>` : ""}
     ${dupAt >= 0 ? `<div class="seat-warn">${I("info")}<span>${tr("Este perfil já está no lugar {n} — as estatísticas contariam duas vezes.", { n: dupAt + 1 })}</span></div>` : ""}`;
 }
@@ -636,16 +628,6 @@ function applyProfileToSeat(seat, pr) {
 /** Liga (uma vez) os cliques dos extras de um cartão de lugar. */
 function bindSeatExtras(card, getSeat, rerender) {
   card.addEventListener("click", (e) => {
-    const rb = e.target.closest("[data-recent]");
-    if (rb) {
-      const pr = Profiles.get(rb.dataset.recent);
-      const seat = getSeat();
-      if (!pr || !seat) return;
-      seat.name = seatNameAfterProfile(seat.name, seat.profileId, pr);
-      applyProfileToSeat(seat, pr);
-      rerender();
-      return;
-    }
     const ab = e.target.closest("[data-alt]");
     if (ab) {
       const seat = getSeat();
@@ -688,7 +670,8 @@ function lastDeckOf(name, excludeIds) {
 /** Folha para escolher o deck de um lugar: os decks de quem lá está
  *  primeiro, depois os dos outros (emprestados), e as alternativas sem
  *  deck. `onChange()` corre depois de mudar o lugar. */
-function openDeckSheet(seats, idx, onChange) {
+function openDeckSheet(seats, idx, onChange, opts) {
+  const noPartner = !!(opts && opts.noPartner);
   const seat = seats[idx];
   const who = (seat.name || "").trim();
   const whoKey = normName(Profiles.canonicalPlayer(who));
@@ -724,7 +707,7 @@ function openDeckSheet(seats, idx, onChange) {
         <div class="deck-actions">
           <button type="button" class="btn btn-ghost" id="ds-new">${I("plus")} ${tr("Novo deck")}</button>
           <button type="button" class="btn btn-ghost" id="ds-cmd">${I("search")} ${tr("Só commander")}</button>
-          ${seat.commander && !seat.profileId ? `<button type="button" class="btn btn-ghost" id="ds-partner">${seat.partnerCommander ? I("x") + " " + tr("Tirar parceiro") : I("plus") + " " + tr("Parceiro")}</button>` : ""}
+          ${seat.commander && !seat.profileId && !noPartner ? `<button type="button" class="btn btn-ghost" id="ds-partner">${seat.partnerCommander ? I("x") + " " + tr("Tirar parceiro") : I("plus") + " " + tr("Parceiro")}</button>` : ""}
           ${seat.profileId || seat.commander ? `<button type="button" class="btn btn-ghost" id="ds-clear">${I("ban")} ${tr("Sem deck")}</button>` : ""}
         </div>
         <button type="button" class="btn btn-ghost btn-block" id="ds-cancel">${tr("Cancelar")}</button>
@@ -781,4 +764,108 @@ function openDeckSheet(seats, idx, onChange) {
   });
   backdrop.querySelector("#ds-cancel").addEventListener("click", close);
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
+}
+
+/** Secção "Quem joga?": fichas dos jogadores e o campo para um novo. */
+function rosterSectionHtml() {
+  return `
+    <div class="section-head"><span class="section-title" id="roster-title"></span></div>
+    <div class="roster" id="roster" role="group" aria-label="${tr("Quem joga?")}"></div>
+    <form class="roster-new hidden" id="roster-new">
+      <input type="text" id="roster-new-name" placeholder="${tr("Nome do jogador")}" autocomplete="off" enterkeyhint="done" aria-label="${tr("Nome do jogador novo")}">
+      <button type="submit" class="btn btn-primary btn-sm">${tr("Adicionar")}</button>
+    </form>`;
+}
+const seatIdxByName = (seats, name) => seats.findIndex((p) => (p.name || "").trim() && normName(p.name) === normName(name));
+/** Pinta as fichas. `chipLabel(i)` = o que aparece na ficha de quem está no lugar i. */
+function paintRoster(root, seats, chipLabel) {
+  const names = rosterPlayers();
+  seats.forEach((p) => { const n = (p.name || "").trim(); if (n && !names.some((x) => normName(x) === normName(n))) names.push(n); });
+  const seated = seats.filter((p) => (p.name || "").trim()).length;
+  root.querySelector("#roster-title").textContent = tr("Quem joga?") + (seated ? " · " + seated : "");
+  root.querySelector("#roster").innerHTML = names.map((n) => {
+    const i = seatIdxByName(seats, n);
+    return `<button type="button" class="roster-chip" data-player="${esc(n)}" aria-pressed="${i >= 0}">
+      ${i >= 0 ? `<span class="roster-num">${chipLabel(i)}</span>` : ""}${esc(n)}</button>`;
+  }).join("") + `<button type="button" class="roster-chip add" id="roster-add">${I("plus")} ${tr("Novo")}</button>`;
+}
+/** Liga as fichas: tocar senta no 1.º lugar livre (com o último deck da
+ *  pessoa) ou levanta quem lá está. `seats()` devolve os lugares (os
+ *  próprios objetos); `addSeat()` cria um lugar novo ou devolve null. */
+function bindRoster(root, { seats, addSeat, onChange }) {
+  const seatPlayer = (name) => {
+    name = Profiles.canonicalPlayer(name.trim());
+    const all = seats();
+    const seat = all.find((p) => !(p.name || "").trim()) || (addSeat && addSeat());
+    if (!seat) { toast(tr("Não há lugares livres")); return; }
+    seat.name = name;
+    if (!seat.profileId && !seat.commander) {
+      const pr = lastDeckOf(name, seats().map((p) => p.profileId));
+      if (pr) applyProfileToSeat(seat, pr);
+    }
+  };
+  root.querySelector("#roster").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-player]");
+    if (b) {
+      const all = seats();
+      const i = seatIdxByName(all, b.dataset.player);
+      // levantar: o lugar fica livre, na mesma posição
+      if (i >= 0) Object.assign(all[i], { name: "", commander: null, partnerCommander: null, profileId: null });
+      else seatPlayer(b.dataset.player);
+      onChange();
+      return;
+    }
+    if (e.target.closest("#roster-add")) {
+      const form = root.querySelector("#roster-new");
+      form.classList.toggle("hidden");
+      if (!form.classList.contains("hidden")) form.querySelector("input").focus();
+    }
+  });
+  root.querySelector("#roster-new").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = root.querySelector("#roster-new-name");
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    if (seatIdxByName(seats(), name) >= 0) { toast(tr("{name} já está sentado", { name })); return; }
+    seatPlayer(name);
+    input.value = "";
+    root.querySelector("#roster-new").classList.add("hidden");
+    onChange();
+  });
+}
+/** Linha de um lugar: arte do deck, quem joga, o deck (abre a folha) e
+ *  os extras. opts: { num, removable, placeholder, noColors } */
+function seatRowHtml(p, i, seats, opts) {
+  const o = opts || {};
+  const name = (p.name || "").trim();
+  const deck = p.profileId ? Profiles.get(p.profileId) : null;
+  const deckLabel = deck ? deck.name : p.commander ? cmdLabel(p.commander, p.partnerCommander || null) : "";
+  const cmd = deck && p.commander ? cmdLabel(p.commander, p.partnerCommander || null) : "";
+  const style = seatThumbStyle(p);
+  return `
+    ${o.num != null ? `<span class="mesa-num seat-num">${o.num}</span>` : ""}
+    <button type="button" class="commander-thumb seat-thumb" data-act="deck" style="${style}" aria-label="${tr("Escolher deck")}">${style ? "" : I("card")}</button>
+    <div class="player-setup-fields">
+      <div class="seat-who ${name ? "" : "empty"}">${name ? esc(name) : esc(o.placeholder || tr("Jogador {n}", { n: i + 1 }))}</div>
+      <button type="button" class="seat-deck-btn ${deckLabel ? "" : "empty"}" data-act="deck">
+        <span>${deckLabel ? esc(deckLabel) : tr("Escolher deck")}</span>${I("chevron-down")}
+      </button>
+      ${cmd && normName(cmd) !== normName(deckLabel) ? `<div class="commander-name">${esc(cmd)}</div>` : ""}
+      <div class="seat-extras">${seatExtrasHtml(p, i, seats, o.noColors)}</div>
+    </div>
+    ${o.removable ? `<button type="button" class="btn btn-icon seat-remove" data-act="remove" aria-label="${tr("Tirar o lugar {n}", { n: i + 1 })}">${I("x")}</button>` : ""}`;
+}
+/** Cartão (uma vez por lugar) com os cliques da linha. `getSeats()` e o
+ *  índice `i` são lidos a cada clique; `onRemove(i)` só se removível. */
+function seatRowCard(getSeats, i, onChange, opts) {
+  const o = opts || {};
+  const card = el(`<div class="player-setup-card seat-row"></div>`);
+  bindSeatExtras(card, () => getSeats()[i], onChange);
+  card.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b) return;
+    if (b.dataset.act === "deck") openDeckSheet(getSeats(), i, onChange, { noPartner: o.noPartner });
+    if (b.dataset.act === "remove" && o.onRemove) o.onRemove(i);
+  });
+  return card;
 }

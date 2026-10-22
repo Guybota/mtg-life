@@ -43,6 +43,7 @@ function renderSetupTeams() {
         </div>
         ${moreOptionsHtml(tr("Tempo e turnos"), trackTurnsFieldHtml(draft.trackTurns !== false))}
         <div class="footer-note" style="margin-bottom:12px">${tr("Vida partilhada por equipa (estilo Two-Headed Giant): a equipa toda soma/perde vida em conjunto. Os turnos alternam entre equipas.")}</div>
+        ${rosterSectionHtml()}
         ${seatsHeadHtml(tr("Equipas"), tr("Sortear equipas"))}
         <div id="teams-list"></div>
       </div>
@@ -53,74 +54,8 @@ function renderSetupTeams() {
   `);
   appEl.appendChild(s);
 
-  // Mesma lógica de reconciliação por índice do setup Standard (ver ali
-  // o porquê): evita destruir/recriar cards (e perder o foco de quem
-  // estava a escrever um nome) sempre que outra parte do ecrã re-renderiza.
-  function buildTeamPlayerCard(t, i) {
-    const p = draft.teams[t].players[i];
-    const profile = p.profileId ? Profiles.get(p.profileId) : null;
-    const card = el(`
-      <div class="player-setup-card">
-        <div class="commander-thumbs">
-          <div class="commander-thumb" data-role="main" style="${commanderThumbStyle(p.commander)}">${p.commander ? "" : I("card")}</div>
-          <div class="commander-thumb thumb-sm" data-role="partner" title="${tr("Commander parceiro")}" style="${commanderThumbStyle(p.partnerCommander)}">${p.partnerCommander ? "" : "+"}</div>
-        </div>
-        <div class="player-setup-fields">
-          <input type="text" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(p.name)}">
-          <div class="commander-name">${p.commander ? esc(p.commander.name) : tr("Sem commander escolhido")}${p.partnerCommander ? " + " + esc(p.partnerCommander.name) : ""}</div>
-          <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
-          <div class="seat-extras"></div>
-        </div>
-      </div>
-    `);
-    bindSeatExtras(card, () => draft.teams[t].players[i], renderTeamsList);
-    card.querySelector('.commander-thumb[data-role="main"]').addEventListener("click", () => {
-      openCommanderPicker((c) => { draft.teams[t].players[i].commander = c; renderTeamsList(); });
-    });
-    card.querySelector('.commander-thumb[data-role="partner"]').addEventListener("click", () => {
-      openCommanderPicker((c) => { draft.teams[t].players[i].partnerCommander = c; renderTeamsList(); }, tr("Escolher commander parceiro"));
-    });
-    card.querySelector(".name-input").addEventListener("input", (e) => {
-      draft.teams[t].players[i].name = e.target.value;
-      const allSeats = draft.teams.reduce((acc, tm) => acc.concat(tm.players), []);
-      const flatIdx = draft.teams.slice(0, t).reduce((a, tm) => a + tm.players.length, 0) + i;
-      card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(draft.teams[t].players[i], flatIdx, allSeats);
-    });
-    card.querySelector(".profile-btn").addEventListener("click", () => {
-      openProfilePicker({
-        commander: draft.teams[t].players[i].commander,
-        partner: draft.teams[t].players[i].partnerCommander,
-        currentProfileId: draft.teams[t].players[i].profileId,
-        playerName: draft.teams[t].players[i].name,
-        onSelect: (id) => {
-          const prof = id ? Profiles.get(id) : null;
-          const tp = draft.teams[t].players[i];
-          tp.name = seatNameAfterProfile(tp.name, tp.profileId, prof);
-          tp.profileId = id;
-          if (prof && prof.commander) { tp.commander = prof.commander; tp.partnerCommander = prof.partnerCommander || null; }
-          renderTeamsList();
-        },
-      });
-    });
-    return card;
-  }
-  function updateTeamPlayerCard(card, t, i) {
-    const p = draft.teams[t].players[i];
-    const profile = p.profileId ? Profiles.get(p.profileId) : null;
-    const mainThumb = card.querySelector('.commander-thumb[data-role="main"]');
-    mainThumb.style.cssText = seatThumbStyle(p);
-    mainThumb.innerHTML = p.commander ? "" : I("card");
-    const partnerThumb = card.querySelector('.commander-thumb[data-role="partner"]');
-    partnerThumb.style.cssText = commanderThumbStyle(p.partnerCommander);
-    partnerThumb.textContent = p.partnerCommander ? "" : "+";
-    card.querySelector(".commander-name").textContent = (p.commander ? p.commander.name : tr("Sem commander escolhido")) + (p.partnerCommander ? " + " + p.partnerCommander.name : "");
-    card.querySelector(".profile-btn").innerHTML = profileBtnHtml(profile);
-    const allSeats = draft.teams.reduce((acc, tm) => acc.concat(tm.players), []);
-    const flatIdx = draft.teams.slice(0, t).reduce((a, tm) => a + tm.players.length, 0) + i;
-    card.querySelector(".seat-extras").innerHTML = seatExtrasHtml(p, flatIdx, allSeats);
-    const nameInput = card.querySelector(".name-input");
-    if (document.activeElement !== nameInput) nameInput.value = p.name;
-  }
+  const allSeats = () => draft.teams.reduce((acc, tm) => acc.concat(tm.players), []);
+  const teamOf = (k) => { let t = 0; while (k >= draft.teams[t].players.length) { k -= draft.teams[t].players.length; t++; } return t; };
   function buildTeamCard(t) {
     const team = draft.teams[t];
     const card = el(`
@@ -135,6 +70,7 @@ function renderSetupTeams() {
   function renderTeamsList() {
     const list = s.querySelector("#teams-list");
     const existingTeamCards = Array.from(list.children);
+    let k = 0;
     draft.teams.forEach((team, t) => {
       let teamCard = existingTeamCards[t];
       if (!teamCard) {
@@ -144,14 +80,21 @@ function renderSetupTeams() {
         const nameInput = teamCard.querySelector(".team-name-input");
         if (document.activeElement !== nameInput) nameInput.value = team.name;
       }
+      // as linhas não têm campos de texto: refazem-se sempre (o índice
+      // de cada lugar na lista de todos muda com o nº de equipas/jogadores)
       const playersContainer = teamCard.querySelector(".team-players");
-      team.players.forEach((p, i) => { if (!playersContainer.children[i]) playersContainer.appendChild(buildTeamPlayerCard(t, i)); });
-      while (playersContainer.children.length > team.players.length) playersContainer.removeChild(playersContainer.lastChild);
+      playersContainer.innerHTML = "";
+      team.players.forEach((p, i) => {
+        const card = seatRowCard(allSeats, k, renderTeamsList);
+        card.innerHTML = seatRowHtml(p, k, allSeats(), { placeholder: tr("Jogador {n}", { n: i + 1 }) });
+        playersContainer.appendChild(card);
+        k++;
+      });
     });
     while (list.children.length > draft.teams.length) list.removeChild(list.lastChild);
-    // atualiza TODOS (os avisos de perfil repetido dependem dos outros lugares)
-    draft.teams.forEach((team, t) => team.players.forEach((p, i) => updateTeamPlayerCard(list.children[t].querySelector(".team-players").children[i], t, i)));
+    paintRoster(s, allSeats(), (j) => teamOf(j) + 1);
   }
+  bindRoster(s, { seats: allSeats, onChange: renderTeamsList });
   renderTeamsList();
 
   function setNumTeams(n) {

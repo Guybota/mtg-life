@@ -18,6 +18,7 @@ function renderSetupBR() {
       </div>
       <div class="scroll">
         <div class="footer-note" style="margin-bottom:12px">${tr("6 jogadores · 30 vidas cada · zona inicial sorteada aleatoriamente · sem commander damage. Consulta as regras completas no ecrã de jogo (ícone de informação).")}</div>
+        ${rosterSectionHtml()}
         ${seatsHeadHtml(tr("Lugares"), tr("Sortear lugares"))}
         <div class="player-setup-list" id="players-list"></div>
       </div>
@@ -29,71 +30,27 @@ function renderSetupBR() {
   appEl.appendChild(s);
   const list = s.querySelector("#players-list");
   if (!draft.profileIds) draft.profileIds = draft.names.map(() => null);
-  draft.names.forEach((name, i) => {
-    const profile = draft.profileIds[i] ? Profiles.get(draft.profileIds[i]) : null;
-    const card = el(`
-      <div class="player-setup-card">
-        <div class="commander-thumb" data-i="${i}" style="${commanderThumbStyle(draft.commanders[i])}">${draft.commanders[i] ? "" : I("card")}</div>
-        <div class="player-setup-fields">
-          <input type="text" class="name-input" placeholder="${tr("Jogador {n}", { n: i + 1 })}" value="${esc(name)}">
-          <div class="commander-name">${draft.commanders[i] ? esc(draft.commanders[i].name) : tr("Sem commander escolhido")}</div>
-          <button class="btn btn-ghost btn-sm profile-btn">${profileBtnHtml(profile)}</button>
-          <div class="seat-extras"></div>
-        </div>
-      </div>
-    `);
-    const paintCmd = () => {
-      const c = draft.commanders[i];
-      card.querySelector(".commander-thumb").style.cssText = commanderThumbStyle(c);
-      card.querySelector(".commander-thumb").innerHTML = c ? "" : I("card");
-      card.querySelector(".commander-name").textContent = c ? c.name : tr("Sem commander escolhido");
-    };
-    const paintExtras = () => {
-      const prof = draft.profileIds[i] ? Profiles.get(draft.profileIds[i]) : null;
-      card.querySelector(".seat-extras").innerHTML = seatDeckExtrasHtml(draft.names[i], draft.commanders[i], prof);
-    };
-    paintExtras();
-    card.querySelector(".seat-extras").addEventListener("click", (e) => {
-      const ab = e.target.closest("[data-alt]");
-      if (!ab) return;
-      const prof = draft.profileIds[i] ? Profiles.get(draft.profileIds[i]) : null;
-      const c = deckCommanders(prof)[parseInt(ab.dataset.alt, 10)];
-      if (c) { draft.commanders[i] = c.commander; paintCmd(); paintExtras(); }
+  // os lugares como objetos (para as fichas e a folha de decks); o rascunho
+  // do Battle Royale continua em listas paralelas
+  const seats = draft.names.map((name, i) => ({ name, commander: draft.commanders[i], partnerCommander: null, profileId: draft.profileIds[i] }));
+  function renderSeats() {
+    draft.names = seats.map((p) => p.name);
+    draft.commanders = seats.map((p) => p.commander);
+    draft.profileIds = seats.map((p) => p.profileId);
+    list.innerHTML = "";
+    seats.forEach((p, i) => {
+      const card = seatRowCard(() => seats, i, renderSeats, { noPartner: true });
+      card.innerHTML = seatRowHtml(p, i, seats, { num: i + 1, noColors: true });
+      list.appendChild(card);
     });
-    card.querySelector(".commander-thumb").addEventListener("click", () => {
-      openCommanderPicker((c) => {
-        draft.commanders[i] = c;
-        paintCmd();
-        paintExtras();
-      });
-    });
-    card.querySelector(".name-input").addEventListener("input", (e) => { draft.names[i] = e.target.value; paintExtras(); });
-    card.querySelector(".profile-btn").addEventListener("click", () => {
-      openProfilePicker({
-        commander: draft.commanders[i],
-        currentProfileId: draft.profileIds[i],
-        playerName: draft.names[i],
-        onSelect: (id) => {
-          const p = id ? Profiles.get(id) : null;
-          draft.names[i] = seatNameAfterProfile(draft.names[i], draft.profileIds[i], p);
-          card.querySelector(".name-input").value = draft.names[i] || "";
-          draft.profileIds[i] = id;
-          card.querySelector(".profile-btn").innerHTML = profileBtnHtml(p);
-          if (p && p.commander) { draft.commanders[i] = p.commander; paintCmd(); }
-          paintExtras();
-        },
-      });
-    });
-    list.appendChild(card);
-  });
+    paintRoster(s, seats, (i) => i + 1);
+  }
+  bindRoster(s, { seats: () => seats, onChange: renderSeats });
+  renderSeats();
   s.querySelector("#back-btn").addEventListener("click", () => nav("menu"));
   s.querySelector("#shuffle-btn").addEventListener("click", () => {
-    const order = shuffleInPlace(draft.names.map((_, i) => i));
-    const pick = (arr) => order.map((k) => (arr ? arr[k] : null));
-    draft.names = pick(draft.names);
-    draft.commanders = pick(draft.commanders);
-    draft.profileIds = pick(draft.profileIds);
-    render();
+    shuffleInPlace(seats);
+    renderSeats();
     toast(tr("Lugares sorteados"));
   });
   s.querySelector("#start-btn").addEventListener("click", () => startBRFromDraft(draft));

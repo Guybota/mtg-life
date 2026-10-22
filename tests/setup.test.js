@@ -59,6 +59,21 @@ module.exports = [
     },
   },
   {
+    name: "folha de decks com muitos decks: linhas inteiras e lista com scroll",
+    async run(t) {
+      const page = await t.page({ viewport: { width: 1000, height: 690 } });
+      const P = seedProfiles();
+      for (let k = 0; k < 20; k++) P.push(Object.assign(JSON.parse(JSON.stringify(P[2])), { id: "m" + k, name: "Deck " + k, history: [] }));
+      await openWith(t, page, P);
+      await page.click(".mode-card.commander");
+      if (await page.$("#qs-setup")) await page.click("#qs-setup");
+      await page.click(".player-setup-card >> nth=0 >> .seat-deck-btn");
+      const h = await page.$$eval("#ds-list [data-deck]", (x) => Math.min(...x.map((e) => e.getBoundingClientRect().height)));
+      t.ok(h >= 56, "linha mais baixa com " + h + "px");
+      t.ok(await page.$eval("#ds-list", (e) => e.scrollHeight > e.clientHeight), "a lista faz scroll");
+    },
+  },
+  {
     name: "lugares: tirar, acrescentar, jogador novo e duelo fixo",
     async run(t) {
       const page = await openSetup(t);

@@ -206,7 +206,32 @@ function nav(newScreen, params) {
   currentScreen = newScreen;
   screenParams = params || {};
   render();
+  armBackButton();
 }
+
+/** Botão/gesto "voltar" do Android: fecha a janela de cima (como tocar
+ *  fora dela, por isso as obrigatórias não fecham), ou faz o mesmo que a
+ *  seta ← do ecrã; no jogo pergunta se volta ao menu. Só no menu deixa
+ *  sair da app. Fica sempre uma entrada a mais no histórico para o
+ *  "voltar" chegar aqui. */
+function armBackButton() {
+  if (!(history.state && history.state.mtgBack)) history.pushState({ mtgBack: true }, "");
+}
+// uma janela aberta também precisa da entrada (ex.: no menu)
+new MutationObserver((list) => {
+  if (list.some((m) => [...m.addedNodes].some((n) => n.classList && n.classList.contains("modal-backdrop")))) armBackButton();
+}).observe(document.body, { childList: true });
+window.addEventListener("popstate", () => {
+  const modals = document.querySelectorAll(".modal-backdrop");
+  const top = modals[modals.length - 1];
+  if (top) top.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  else if (currentScreen === "menu") return; // sai da app
+  else {
+    const back = document.querySelector(".screen #back-btn, .screen #menu-btn");
+    if (back) back.click(); else nav("menu");
+  }
+  armBackButton();
+});
 
 function closeAnyModal() {
   document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
@@ -293,27 +318,72 @@ function bindPressRepeat(elm, callback, { allowScroll = false } = {}) {
   if (!allowScroll) elm.addEventListener("touchstart", (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
 }
 
-/** Chromium pode ignorar o scroll nativo no eixo rodado por CSS.
- *  Só nesse modo, o movimento horizontal do ecrã corresponde ao scroll
- *  vertical da folha. Captura implícita do toque mantém o gesto na folha. */
-function bindRotatedScroll(sheet) {
-  let gesture = null;
-  sheet.addEventListener("pointerdown", (e) => {
+/** Com a página rodada 90° por CSS (html.force-landscape), o Chromium do
+ *  Android ignora o scroll nativo no eixo rodado. Nesse modo o CSS desliga
+ *  os gestos nativos e é aqui que o dedo faz scroll de qualquer lista: o
+ *  body roda 90° no sentido dos ponteiros, por isso o movimento horizontal
+ *  do ecrã é o scroll vertical do conteúdo e o vertical é o horizontal.
+ *  Um toque que acabou por ser scroll não conta como clique. */
+(function rotatedScroll() {
+  const canScroll = (el, axis) => {
+    const st = getComputedStyle(el);
+    return axis === "y"
+      ? /(auto|scroll)/.test(st.overflowY) && el.scrollHeight > el.clientHeight + 1
+      : /(auto|scroll)/.test(st.overflowX) && el.scrollWidth > el.clientWidth + 1;
+  };
+  const scrollerOf = (el, axis) => {
+    for (; el && el !== document.documentElement; el = el.parentElement) if (canScroll(el, axis)) return el;
+    return null;
+  };
+  let g = null, glide = 0;
+  document.addEventListener("pointerdown", (e) => {
+    cancelAnimationFrame(glide);
+    g = null;
     if (e.pointerType !== "touch" || !e.isPrimary || !document.documentElement.classList.contains("force-landscape")) return;
-    gesture = { id: e.pointerId, x: e.clientX, y: e.clientY, top: sheet.scrollTop, scrolling: false };
+    if (e.target.closest(".mesa")) return; // a mesa tem o seu próprio arrastar (trocar lugares)
+    g = { id: e.pointerId, x: e.clientX, y: e.clientY, target: e.target, el: null, axis: null, start: 0, v: 0, lastPos: 0, lastT: 0 };
   }, true);
-  sheet.addEventListener("pointermove", (e) => {
-    if (!gesture || e.pointerId !== gesture.id) return;
-    const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
-    if (!gesture.scrolling && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) gesture.scrolling = true;
-    if (!gesture.scrolling) return;
-    if (e.cancelable) e.preventDefault();
-    sheet.scrollTop = gesture.top + dx;
+  document.addEventListener("pointermove", (e) => {
+    if (!g || e.pointerId !== g.id) return;
+    const dx = e.clientX - g.x, dy = e.clientY - g.y;
+    if (!g.axis) {
+      if (Math.hypot(dx, dy) < 10) return;
+      g.axis = Math.abs(dx) >= Math.abs(dy) ? "y" : "x";
+      g.el = scrollerOf(g.target, g.axis);
+      if (!g.el) { g = null; return; }
+      g.start = g.axis === "y" ? g.el.scrollTop : g.el.scrollLeft;
+      g.lastT = e.timeStamp;
+    }
+    const pos = g.axis === "y" ? g.start + dx : g.start - dy;
+    if (g.axis === "y") g.el.scrollTop = pos; else g.el.scrollLeft = pos;
+    const dt = e.timeStamp - g.lastT;
+    if (dt > 0) { g.v = (pos - g.lastPos) / dt; g.lastPos = pos; g.lastT = e.timeStamp; }
   }, true);
-  function end(e) { if (gesture && e.pointerId === gesture.id) gesture = null; }
-  sheet.addEventListener("pointerup", end, true);
-  sheet.addEventListener("pointercancel", end, true);
-}
+  const end = (e) => {
+    if (!g || e.pointerId !== g.id) return;
+    const done = g;
+    g = null;
+    if (!done.el) return;
+    // o toque que acabou em scroll não é um clique (o clique desse toque
+    // chega logo a seguir ao levantar o dedo; um toque novo já conta)
+    const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+    document.addEventListener("click", swallow, { capture: true, once: true });
+    setTimeout(() => document.removeEventListener("click", swallow, true), 80);
+    // inércia: continua com a velocidade do fim do gesto e trava aos poucos
+    let v = Math.max(-4, Math.min(4, done.v)), last = performance.now();
+    const step = (now) => {
+      const dt = now - last;
+      last = now;
+      if (Math.abs(v) < 0.02) return;
+      if (done.axis === "y") done.el.scrollTop += v * dt; else done.el.scrollLeft += v * dt;
+      v *= Math.pow(0.995, dt);
+      glide = requestAnimationFrame(step);
+    };
+    if (e.type === "pointerup" && !matchMedia("(prefers-reduced-motion: reduce)").matches) glide = requestAnimationFrame(step);
+  };
+  document.addEventListener("pointerup", end, true);
+  document.addEventListener("pointercancel", end, true);
+})();
 
 // Feedback ao tocar: uma "onda" que nasce no ponto tocado nos botões e
 // cartões retangulares, e um pequeno "pop" (encolhe e volta com mola)
@@ -593,8 +663,18 @@ function applyGameOrientation() {
   // 1v1 ao alto num telemóvel: tabuleiro em coluna (classe própria para o CSS)
   root.classList.toggle("duel-portrait", isPortraitFriendlyGame() && portrait && window.innerWidth < 700);
 }
-window.addEventListener("resize", applyGameOrientation);
-window.addEventListener("orientationchange", () => setTimeout(applyGameOrientation, 150));
+// Em alguns browsers Android o teclado encolhe a janela: com o jogo rodado
+// isso parecia "deitar" o aparelho e desfazia a rotação enquanto se escrevia.
+// Mudar só a altura com um campo em foco é o teclado, não o aparelho a rodar.
+let lastResizeW = window.innerWidth;
+function onViewportChange() {
+  const typing = document.activeElement && document.activeElement.matches("input, textarea");
+  if (typing && window.innerWidth === lastResizeW) return;
+  lastResizeW = window.innerWidth;
+  applyGameOrientation();
+}
+window.addEventListener("resize", onViewportChange);
+window.addEventListener("orientationchange", () => setTimeout(onViewportChange, 150));
 
 function render() {
   stopAllRepeats();

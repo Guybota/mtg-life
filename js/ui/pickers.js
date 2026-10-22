@@ -338,7 +338,7 @@ function openProfilePicker({ commander, partner, currentProfileId, playerName, o
         <h2 id="pp-title">${tr("Perfil do jogador")}</h2>
         <div class="footer-note" id="pp-note" style="margin-bottom:10px">${tr("Os perfis guardam as estatísticas deste commander entre jogos (vitórias, tempo médio por turno/jogo, etc).")}</div>
         ${profiles.length > 6 ? `<label class="search-field pp-search">${I("search")}<input type="search" id="pp-filter" placeholder="${tr("Procurar perfil, commander ou jogador")}" aria-label="${tr("Procurar perfis")}" autocomplete="off"></label>` : ""}
-        <div class="col" id="pp-list" style="max-height:38vh;overflow-y:auto"></div>
+        <div class="col" id="pp-list"></div>
         <div class="row" id="pp-actions" style="margin-top:10px">
           <button class="btn btn-ghost grow" id="pp-new">${I("plus")} ${tr("Criar novo perfil")}</button>
           ${currentProfileId ? `<button class="btn btn-ghost grow" id="pp-clear">${I("x")} ${tr("Remover perfil")}</button>` : ""}

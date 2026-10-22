@@ -889,7 +889,6 @@ function openCmdDamageModal(playerId, focusOppId) {
   `);
   document.body.appendChild(backdrop);
   const list = backdrop.querySelector("#cdx-list");
-  bindRotatedScroll(backdrop.querySelector(".cdx-sheet"));
 
   function paintLife() {
     const d = p.life - lifeAtOpen;
